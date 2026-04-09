@@ -1,0 +1,21 @@
+name: BUAA-SE-Demo
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 步骤1-检出代码
+        uses: actions/checkout@v4
+
+      - name: 步骤2-打印当前时间
+        run: date
+
+      - name: 步骤3-执行模拟测试
+        run: |
+          echo "Hello, ${{ github.actor }}! 你的 CI 触发成功了。"
