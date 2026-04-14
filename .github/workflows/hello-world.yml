@@ -18,4 +18,4 @@ jobs:
 
       - name: 步骤3-执行模拟测试
         run: |
-          echo "Helllo, ${{ github.actor }}! 你的 CI 触发成功了。1 Ciallo～(∠・ω< )⌒☆"
+          echo "Hello, ${{ github.actor }}! 你的 CI 触发成功了。1 Ciallo～(∠・ω< )⌒☆"
