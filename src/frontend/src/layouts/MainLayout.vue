@@ -2,6 +2,7 @@
 import {
   ArrowDown,
   Compass,
+  Connection,
   Grid,
   Menu,
   Plus,
@@ -42,6 +43,19 @@ const navigationItems: NavItem[] = [
 const activePath = computed(() => route.path)
 const displayName = computed(() => authStore.displayName)
 
+// 判断是否在 Discover 模块
+const isDiscoverModule = computed(() => {
+  return route.path.startsWith('/app/discover')
+})
+
+// Discover 模块的当前子页面
+const discoverActiveTab = computed(() => {
+  if (route.name === 'discover-upstream') {
+    return 'upstream'
+  }
+  return 'keyword'
+})
+
 const handleNavigate = async (path: string) => {
   sidebarOpen.value = false
   if (path !== route.path) {
@@ -56,6 +70,14 @@ const handleLogout = async () => {
 
 const handleUpload = () => {
   window.alert('Upload entry is ready. Connect this button to your PDF upload dialog later.')
+}
+
+const handleDiscoverTabChange = (tab: string) => {
+  if (tab === 'keyword' && route.name !== 'discover') {
+    router.push('/app/discover')
+  } else if (tab === 'upstream' && route.name !== 'discover-upstream') {
+    router.push('/app/discover-upstream')
+  }
 }
 </script>
 
@@ -99,20 +121,42 @@ const handleUpload = () => {
             <el-icon><Menu /></el-icon>
           </el-button>
 
-          <label class="workspace-search">
-            <el-icon><Search /></el-icon>
-            <input v-model="quickSearch" type="text" placeholder="Search papers, authors, topics..." />
-          </label>
+          <!-- 非 Discover 模块显示标题 -->
+          <div v-if="!isDiscoverModule" class="workspace-topbar__title">
+            <h1 v-if="route.name === 'dashboard'" class="topbar-title">Dashboard</h1>
+            <h1 v-else-if="route.name === 'library'" class="topbar-title">My Library</h1>
+            <h1 v-else-if="route.name === 'graph'" class="topbar-title">Knowledge Graph</h1>
+          </div>
+
+          <!-- Discover 模块增加切换按钮 -->
+          <div v-else class="discover-tabs">
+            <h1 class="topbar-title">Discover</h1>
+
+            <button
+              class="discover-tab"
+              :class="{ 'is-active': discoverActiveTab === 'keyword' }"
+              type="button"
+              @click="handleDiscoverTabChange('keyword')"
+            >
+              <el-icon><Search /></el-icon>
+              <span>关键词检索</span>
+            </button>
+            <button
+              class="discover-tab"
+              :class="{ 'is-active': discoverActiveTab === 'upstream' }"
+              type="button"
+              @click="handleDiscoverTabChange('upstream')"
+            >
+              <el-icon><Connection /></el-icon>
+              <span>上下游检索</span>
+            </button>
+          </div>
         </div>
 
         <div class="workspace-topbar__actions">
           <el-button plain @click="handleUpload">
             <el-icon><Upload /></el-icon>
             Upload Paper
-          </el-button>
-          <el-button type="primary" plain @click="handleNavigate('/app/discover')">
-            <el-icon><Plus /></el-icon>
-            New Exploration
           </el-button>
           <el-dropdown>
             <button class="workspace-user" type="button">
@@ -287,25 +331,41 @@ const handleUpload = () => {
   display: none;
 }
 
-.workspace-search {
+.discover-tabs {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-width: min(500px, 48vw);
-  padding: 0.56rem 0.8rem;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: white;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  gap: 0.8rem;
 }
 
-.workspace-search input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  outline: none;
+.topbar-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
   color: var(--text-primary);
+}
+
+.discover-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line-soft);
+  background: white;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.discover-tab:hover {
+  background: rgba(22, 50, 95, 0.045);
+}
+
+.discover-tab.is-active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: var(--brand);
 }
 
 .workspace-user {
@@ -385,11 +445,6 @@ const handleUpload = () => {
   .workspace-topbar__actions {
     justify-content: space-between;
     flex-wrap: wrap;
-  }
-
-  .workspace-search {
-    min-width: 0;
-    width: 100%;
   }
 
   .workspace-user__meta {

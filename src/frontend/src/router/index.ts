@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/auth'
 import AuthView from '../views/auth/AuthView.vue'
 import DashboardView from '../views/dashboard/DashboardView.vue'
 import DiscoverView from '../views/discover/DiscoverView.vue'
+import DiscoverViewUpstream from '../views/discover/DiscoverViewUpstream.vue'
 import GraphView from '../views/graph/GraphView.vue'
 import LibraryView from '../views/library/LibraryView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
@@ -67,6 +68,14 @@ const router = createRouter({
           component: DiscoverView,
           meta: {
             title: 'Scider | Discover',
+          },
+        },
+        {
+          path: 'discover-upstream',
+          name: 'discover-upstream',
+          component: DiscoverViewUpstream,
+          meta: {
+            title: 'Scider | Discover Upstream',
           },
         },
       ],
