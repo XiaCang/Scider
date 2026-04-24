@@ -1,38 +1,23 @@
----
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
+## [Bug]: (简要描述 Bug 内容)
 
----
+**1. Bug 描述**
+清晰且简要地描述该 Bug 的现象。
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**2. 复现步骤**
+1. 进入...
+2. 点击...
+3. 观察到...
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**3. 预期行为**
+在此处说明应当发生的结果。
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**4. 实际行为**
+在此处说明实际发生的错误结果（附上错误日志或截图更佳）。
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**5. 环境信息**
+- OS: (如 Windows 11 / macOS 14)
+- Browser/Env: (如 Chrome 123 / Python 3.10)
+- Version: (涉及的版本号或 Commit ID)
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
-
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
-
-**Additional context**
-Add any other context about the problem here.
+**6. 其他上下文**
+添加任何关于此问题的其他上下文。

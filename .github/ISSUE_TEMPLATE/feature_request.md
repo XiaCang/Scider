@@ -1,20 +1,15 @@
----
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
-assignees: ''
+## [Feature]: (简要描述新功能)
 
----
+**1. 需求背景**
+该功能解决了什么问题？是否与现有的某个 Issue 相关？
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**2. 功能描述**
+请详细描述你期望实现的功能逻辑。
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**3. 方案建议 (可选)**
+如果你对实现该功能有初步的想法或技术选型建议（例如：需要新增一个 API 接口）。
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
-
-**Additional context**
-Add any other context or screenshots about the feature request here.
+**4. 验收标准**
+如何判断该功能已完整实现？
+- [ ] 标准 1
+- [ ] 标准 2
