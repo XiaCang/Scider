@@ -224,6 +224,8 @@ const handleDiscoverTabChange = (tab: string) => {
   background: rgba(255, 255, 255, 0.88);
   border-right: 1px solid rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(16px);
+  position: relative;
+  z-index: 100;
 }
 
 .workspace-sidebar__brand p,
