@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ArrowRight, FolderAdd } from '@element-plus/icons-vue'
+import { ArrowRight, FolderAdd, Folder } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElSelect, ElOption } from 'element-plus'
-import { ref, computed, h } from 'vue'
+import { computed, h, ref, onMounted } from 'vue'
 import FolderItem from './FolderItem.vue'
 
 interface LibraryFolder {
@@ -29,6 +29,9 @@ const emit = defineEmits<{
   'edit-folder': [folder: LibraryFolder]
   'delete-folder': [folder: LibraryFolder]
 }>()
+
+// 控制是否禁用过渡动画（用于防止首次挂载时的位移闪烁）
+const disableTransition = ref(true)
 
 // 获取所有文件夹（扁平化）用于移动/复制操作
 const getAllFolders = (folders: LibraryFolder[]): LibraryFolder[] => {
@@ -81,7 +84,7 @@ const handleCreateRootFolder = async () => {
       cancelButtonText: '取消',
       showCancelButton: true,
       customClass: 'folder-operation-message-box',
-      beforeClose: (action, instance, done) => {
+      beforeClose: (action, _instance, done) => {
         if (action === 'confirm') {
           if (!folderName.trim()) {
             ElMessage.warning('文件夹名称不能为空')
@@ -127,7 +130,7 @@ const handleCreateSubFolder = async (parentFolder: LibraryFolder) => {
       cancelButtonText: '取消',
       showCancelButton: true,
       customClass: 'folder-operation-message-box',
-      beforeClose: (action, instance, done) => {
+      beforeClose: (action, _instance, done) => {
         if (action === 'confirm') {
           if (!folderName.trim()) {
             ElMessage.warning('文件夹名称不能为空')
@@ -182,7 +185,7 @@ const handleRenameFolder = async (folder: LibraryFolder) => {
       cancelButtonText: '取消',
       showCancelButton: true,
       customClass: 'folder-operation-message-box',
-      beforeClose: (action, instance, done) => {
+      beforeClose: (action, _instance, done) => {
         if (action === 'confirm') {
           if (!newName.trim()) {
             ElMessage.warning('文件夹名称不能为空')
@@ -273,7 +276,7 @@ const handleMoveFolder = async (folder: LibraryFolder) => {
       cancelButtonText: '取消',
       showCancelButton: true,
       customClass: 'folder-operation-message-box',
-      beforeClose: (action, instance, done) => {
+      beforeClose: (action, _instance, done) => {
         if (action === 'confirm') {
           if (!selectedTargetId) {
             ElMessage.warning('请选择目标文件夹')
@@ -358,7 +361,7 @@ const handleCopyFolder = async (folder: LibraryFolder) => {
       cancelButtonText: '取消',
       showCancelButton: true,
       customClass: 'folder-operation-message-box',
-      beforeClose: (action, instance, done) => {
+      beforeClose: (action, _instance, done) => {
         if (action === 'confirm') {
           if (!selectedTargetId) {
             ElMessage.warning('请选择目标文件夹')
@@ -441,15 +444,39 @@ const handleDeleteFolder = async (folder: LibraryFolder) => {
     // 用户取消操作
   }
 }
+
+// 组件挂载后，在下一帧启用过渡动画
+onMounted(() => {
+  // 使用 requestAnimationFrame 确保在浏览器完成首次渲染和布局计算后启用过渡
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      disableTransition.value = false
+    })
+  })
+})
+
 </script>
 
 <template>
-  <section class="library-page">
-    <!-- 文件夹管理面板 -->
-    <aside class="folder-panel" :class="{ 'is-visible': folderPanelVisible }">
-      <!-- 梯形触发器 -->
-      <div class="folder-panel__trigger" @click="$emit('update:folderPanelVisible', !folderPanelVisible)"></div>
-      
+  <!-- 梯形触发器 - 使用 Teleport 提升到 body 层级 -->
+  <Teleport to="body">
+    <div 
+      class="folder-panel__trigger" 
+      :class="{ 
+        'is-panel-visible': folderPanelVisible,
+        'no-transition': disableTransition 
+      }"
+      @click="$emit('update:folderPanelVisible', !folderPanelVisible)"
+    ></div>
+    
+    <!-- 文件夹管理面板 - 使用 Teleport 提升到 body 层级 -->
+    <aside 
+      class="folder-panel" 
+      :class="{ 
+        'is-visible': folderPanelVisible,
+        'no-transition': disableTransition 
+      }"
+    >
       <div class="folder-panel__header">
         <h3 class="folder-panel__title">文库文件夹</h3>
       </div>
@@ -508,6 +535,12 @@ const handleDeleteFolder = async (folder: LibraryFolder) => {
         </div>
       </div>
     </aside>
+  </Teleport>
+  
+  <!-- 保留原有的 library-page 结构用于主内容区 -->
+  <section class="library-page">
+    <!-- 主内容区域将由父组件或其他插槽提供 -->
+    <slot></slot>
   </section>
 </template>
 
@@ -519,7 +552,7 @@ const handleDeleteFolder = async (folder: LibraryFolder) => {
   position: relative;
 }
 
-/* 文件夹面板样式 */
+/* 文件夹面板样式 - 使用 fixed 定位相对于视口 */
 .folder-panel {
   width: 280px;
   min-width: 280px;
@@ -528,37 +561,52 @@ const handleDeleteFolder = async (folder: LibraryFolder) => {
   display: flex;
   flex-direction: column;
   overflow: visible;
-  position: absolute;
+  position: fixed;
   left: 0;
-  top: 0;
+  top: 64px; /* 主导航栏高度 */
   bottom: 0;
   z-index: 50;
-  margin-left: -300px;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 禁用过渡动画的类 */
+.folder-panel.no-transition {
+  transition: none !important;
 }
  
 .folder-panel.is-visible {
-  margin-left: 0;
+  transform: translateX(0);
 }
 
-/* 梯形触发器 */
+/* 梯形触发器 - 使用 fixed 定位相对于视口 */
 .folder-panel__trigger {
-  position: absolute;
-  right: -25px;
-  top: 5px;
+  position: fixed;
+  left: 0; /* 基准位置：屏幕左边缘 */
+  top: calc(64px + 5px); /* 主导航栏高度 + 偏移 */
   width: 25px;
   height: 80px;
   background: #1e3a5f;
   cursor: pointer;
   clip-path: polygon(0 0, 100% 15%, 100% 85%, 0 100%);
-  transition: all 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 60;
   box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
 }
 
+/* 禁用过渡动画的类 */
+.folder-panel__trigger.no-transition {
+  transition: none !important;
+}
+
 .folder-panel__trigger:hover {
   background: #2a4d73;
+}
+
+/* 当面板可见时，触发器移至面板右边缘 (280px) */
+.folder-panel__trigger.is-panel-visible {
+  transform: translateX(280px);
 }
 
 .folder-panel__header {

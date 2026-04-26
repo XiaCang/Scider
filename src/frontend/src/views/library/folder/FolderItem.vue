@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight, Delete, EditPen, Folder, FolderAdd, MoreFilled } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, ElSelect, ElOption } from 'element-plus'
-import { h, ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 interface LibraryFolder {
   id: string
@@ -32,6 +31,7 @@ const emit = defineEmits<{
 
 const dropdownVisible = ref(false)
 const dropdownPosition = ref<{ x: number, y: number }>({ x: 0, y: 0 })
+const dropdownRef = ref<HTMLElement | null>(null)
 
 const handleSelectFolder = () => {
   emit('select-folder', props.folder.id)
@@ -72,6 +72,37 @@ const toggleDropdown = (event: MouseEvent) => {
 const closeDropdown = () => {
   dropdownVisible.value = false
 }
+
+// 处理全局点击事件
+const handleClickOutside = (event: MouseEvent) => {
+  if (!dropdownVisible.value) return
+  
+  const target = event.target as HTMLElement
+  
+  // 检查点击是否在下拉菜单内部
+  if (dropdownRef.value && dropdownRef.value.contains(target)) {
+    return
+  }
+  
+  // 检查点击是否是触发按钮本身
+  const moreIcon = document.querySelector('.more-icon')
+  if (moreIcon && moreIcon.contains(target)) {
+    return
+  }
+  
+  // 点击了外部区域，关闭下拉菜单
+  dropdownVisible.value = false
+}
+
+// 组件挂载时添加全局点击监听
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+// 组件卸载时移除全局点击监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // 新建子文件夹
 const handleCreateSubFolder = async () => {
@@ -151,6 +182,7 @@ import { computed } from 'vue'
       <!-- 下拉菜单 -->
       <div 
         v-if="dropdownVisible"
+        ref="dropdownRef"
         class="folder-dropdown"
         :style="{ top: `${dropdownPosition.y}px`, left: `${dropdownPosition.x}px` }"
       >

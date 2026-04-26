@@ -17,7 +17,7 @@ const yearOptions = [
 ]
 
 const venueOptions = [
-  { label: '全部类型', value: '' },
+  { label: '全部来源', value: '' },
   { label: 'arXiv', value: 'arXiv' },
   { label: 'SIGIR', value: 'SIGIR' },
   { label: 'CHI', value: 'CHI' },
@@ -95,7 +95,7 @@ const recommendations = [
 
         <el-dropdown trigger="click">
           <el-button plain>
-            {{ selectedVenue ? venueOptions.find(opt => opt.value === selectedVenue)?.label : '类型' }}
+            {{ selectedVenue ? venueOptions.find(opt => opt.value === selectedVenue)?.label : '来源' }}
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>

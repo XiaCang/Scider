@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { EditPen, FolderOpened, Search } from '@element-plus/icons-vue'
+import { EditPen, Search, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, ref } from 'vue'
+import { computed, ref, h } from 'vue'
+import { useRouter } from 'vue-router'
 
-import type { LibraryPaper } from '../../api/library'
+import type { LibraryPaper, PaperKeyPoints } from '../../api/library'
+import { saveKeyPointsApi } from '../../api/library'
 import LibraryFolder from './LibraryFolder.vue'
+import PaperDetail from './paper/PaperDetail.vue'
 
 interface LibraryFolder {
   id: string
@@ -15,12 +18,12 @@ interface LibraryFolder {
 
 const searchQuery = ref('')
 const selectedPaperId = ref('paper-4')
-const draftKeyPoints = ref('1. Attention mechanism\n2. Parallel processing\n3. Reduced training time')
 const folderPanelVisible = ref(true)
 const selectedFolderId = ref<string>('all')
-const editingFolderId = ref<string | null>(null)
-const editingFolderName = ref('')
 const expandedFolders = ref<Set<string>>(new Set())
+const paperDetailVisible = ref(false)
+const selectedPaper = ref<LibraryPaper | null>(null)
+const router = useRouter()
 
 const folders = ref<LibraryFolder[]>([
   {
@@ -93,43 +96,68 @@ const papers = ref<LibraryPaper[]>([
     year: 2022,
     status: 'Processing',
     source: 'CVPR',
-    keyPoints: ['Visual tokenization', 'Scalable encoder blocks'],
+    keyPoints: {
+      background: '视觉任务中传统CNN的局限性，需要更好的长距离依赖建模',
+      method: '将图像分割为visual tokens，使用Transformer编码器处理',
+      innovation: '首次将纯Transformer架构应用于计算机视觉任务',
+      conclusion: 'ViT在大规模数据集上可以达到甚至超越SOTA CNN的性能'
+    },
   },
   {
     id: 'paper-2',
     title: 'Transformers in Poraios and Grapheni Methods',
     authors: 'R. K. Rainur',
     year: 2023,
-    status: 'Completed',
+    status: 'PendingConfirmation',
     source: 'arXiv',
-    keyPoints: ['Cross-modal alignment', 'Hybrid retrieval'],
+    keyPoints: {
+      background: '多模态数据对齐和检索存在语义鸿沟问题',
+      method: '采用跨模态对齐技术和混合检索策略',
+      innovation: '提出新颖的跨模态表示学习方法',
+      conclusion: '显著提升了跨模态检索的准确性和效率'
+    },
   },
   {
     id: 'paper-3',
     title: 'Transformers in Vision',
     authors: 'R. S. Soft',
     year: 2023,
-    status: 'Completed',
+    status: 'Confirmed',
     source: 'NeurIPS',
-    keyPoints: ['Domain adaptation', 'Zero-shot transfer'],
+    keyPoints: {
+      background: '域适应和零样本迁移在实际应用中面临挑战',
+      method: '利用领域自适应技术和零样本学习框架',
+      innovation: '设计了新的域不变特征提取器',
+      conclusion: '在多个基准测试中实现了优异的零样本迁移性能'
+    },
   },
   {
     id: 'paper-4',
     title: 'Transformers in Vision',
     authors: 'R. C. Bamer, R.A',
     year: 2022,
-    status: 'Awaiting Review',
+    status: 'PendingConfirmation',
     source: 'ICLR',
-    keyPoints: ['Attention mechanism', 'Parallel processing', 'Reduced training time'],
+    keyPoints: {
+      background: '传统序列模型的训练效率和并行化能力不足',
+      method: '引入自注意力机制实现并行处理',
+      innovation: 'Attention机制大幅减少训练时间并提升模型表现',
+      conclusion: 'Transformer成为NLP和CV领域的基础架构'
+    },
   },
   {
     id: 'paper-5',
     title: 'Transformens and Meal Designers in Vision',
     authors: 'A. Steruan R. Maris',
     year: 2023,
-    status: 'Completed',
+    status: 'Confirmed',
     source: 'ECCV',
-    keyPoints: ['Dataset efficiency', 'Training recipe'],
+    keyPoints: {
+      background: '视觉模型训练需要大量数据和计算资源',
+      method: '优化数据集效率和训练配方设计',
+      innovation: '提出更高效的训练策略和数据增强方法',
+      conclusion: '在减少资源消耗的同时保持了模型性能'
+    },
   },
 ])
 
@@ -154,138 +182,211 @@ const filteredPapers = computed(() => {
 })
 
 const handleReview = (paper: LibraryPaper) => {
+  selectedPaper.value = paper
   selectedPaperId.value = paper.id
-  draftKeyPoints.value = paper.keyPoints.map((item, index) => `${index + 1}. ${item}`).join('\n')
+  // 不再需要初始化draftKeyPoints，由PaperDetail组件内部管理
+  paperDetailVisible.value = true
 }
 
-const handleSave = () => {
-  const paper = papers.value.find((item) => item.id === selectedPaperId.value)
-  if (!paper) {
-    return
-  }
-
-  paper.keyPoints = draftKeyPoints.value
-    .split('\n')
-    .map((item) => item.trim().replace(/^\d+\.\s*/, ''))
-    .filter(Boolean)
-  paper.status = 'Completed'
-  ElMessage.success('Key Points saved locally. Replace with saveKeyPointsApi later.')
-}
-
-// 处理文件夹相关事件
-const handleCreateFolderEvent = async () => {
+// 删除论文
+const handleDeletePaper = async (paper: LibraryPaper) => {
   try {
-    const { value: folderName } = await ElMessageBox.prompt('请输入文件夹名称', '新建文件夹', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      inputPattern: /\S+/,
-      inputErrorMessage: '文件夹名称不能为空',
+    await ElMessageBox({
+      title: '删除论文',
+      message: h('div', { class: 'folder-operation-dialog' }, [
+        h('p', { class: 'dialog-tip dialog-warning' }, `确定要删除论文 "${paper.title}" 吗？`),
+        h('p', { class: 'dialog-hint' }, '请选择删除范围：')
+      ]),
+      confirmButtonText: selectedFolderId.value !== 'all' ? '从所有位置彻底删除' : '从所有位置删除',
+      cancelButtonText: selectedFolderId.value !== 'all' ? '仅从当前文件夹移除' : '取消',
+      showCancelButton: true,
+      customClass: 'folder-operation-message-box',
+      distinguishCancelAndClose: true,
+      beforeClose: (action, _instance, done) => {
+        if (action === 'confirm') {
+          // 用户选择了"从所有位置彻底删除"
+          done()
+        } else if (action === 'cancel' && selectedFolderId.value !== 'all') {
+          // 用户在非全部视图下选择了"仅从当前文件夹移除"
+          done()
+        } else {
+          // 用户关闭对话框或在全部视图下点击取消
+          done()
+        }
+      }
     })
     
-    const newFolder: LibraryFolder = {
-      id: `folder-${Date.now()}`,
-      name: folderName,
-      paperIds: [],
+    // 执行全局删除(或全部视图下的直接删除)
+    if (selectedFolderId.value === 'all') {
+      // 在"全部论文"视图下,直接从全局删除
+      await performGlobalDelete(paper)
     }
-    
-    folders.value.push(newFolder)
-    ElMessage.success('文件夹创建成功')
-  } catch {
-    // 用户取消操作
+  } catch (action) {
+    if (action === 'confirm') {
+      // 用户点击了"从所有位置彻底删除"按钮
+      try {
+        await ElMessageBox.confirm(
+          '此操作将从所有文件夹中彻底删除该论文,且不可恢复。确定要继续吗?',
+          '警告',
+          {
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消',
+            type: 'warning',
+          }
+        )
+        
+        await performGlobalDelete(paper)
+      } catch {
+        // 用户取消了彻底删除
+      }
+    } else if (action === 'cancel' && selectedFolderId.value !== 'all') {
+      // 用户点击了"仅从当前文件夹移除"按钮
+      const folder = folders.value.find(f => f.id === selectedFolderId.value)
+      if (folder) {
+        const index = folder.paperIds.indexOf(paper.id)
+        if (index > -1) {
+          folder.paperIds.splice(index, 1)
+          ElMessage.success('已从当前文件夹移除')
+        }
+      }
+    }
+    // 用户关闭对话框,不做任何操作
   }
 }
 
-const handleCreateRootFolderEvent = (folder: LibraryFolder) => {
-  folders.value.push(folder)
-  ElMessage.success('文件夹创建成功')
+// 执行全局删除
+const performGlobalDelete = async (paper: LibraryPaper) => {
+  // 从所有文件夹中移除
+  folders.value.forEach(folder => {
+    const removePaperFromFolder = (f: any) => {
+      const index = f.paperIds.indexOf(paper.id)
+      if (index > -1) {
+        f.paperIds.splice(index, 1)
+      }
+      if (f.children) {
+        f.children.forEach(removePaperFromFolder)
+      }
+    }
+    removePaperFromFolder(folder)
+  })
+  
+  // 从论文列表中删除
+  const index = papers.value.findIndex(p => p.id === paper.id)
+  if (index > -1) {
+    papers.value.splice(index, 1)
+  }
+  
+  ElMessage.success('论文已彻底删除')
 }
 
-const handleEditFolderEvent = (folder: LibraryFolder) => {
-  editingFolderId.value = folder.id
-  editingFolderName.value = folder.name
+// 保存关键点（从抽屉组件触发）
+const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) => {
+  try {
+    await saveKeyPointsApi(paperId, keyPoints)
+    
+    // 更新本地数据
+    const paper = papers.value.find((item) => item.id === paperId)
+    if (paper) {
+      paper.keyPoints = keyPoints
+      paper.status = 'Confirmed'  // 确认后状态变为已确认
+    }
+    
+    ElMessage.success('关键点已保存到服务器')
+  } catch (error) {
+    ElMessage.error('保存失败，请重试')
+    console.error('保存关键点失败:', error)
+  }
+}
+
+// 预览 PDF
+const handlePreviewPdf = (paperId: string) => {
+  // 跳转到PDF预览页面
+  router.push({
+    name: 'paper-pdf',
+    params: { paperId }
+  })
+}
+
+// 状态映射（中文显示）
+const statusTextMap: Record<LibraryPaper['status'], string> = {
+  Processing: '处理中',
+  PendingConfirmation: '未确认',
+  Confirmed: '已确认',
 }
 
 const statusClassMap: Record<LibraryPaper['status'], string> = {
   Processing: 'is-warning',
-  Completed: 'is-success',
-  'Awaiting Review': 'is-brand',
+  PendingConfirmation: 'is-brand',
+  Confirmed: 'is-success',
 }
 </script>
 
 <template>
-  <section class="library-page">
+  <section class="library-page" :class="{ 'folder-panel-open': folderPanelVisible }">
     <!-- 文件夹抽屉组件 -->
     <LibraryFolder
       v-model:selected-folder-id="selectedFolderId"
       v-model:expanded-folders="expandedFolders"
       v-model:folder-panel-visible="folderPanelVisible"
       :folders="folders"
-    />
-
-    <!-- 主内容区 -->
-    <div class="library-main">
-      <!-- 顶部工具栏 -->
-      <header class="library-header">
-        <div class="library-header__left">
-          <span v-if="selectedFolderId !== 'all'" class="current-folder">
-            当前文件夹：{{ folders.find(f => f.id === selectedFolderId)?.name || '全部' }}
-          </span>
-          <span v-else class="current-folder">全部论文</span>
-        </div>
-
-        <label class="library-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="searchQuery" type="text" placeholder="Search by title..." />
-        </label>
-      </header>
-
-      <section class="library-table">
-        <el-table :data="filteredPapers" row-key="id">
-          <el-table-column prop="title" label="Title" min-width="300" />
-          <el-table-column prop="authors" label="Authors" min-width="180" />
-          <el-table-column prop="year" label="Year" width="100" />
-          <el-table-column label="Status" width="170">
-            <template #default="{ row }">
-              <span class="status-pill" :class="statusClassMap[row.status as LibraryPaper['status']]">
-                {{ row.status }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="Action" width="200">
-            <template #default="{ row }">
-              <el-button text @click="handleReview(row)">
-                <el-icon><EditPen /></el-icon>
-                Review Key Points 
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </section>
-
-      <section class="library-review">
-        <div class="library-review__header">
-          <div>
-            <h2 class="section-title">Key Points Review</h2>
-            <p class="section-description">这里是后续对接异步提炼结果和人工校对的入口区域。</p>
+    >
+      <!-- 主内容区作为插槽传入 -->
+      <div class="library-main">
+        <!-- 顶部工具栏 -->
+        <header class="library-header">
+          <div class="library-header__left">
+            <span v-if="selectedFolderId !== 'all'" class="current-folder">
+              当前文件夹：{{ folders.find(f => f.id === selectedFolderId)?.name || '全部' }}
+            </span>
+            <span v-else class="current-folder">全部论文</span>
           </div>
-          <span class="status-pill is-brand">
-            <el-icon><FolderOpened /></el-icon>
-            {{ selectedPaperId }}
-          </span>
-        </div>
 
-        <el-input
-          v-model="draftKeyPoints"
-          type="textarea"
-          :rows="8"
-          placeholder="Review and edit extracted key points..."
-        />
+          <label class="library-search">
+            <el-icon><Search /></el-icon>
+            <input v-model="searchQuery" type="text" placeholder="Search by title..." />
+          </label>
+        </header>
 
-        <div class="library-review__actions">
-          <el-button type="primary" @click="handleSave">Save</el-button>
-        </div>
-      </section>
-    </div>
+        <section class="library-table">
+          <el-table :data="filteredPapers" row-key="id">
+            <el-table-column prop="title" label="Title" min-width="300" />
+            <el-table-column prop="authors" label="Authors" min-width="180" />
+            <el-table-column prop="year" label="Year" width="100" />
+            <el-table-column label="Status" width="170">
+              <template #default="{ row }">
+                <span class="status-pill" :class="statusClassMap[row.status as LibraryPaper['status']]">
+                  {{ statusTextMap[row.status as LibraryPaper['status']] }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Action" width="200">
+              <template #default="{ row }">
+                <div class="action-buttons">
+                  <el-button text @click="handleReview(row)">
+                    <el-icon><EditPen /></el-icon>
+                    详情
+                  </el-button>
+                  <el-button text type="danger" @click="handleDeletePaper(row)">
+                    <el-icon><Delete /></el-icon>
+                    删除
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+
+        <!-- 移除旧的Key Points Review区域，因为现在使用PaperDetail抽屉 -->
+      </div>
+    </LibraryFolder>
+
+    <!-- 论文详情抽屉 -->
+    <PaperDetail
+      v-model="paperDetailVisible"
+      :paper="selectedPaper"
+      @save="handleSaveKeyPoints"
+      @preview-pdf="handlePreviewPdf"
+    />
   </section>
 </template>
 
@@ -304,6 +405,13 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
   gap: 0.9rem;
   padding: 1.2rem 1.5rem 1.5rem;
   min-width: 0;
+  margin-left: 0;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 当文件夹面板打开时，主内容区右移 */
+.library-page.folder-panel-open .library-main {
+  margin-left: 280px;
 }
 
 .library-header {
@@ -351,22 +459,9 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
   border-bottom: 1px solid var(--line-soft);
 }
 
-.library-review__header {
+.action-buttons {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
-}
-
-.library-review {
-  padding-top: 1rem;
-}
-
-.library-review__actions {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 0.8rem;
+  gap: 0.5rem;
 }
 
 @media (max-width: 820px) {
@@ -384,5 +479,69 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
     width: 100%;
     min-width: 0;
   }
+}
+</style>
+
+<style>
+/* 文件夹操作弹窗全局样式 */
+.folder-operation-message-box {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.folder-operation-message-box .el-message-box__header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.folder-operation-message-box .el-message-box__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.folder-operation-message-box .el-message-box__content {
+  padding: 24px;
+}
+
+.folder-operation-message-box .el-message-box__btns {
+  padding: 16px 24px 24px;
+  display: flex;
+  gap: 12px;
+}
+
+.folder-operation-message-box .el-button--primary {
+  background-color: var(--brand);
+  border-color: var(--brand);
+}
+
+.folder-operation-message-box .el-button--default {
+  background-color: white;
+  border-color: var(--line-soft);
+}
+
+.folder-operation-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog-tip {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.dialog-warning {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.dialog-hint {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 </style>

@@ -119,9 +119,9 @@ const handleDiscoverTabChange = (tab: string) => {
       </div>
     </header>
 
-    <section v-if="isDiscoverModule || route.name !== 'dashboard'" class="workspace-sub-header">
+    <section v-if="isDiscoverModule" class="workspace-sub-header">
       <div class="header-container">
-        <div v-if="isDiscoverModule" class="discover-tabs">
+        <div class="discover-tabs">
           <button
             class="discover-tab"
             :class="{ 'is-active': discoverActiveTab === 'keyword' }"
@@ -138,9 +138,6 @@ const handleDiscoverTabChange = (tab: string) => {
             <el-icon><Connection /></el-icon>
             <span>上下游检索</span>
           </button>
-        </div>
-        <div v-else class="page-title-area">
-          <h1 class="page-title">{{ route.name === 'library' ? 'My Library' : 'Knowledge Graph' }}</h1>
         </div>
       </div>
     </section>
@@ -280,6 +277,8 @@ const handleDiscoverTabChange = (tab: string) => {
 
 .discover-tabs {
   display: flex;
+  margin-left: 9px;
+  margin-top:10px;
   gap: 1.5rem;
   height: 100%;
 }
