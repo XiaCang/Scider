@@ -329,7 +329,56 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
       v-model:expanded-folders="expandedFolders"
       v-model:folder-panel-visible="folderPanelVisible"
       :folders="folders"
-    />
+    >
+      <!-- 主内容区作为插槽传入 -->
+      <div class="library-main">
+        <!-- 顶部工具栏 -->
+        <header class="library-header">
+          <div class="library-header__left">
+            <span v-if="selectedFolderId !== 'all'" class="current-folder">
+              当前文件夹：{{ folders.find(f => f.id === selectedFolderId)?.name || '全部' }}
+            </span>
+            <span v-else class="current-folder">全部论文</span>
+          </div>
+
+          <label class="library-search">
+            <el-icon><Search /></el-icon>
+            <input v-model="searchQuery" type="text" placeholder="Search by title..." />
+          </label>
+        </header>
+
+        <section class="library-table">
+          <el-table :data="filteredPapers" row-key="id">
+            <el-table-column prop="title" label="Title" min-width="300" />
+            <el-table-column prop="authors" label="Authors" min-width="180" />
+            <el-table-column prop="year" label="Year" width="100" />
+            <el-table-column label="Status" width="170">
+              <template #default="{ row }">
+                <span class="status-pill" :class="statusClassMap[row.status as LibraryPaper['status']]">
+                  {{ statusTextMap[row.status as LibraryPaper['status']] }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Action" width="200">
+              <template #default="{ row }">
+                <div class="action-buttons">
+                  <el-button text @click="handleReview(row)">
+                    <el-icon><EditPen /></el-icon>
+                    详情
+                  </el-button>
+                  <el-button text type="danger" @click="handleDeletePaper(row)">
+                    <el-icon><Delete /></el-icon>
+                    删除
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+
+        <!-- 移除旧的Key Points Review区域，因为现在使用PaperDetail抽屉 -->
+      </div>
+    </LibraryFolder>
 
     <!-- 论文详情抽屉 -->
     <PaperDetail
@@ -338,55 +387,6 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
       @save="handleSaveKeyPoints"
       @preview-pdf="handlePreviewPdf"
     />
-
-    <!-- 主内容区 -->
-    <div class="library-main">
-      <!-- 顶部工具栏 -->
-      <header class="library-header">
-        <div class="library-header__left">
-          <span v-if="selectedFolderId !== 'all'" class="current-folder">
-            当前文件夹：{{ folders.find(f => f.id === selectedFolderId)?.name || '全部' }}
-          </span>
-          <span v-else class="current-folder">全部论文</span>
-        </div>
-
-        <label class="library-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="searchQuery" type="text" placeholder="Search by title..." />
-        </label>
-      </header>
-
-      <section class="library-table">
-        <el-table :data="filteredPapers" row-key="id">
-          <el-table-column prop="title" label="Title" min-width="300" />
-          <el-table-column prop="authors" label="Authors" min-width="180" />
-          <el-table-column prop="year" label="Year" width="100" />
-          <el-table-column label="Status" width="170">
-            <template #default="{ row }">
-              <span class="status-pill" :class="statusClassMap[row.status as LibraryPaper['status']]">
-                {{ statusTextMap[row.status as LibraryPaper['status']] }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="Action" width="200">
-            <template #default="{ row }">
-              <div class="action-buttons">
-                <el-button text @click="handleReview(row)">
-                  <el-icon><EditPen /></el-icon>
-                  详情
-                </el-button>
-                <el-button text type="danger" @click="handleDeletePaper(row)">
-                  <el-icon><Delete /></el-icon>
-                  删除
-                </el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-      </section>
-
-      <!-- 移除旧的Key Points Review区域，因为现在使用PaperDetail抽屉 -->
-    </div>
   </section>
 </template>
 
@@ -405,6 +405,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
   gap: 0.9rem;
   padding: 1.2rem 1.5rem 1.5rem;
   min-width: 0;
+  margin-left: 0;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
