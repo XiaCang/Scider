@@ -48,6 +48,9 @@ html,
 body,
 #app {
   min-height: 100vh;
+  /* 现代浏览器首选方案：保留滚动条间隙 */
+  scrollbar-gutter: stable;
+
 }
 
 body {

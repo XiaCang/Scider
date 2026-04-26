@@ -71,7 +71,7 @@ const handleSubmit = async () => {
 
     <div class="auth-shell page-shell">
       <section class="auth-intro">
-        <AppLogo />
+        <AppLogo size="48"/>
         <h1 style="font-size: 32px;">把分散的论文阅读，整理成一张能持续生长的个人知识网络。</h1>
         <p>
           Scider 面向科研新手，帮助你完成上传、提炼、关联和推荐的完整阅读闭环，减少“读后即忘”和文献追踪成本。
