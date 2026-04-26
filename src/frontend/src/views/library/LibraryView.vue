@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 
 import type { LibraryPaper, PaperKeyPoints } from '../../api/library'
 import { saveKeyPointsApi } from '../../api/library'
-import LibraryFolder from './LibraryFolder.vue'
+import LibraryFolder from './folder/LibraryFolder.vue'
 import PaperDetail from './paper/PaperDetail.vue'
 
 interface LibraryFolder {
