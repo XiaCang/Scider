@@ -2,6 +2,7 @@
 import { EditPen, FolderOpened, Search, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, h } from 'vue'
+import { useRouter } from 'vue-router'
 
 import type { LibraryPaper, PaperKeyPoints } from '../../api/library'
 import { saveKeyPointsApi } from '../../api/library'
@@ -24,6 +25,7 @@ const editingFolderName = ref('')
 const expandedFolders = ref<Set<string>>(new Set())
 const paperDetailVisible = ref(false)
 const selectedPaper = ref<LibraryPaper | null>(null)
+const router = useRouter()
 
 const folders = ref<LibraryFolder[]>([
   {
@@ -300,9 +302,11 @@ const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) =
 
 // 预览 PDF
 const handlePreviewPdf = (paperId: string) => {
-  ElMessage.info(`预览论文 PDF: ${paperId}`)
-  // TODO: 实现 PDF 预览功能，可以打开新窗口或嵌入 PDF 查看器
-  // 例如：window.open(`/papers/${paperId}/pdf`, '_blank')
+  // 跳转到PDF预览页面
+  router.push({
+    name: 'paper-pdf',
+    params: { paperId }
+  })
 }
 
 // 状态映射（中文显示）

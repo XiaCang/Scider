@@ -13,7 +13,7 @@ const libraryPapers = ref<LibraryPaper[]>([
     title: 'Transformers in Vision',
     authors: 'A. Calianham',
     year: 2022,
-    status: 'Completed',
+    status: 'Confirmed',
     source: 'CVPR',
     keyPoints: {
       background: '视觉任务中传统CNN的局限性，需要更好的长距离依赖建模',
@@ -27,7 +27,7 @@ const libraryPapers = ref<LibraryPaper[]>([
     title: 'Transformers in Poraios and Grapheni Methods',
     authors: 'R. K. Rainur',
     year: 2023,
-    status: 'Completed',
+    status: 'Confirmed',
     source: 'arXiv',
     keyPoints: {
       background: '多模态数据对齐和检索存在语义鸿沟问题',
@@ -41,7 +41,7 @@ const libraryPapers = ref<LibraryPaper[]>([
     title: 'Transformers in Vision',
     authors: 'R. S. Soft',
     year: 2023,
-    status: 'Completed',
+    status: 'Confirmed',
     source: 'NeurIPS',
     keyPoints: {
       background: '域适应和零样本迁移在实际应用中面临挑战',
@@ -55,7 +55,7 @@ const libraryPapers = ref<LibraryPaper[]>([
     title: 'Transformers in Vision',
     authors: 'R. C. Bamer, R.A',
     year: 2022,
-    status: 'Completed',
+    status: 'Confirmed',
     source: 'ICLR',
     keyPoints: {
       background: '传统序列模型的训练效率和并行化能力不足',

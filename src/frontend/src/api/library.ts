@@ -120,3 +120,56 @@ export const fetchFolderPapersApi = (folderId: string) =>
  */
 export const movePaperToFolderApi = (paperId: string, folderId: string | null) =>
   request.patch(`/papers/${paperId}/folder`, { folder_id: folderId })
+
+// ==================== PDF预览相关接口 ====================
+
+/**
+ * 论文PDF信息
+ */
+export interface PaperPdfInfo {
+  id: string
+  title: string
+  pdfUrl: string
+  pageCount: number
+}
+
+/**
+ * 论文笔记
+ */
+export interface PaperNote {
+  id: string
+  paperId: string
+  content: string
+  pageNumber: number
+  selectedText?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * 获取论文PDF信息
+ */
+export const fetchPaperPdfInfoApi = (paperId: string) =>
+  request.get<PaperPdfInfo>(`/papers/${paperId}/pdf-info`)
+
+/**
+ * 获取论文笔记列表
+ */
+export const fetchPaperNotesApi = (paperId: string) =>
+  request.get<PaperNote[]>(`/papers/${paperId}/notes`)
+
+/**
+ * 创建笔记
+ */
+export const createNoteApi = (paperId: string, data: {
+  content: string
+  pageNumber: number
+  selectedText?: string
+}) =>
+  request.post<PaperNote>(`/papers/${paperId}/notes`, data)
+
+/**
+ * 更新笔记
+ */
+export const updateNoteApi = (paperId: string, noteId: string, data: { content: string }) =>
+  request.patch<PaperNote>(`/papers/${paperId}/notes/${noteId}`, data)
