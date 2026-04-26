@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight, Delete, EditPen, Folder, FolderAdd, MoreFilled } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, ElSelect, ElOption } from 'element-plus'
-import { h, ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 interface LibraryFolder {
   id: string
