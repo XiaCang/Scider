@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
@@ -40,18 +40,30 @@ const isLoading = ref(false)
 const nodeDetailVisible = ref(false)
 const selectedNodeData = ref<GraphNode | null>(null)
 
-// 筛选器状态
+// 筛选器状态（默认全部为 false，只显示论文节点）
 const filters = reactive({
-  background: true,
-  method: true,
-  innovation: true,
-  conclusion: true,
+  background: false,
+  method: false,
+  innovation: false,
+  conclusion: false,
 })
+
+// 缓存图谱数据，用于筛选时重新渲染
+let cachedNodes: GraphNode[] = []
+let cachedLinks: GraphLink[] = []
+
+// 画布高度控制
+const canvasHeight = ref(600) // 初始高度 600px
+let isResizing = false // 简化为普通变量,无需响应式
+const resizeStartY = ref(0)
+const resizeStartHeight = ref(0)
+const MIN_HEIGHT = 300 // 最小高度
+const MAX_HEIGHT = 2000 // 最大高度
 
 // --- 数据模拟与配置 ---
 const categories = [
   { name: '论文', itemStyle: { color: '#173668' } },
-  { name: '研究背景', itemStyle: { color: '#f59e0b' } },
+  { name: '研究背景', itemStyle: { color: '#a78bfa' } },
   { name: '研究方法', itemStyle: { color: '#3b82f6' } },
   { name: '创新点', itemStyle: { color: '#eab308' } },
   { name: '结论', itemStyle: { color: '#22c55e' } },
@@ -337,7 +349,11 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   if (!chartRef.value) return
   if (!chartInstance) chartInstance = echarts.init(chartRef.value)
 
-  // 根据筛选器过滤节点
+  // 缓存数据供筛选时使用
+  cachedNodes = nodes
+  cachedLinks = links
+
+  // 根据筛选器过滤节点（论文节点始终显示）
   const visibleTypes: NodeType[] = ['paper']
   if (filters.background) visibleTypes.push('background')
   if (filters.method) visibleTypes.push('method')
@@ -348,40 +364,171 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   const nodeIds = new Set(filteredNodes.map(n => n.id))
   const filteredLinks = links.filter(l => nodeIds.has(l.source) && nodeIds.has(l.target))
 
+  // 统计每个节点的连接数，用于动态调整大小
+  const nodeConnectionCount: Record<string, number> = {}
+  filteredLinks.forEach(link => {
+    nodeConnectionCount[link.source] = (nodeConnectionCount[link.source] || 0) + 1
+    nodeConnectionCount[link.target] = (nodeConnectionCount[link.target] || 0) + 1
+  })
+
   const option: echarts.EChartsOption = {
     tooltip: {
       trigger: 'item',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#e0e6ed',
+      borderWidth: 1,
+      textStyle: { color: '#333', fontSize: 12 },
       formatter: (params: any) => {
         if (params.dataType === 'edge') {
-          return `${params.data.label || '关联'}<br/>${params.data.relationType}`
+          const relationLabels: Record<string, string> = {
+            ownership: '归属关系',
+            semantic: '语义关联',
+            citation: '引用关系'
+          }
+          return `
+            <div style="padding: 4px 0;">
+              <div style="font-weight: 600; margin-bottom: 4px;">${relationLabels[params.data.relationType] || '关联'}</div>
+              ${params.data.label ? `<div style="color: #666; font-size: 11px;">${params.data.label}</div>` : ''}
+            </div>
+          `
         }
-        return `<b>${params.name}</b><br/>类型: ${categories[params.data.category].name}`
+        const typeLabels: Record<string, string> = {
+          paper: '📄 论文',
+          background: '🎯 研究背景',
+          method: '⚙️ 研究方法',
+          innovation: '💡 创新点',
+          conclusion: '✅ 结论'
+        }
+        return `
+          <div style="padding: 4px 0;">
+            <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${params.name}</div>
+            <div style="color: #666; font-size: 11px;">${typeLabels[params.data.type] || '节点'}</div>
+          </div>
+        `
       }
     },
-    legend: { data: categories.map(c => c.name), orient: 'vertical', right: 10, top: 20 },
+    legend: { 
+      data: categories.map(c => c.name), 
+      orient: 'vertical', 
+      right: 15, 
+      top: 15,
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderRadius: 10,
+      padding: [12, 16],
+      textStyle: { fontSize: 12, color: '#555' },
+      itemWidth: 16,
+      itemHeight: 10,
+      itemGap: 10,
+      selector: false,
+      selectedMode: false  // 禁用图例的点击和悬停交互
+    },
     series: [{
       type: 'graph',
       layout: 'force',
-      data: filteredNodes.map(n => ({ ...n, symbol: getSymbolByType(n.type) })),
+      data: filteredNodes.map(n => {
+        const connections = nodeConnectionCount[n.id] || 0
+        const baseSize = n.type === 'paper' ? 55 : 38
+        const sizeBoost = Math.min(connections * 3, 12)  // 根据连接数适度增大
+        
+        return { 
+          ...n, 
+          symbol: getSymbolByType(n.type),
+          symbolSize: baseSize + sizeBoost,
+          itemStyle: {
+            borderWidth: n.type === 'paper' ? 3 : 2,
+            borderColor: n.type === 'paper' ? '#fff' : 'rgba(255, 255, 255, 0.6)',
+            shadowBlur: n.type === 'paper' ? 15 : 8,
+            shadowColor: 'rgba(0, 0, 0, 0.12)',
+            shadowOffsetY: 2
+          }
+        }
+      }),
       links: filteredLinks.map(l => ({
         ...l,
         lineStyle: {
           type: l.relationType === 'semantic' ? 'dashed' : 'solid',
-          color: l.relationType === 'citation' ? '#999' : 'source',
-          curveness: 0.1
+          color: l.relationType === 'citation' ? 'rgba(153, 153, 153, 0.35)' : 
+                 l.relationType === 'semantic' ? 'rgba(99, 132, 180, 0.4)' : 'rgba(120, 140, 170, 0.25)',
+          curveness: l.relationType === 'semantic' ? 0.25 : 0.08,
+          width: l.relationType === 'ownership' ? 2.5 : 1.8,
+          opacity: 0.7
         },
-        label: { show: !!l.label, formatter: l.label }
+        label: { 
+          show: false,  // 默认隐藏连线标签，保持简洁
+          formatter: l.label,
+          fontSize: 10,
+          color: '#666',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          padding: [2, 6],
+          borderRadius: 4
+        }
       })),
       categories,
       roam: true,
       draggable: true,
-      force: { repulsion: 400, gravity: 0.1, edgeLength: 120 },
-      emphasis: { focus: 'adjacency' },
-      label: { show: true, position: 'right', fontSize: 10 }
+      force: { 
+        repulsion: 1000,  // 更强的排斥力
+        gravity: 0.03,    // 更低的重力
+        edgeLength: [180, 350],  // 更长的边距
+        friction: 0.65,   // 更高摩擦力
+        layoutAnimation: true
+      },
+      emphasis: { 
+        focus: 'adjacency',
+        scale: true,
+        lineStyle: {
+          width: 5,
+          opacity: 0.9,
+          shadowBlur: 8,
+          shadowColor: 'rgba(0, 0, 0, 0.2)'
+        },
+        itemStyle: {
+          shadowBlur: 25,
+          shadowColor: 'rgba(0, 0, 0, 0.35)',
+          borderColor: '#fff',
+          borderWidth: 4
+        },
+        label: {
+          show: true,
+          fontSize: 13,
+          fontWeight: 'bold'
+        }
+      },
+      label: { 
+        show: true, 
+        position: 'right', 
+        fontSize: 11,
+        fontWeight: 500,
+        color: '#2c3e50',
+        distance: 10,
+        formatter: (params: any) => {
+          if (params.data.type === 'paper') {
+            return params.name
+          }
+          const name = params.name
+          return name.length > 10 ? name.substring(0, 10) + '…' : name
+        }
+      },
+      // 静默状态的样式
+      blur: {
+        itemStyle: {
+          opacity: 0.3
+        },
+        lineStyle: {
+          opacity: 0.1
+        },
+        label: {
+          show: false
+        }
+      }
     }]
   }
 
   chartInstance.setOption(option, { notMerge: true })
+
+  // 绑定点击事件处理节点详情
+  chartInstance.off('click')
+  chartInstance.on('click', handleChartClick)
 }
 
 // --- 交互事件处理 ---
@@ -391,6 +538,17 @@ const handleChartClick = (params: any) => {
     nodeDetailVisible.value = true
   }
 }
+
+// 监听筛选器变化，重新渲染图谱
+watch(
+  () => [filters.background, filters.method, filters.innovation, filters.conclusion],
+  () => {
+    if (cachedNodes.length > 0 && cachedLinks.length > 0) {
+      renderChart(cachedNodes, cachedLinks)
+    }
+  },
+  { deep: true }
+)
 
 // 从节点详情跳转到论文PDF预览页
 const handleNavigateToPaper = (paperId: string) => {
@@ -415,19 +573,67 @@ const handleNavigateToPaper = (paperId: string) => {
   })
 }
 
+// 开始拖拽调整大小
+const startResize = (event: MouseEvent) => {
+  event.preventDefault()
+  isResizing = true
+  resizeStartY.value = event.clientY
+  resizeStartHeight.value = canvasHeight.value
+  
+  document.addEventListener('mousemove', handleResizeMove)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'ns-resize'
+  document.body.style.userSelect = 'none'
+}
+
+// 拖拽移动
+const handleResizeMove = (event: MouseEvent) => {
+  if (!isResizing) return
+  
+  const deltaY = event.clientY - resizeStartY.value
+  let newHeight = resizeStartHeight.value + deltaY
+  
+  // 限制高度范围
+  newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newHeight))
+  canvasHeight.value = newHeight
+  
+  // 实时调整图表大小
+  if (chartInstance) {
+    chartInstance.resize()
+  }
+}
+
+// 停止拖拽
+const stopResize = () => {
+  isResizing = false
+  document.removeEventListener('mousemove', handleResizeMove)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  
+  // 确保最终尺寸正确应用
+  setTimeout(() => {
+    if (chartInstance) {
+      chartInstance.resize()
+    }
+  }, 50)
+}
+
 const handleResize = () => chartInstance?.resize()
 
 onMounted(() => {
   fetchGraphData()
   window.addEventListener('resize', handleResize)
-  if (chartRef.value) {
-    chartInstance = echarts.init(chartRef.value)
-    chartInstance.on('click', handleChartClick)
-  }
+  // 移除冗余的 chartInstance 初始化,由 renderChart 统一处理并绑定事件
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  // 清理可能残留的拖拽监听器
+  if (isResizing) {
+    document.removeEventListener('mousemove', handleResizeMove)
+    document.removeEventListener('mouseup', stopResize)
+  }
   chartInstance?.dispose()
 })
 </script>
@@ -435,22 +641,51 @@ onUnmounted(() => {
 <template>
   <section class="graph-page">
     <header class="graph-header">
-      <div>
+      <div class="header-left">
         <h1 class="section-title">Knowledge Graph</h1>
         <div class="graph-filters">
-          <el-checkbox v-model="filters.background" size="small">研究背景</el-checkbox>
-          <el-checkbox v-model="filters.method" size="small">研究方法</el-checkbox>
-          <el-checkbox v-model="filters.innovation" size="small">创新点</el-checkbox>
-          <el-checkbox v-model="filters.conclusion" size="small">结论</el-checkbox>
+          <el-checkbox v-model="filters.background" size="small" class="filter-chip">
+            <span class="filter-icon" style="background: #a78bfa;"></span>
+            研究背景
+          </el-checkbox>
+          <el-checkbox v-model="filters.method" size="small" class="filter-chip">
+            <span class="filter-icon" style="background: #3b82f6;"></span>
+            研究方法
+          </el-checkbox>
+          <el-checkbox v-model="filters.innovation" size="small" class="filter-chip">
+            <span class="filter-icon" style="background: #eab308;"></span>
+            创新点
+          </el-checkbox>
+          <el-checkbox v-model="filters.conclusion" size="small" class="filter-chip">
+            <span class="filter-icon" style="background: #22c55e;"></span>
+            结论
+          </el-checkbox>
         </div>
       </div>
       <div class="graph-tags">
-        <span class="status-pill is-brand">Semantic Units</span>
+        <span class="status-pill is-brand">
+          <span class="pill-icon">🔬</span>
+          Semantic Units
+        </span>
       </div>
     </header>
 
-    <section class="graph-canvas">
-      <div v-loading="isLoading" ref="chartRef" class="graph-chart"></div>
+    <section class="graph-canvas-wrapper">
+      <div 
+        class="graph-canvas" 
+        :style="{ height: `${canvasHeight}px` }"
+      >
+        <div v-loading="isLoading" ref="chartRef" class="graph-chart"></div>
+        
+        <!-- 拖拽调整手柄 -->
+        <div 
+          class="resize-handle"
+          @mousedown="startResize"
+          title="拖拽调整画布高度"
+        >
+          <div class="resize-handle-bar"></div>
+        </div>
+      </div>
     </section>
 
     <!-- 节点详情抽屉 -->
@@ -463,16 +698,160 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.graph-page { display: grid; gap: 0.9rem; height: 100%; }
+.graph-page { 
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem; 
+  height: 100%;
+  padding: 0 1.5rem 1.5rem;
+  overflow-y: auto;
+}
+
 .graph-header { 
-  display: flex; align-items: center; justify-content: space-between; 
-  padding-bottom: 0.9rem; border-bottom: 1px solid var(--line-soft); 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  padding-bottom: 1rem; 
+  border-bottom: 2px solid var(--line-soft);
+  background: linear-gradient(to bottom, rgba(255,255,255,0.9), transparent);
 }
-.graph-filters { display: flex; gap: 1rem; margin-top: 0.5rem; }
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.section-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.graph-filters { 
+  display: flex; 
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 6px 14px !important;
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid var(--line-soft) !important;
+  transition: all 0.2s ease !important;
+  font-size: 13px !important;
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: #cbd5e0 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+.filter-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.graph-tags {
+  display: flex;
+  align-items: center;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.08));
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.pill-icon {
+  font-size: 14px;
+}
+
+.graph-canvas-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .graph-canvas { 
-  position: relative; flex: 1; min-height: 60vh; 
-  border: 1px solid var(--line-soft); border-radius: 12px;
-  background: radial-gradient(circle at top, rgba(237, 244, 255, 0.9), transparent 40%);
+  position: relative; 
+  width: 100%;
+  min-height: 300px;
+  border: 1px solid var(--line-soft); 
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
+  box-shadow: 
+    inset 0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transition: height 0.1s ease-out;
 }
-.graph-chart { width: 100%; height: 100%; }
+
+.graph-chart { 
+  width: 100%; 
+  height: 100%; 
+}
+
+/* 拖拽调整手柄样式 */
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  cursor: ns-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.05));
+  transition: background 0.2s ease;
+}
+
+.resize-handle:hover {
+  background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.15));
+}
+
+.resize-handle-bar {
+  width: 60px;
+  height: 4px;
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.resize-handle:hover .resize-handle-bar {
+  width: 80px;
+  background: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Element Plus 复选框样式覆盖 */
+:deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
+  color: #2c3e50 !important;
+  font-weight: 600;
+}
+
+:deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
+:deep(.el-checkbox__label) {
+  font-size: 13px;
+  padding-left: 6px !important;
+}
 </style>
