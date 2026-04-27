@@ -1,50 +1,15 @@
 import request from '../network/request'
 import type { AuthResponse, LoginPayload, RegisterPayload } from '../types/auth'
 
-const shouldUseFallback = () => import.meta.env.VITE_ENABLE_API_FALLBACK !== 'false'
+// 1. 登录
+export const loginApi = (payload: LoginPayload) : Promise<AuthResponse> =>
+    request.post<AuthResponse>('/auth/login', payload)
 
-const createMockResponse = (
-  payload: Pick<RegisterPayload, 'name' | 'email'>,
-): Promise<AuthResponse> =>
-  new Promise((resolve) => {
-    window.setTimeout(() => {
-      resolve({
-        accessToken: `scider-demo-token-${Date.now()}`,
-        user: {
-          id: `user-${Date.now()}`,
-          name: payload.name,
-          email: payload.email,
-          institution: 'Scider Lab',
-        },
-      })
-    }, 480)
-  })
+// 2. 注册
+export const registerApi = (payload: RegisterPayload) : Promise<AuthResponse> =>
+    request.post<AuthResponse>('/auth/register', payload)
 
-export const loginApi = async (payload: LoginPayload): Promise<AuthResponse> => {
-  try {
-    return await request.post('/auth/login', payload)
-  } catch (error) {
-    if (!shouldUseFallback()) {
-      throw error
-    }
 
-    return createMockResponse({
-      name: payload.email.split('@')[0] || 'Researcher',
-      email: payload.email,
-    })
-  }
-}
-
-export const registerApi = async (payload: RegisterPayload): Promise<AuthResponse> => {
-  try {
-    return await request.post('/auth/register', payload)
-  } catch (error) {
-    if (!shouldUseFallback()) {
-      throw error
-    }
-
-    return createMockResponse(payload)
-  }
-}
-
-export const getProfileApi = () => request.get('/auth/profile')
+// 3. 获取用户信息
+export const getProfileApi = (): Promise<any> => 
+  request.get('/auth/profile')

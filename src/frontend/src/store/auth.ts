@@ -1,69 +1,68 @@
 import { defineStore } from 'pinia'
-
+import { ref, computed } from 'vue'
 import { loginApi, registerApi } from '../api/auth'
 import type { AuthUser, LoginPayload, RegisterPayload } from '../types/auth'
-import {
-  clearAuthStorage,
-  getAccessToken,
-  getStoredProfile,
-  setAccessToken,
-  setStoredProfile,
-} from '../utils/storage'
+import { authStorage } from '../utils/auth_storage'
 
-interface AuthState {
-  token: string
-  user: AuthUser | null
-  hydrated: boolean
-}
+export const useAuthStore = defineStore('auth', () => {
+  // state
+  const token = ref<string>('')
+  const user = ref<AuthUser | null>(null)
+  const hydrated = ref<boolean>(false)
 
-export const useAuthStore = defineStore('auth', {
-  state: (): AuthState => ({
-    token: '',
-    user: null,
-    hydrated: false,
-  }),
+  // getters
+  const isAuthenticated = computed(() => Boolean(token.value))
+  const displayName = computed(() => user.value?.username || 'Researcher')
 
-  getters: {
-    isAuthenticated: (state) => Boolean(state.token),
-    displayName: (state) => state.user?.name || 'Researcher',
-  },
+  // actions
+  function hydrate() {
+    if (hydrated.value) return
 
-  actions: {
-    hydrate() {
-      if (this.hydrated) {
-        return
-      }
+    token.value = authStorage.getToken()
+    user.value = authStorage.getProfile()
+    hydrated.value = true
+  }
 
-      this.token = getAccessToken()
-      this.user = getStoredProfile()
-      this.hydrated = true
-    },
+  async function login(payload: LoginPayload) {
+    const response = await loginApi(payload)
+    applySession(response.accessToken, response.user)
+    return response
+  }
 
-    async login(payload: LoginPayload) {
-      const response = await loginApi(payload)
-      this.applySession(response.accessToken, response.user)
-      return response
-    },
+  async function register(payload: RegisterPayload) {
+    const response = await registerApi(payload)
+    applySession(response.accessToken, response.user)
+    return response
+  }
 
-    async register(payload: RegisterPayload) {
-      const response = await registerApi(payload)
-      this.applySession(response.accessToken, response.user)
-      return response
-    },
+  function applySession(newToken: string, newUser: AuthUser) {
+    token.value = newToken
+    user.value = newUser
+    hydrated.value = true
+    authStorage.setToken(newToken)
+    authStorage.setProfile(newUser)
+  }
 
-    applySession(token: string, user: AuthUser) {
-      this.token = token
-      this.user = user
-      this.hydrated = true
-      setAccessToken(token)
-      setStoredProfile(user)
-    },
+  function logout() {
+    token.value = ''
+    user.value = null
+    hydrated.value = true
+    authStorage.clearAll()
+  }
 
-    logout() {
-      this.token = ''
-      this.user = null
-      this.hydrated = true
-      clearAuthStorage()
-    },
-  },
+  return {
+    // state
+    token,
+    user,
+    hydrated,
+    // getters
+    isAuthenticated,
+    displayName,
+    // actions
+    hydrate,
+    login,
+    register,
+    applySession,
+    logout,
+  }
 })
