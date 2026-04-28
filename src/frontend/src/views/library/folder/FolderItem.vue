@@ -1,21 +1,15 @@
 <script setup lang="ts">
 import { ArrowRight, Delete, EditPen, Folder, FolderAdd, MoreFilled } from '@element-plus/icons-vue'
-import { ref, onMounted, onUnmounted } from 'vue'
-
-interface LibraryFolder {
-  id: string
-  name: string
-  paperIds: string[]
-  children?: LibraryFolder[]
-}
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useFolderOperations } from '../../../hooks/useFolderOperations'
+import type { Folder as LibraryFolder } from '../../../types/folder'
 
 interface Props {
   folder: LibraryFolder
   depth: number
   selectedFolderId: string
   expandedFolders: Set<string>
-  allFolders: LibraryFolder[]
-  showActions?: boolean // 新增：是否显示操作按钮，默认为 true
+  showActions?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,127 +19,83 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'select-folder': [folderId: string]
   'toggle-expand': [folderId: string]
-  'create-sub-folder': [parentFolder: LibraryFolder]
-  'rename-folder': [folder: LibraryFolder]
-  'move-folder': [folder: LibraryFolder]
-  'copy-folder': [folder: LibraryFolder]
-  'delete-folder': [folder: LibraryFolder]
 }>()
 
+// 引入操作逻辑
+const { createSubFolder, renameFolder, moveFolder, copyFolder, deleteFolder } = useFolderOperations()
+
+// 本地状态：下拉菜单
 const dropdownVisible = ref(false)
-const dropdownPosition = ref<{ x: number, y: number }>({ x: 0, y: 0 })
+const dropdownPosition = ref({ x: 0, y: 0 })
 const dropdownRef = ref<HTMLElement | null>(null)
 
-const handleSelectFolder = () => {
-  emit('select-folder', props.folder.id)
-}
+// 基础交互
+const handleSelectFolder = () => emit('select-folder', props.folder.id)
 
 const toggleExpand = (event: MouseEvent) => {
   event.stopPropagation()
-  if (hasChildren.value) {
-    emit('toggle-expand', props.folder.id)
-  }
+  if (hasChildren.value) emit('toggle-expand', props.folder.id)
 }
 
-const hasChildren = computed(() => {
-  return props.folder.children && props.folder.children.length > 0
-})
+// 辅助计算
+const hasChildren = computed(() => !!(props.folder.children?.length))
+const isExpanded = computed(() => props.expandedFolders.has(props.folder.id))
+const indentStyle = computed(() => ({
+  marginLeft: `${props.depth * 1.5}rem`,
+  paddingLeft: '0.5rem'
+}))
 
-const isExpanded = computed(() => {
-  return props.expandedFolders.has(props.folder.id)
-})
-
-// 切换下拉菜单显示
+// 下拉菜单控制
 const toggleDropdown = (event: MouseEvent) => {
   event.stopPropagation()
   if (dropdownVisible.value) {
     dropdownVisible.value = false
-  } else {
-    dropdownVisible.value = true
-    const target = event.currentTarget as HTMLElement
-    const rect = target.getBoundingClientRect()
-    dropdownPosition.value = { 
-      x: rect.right, 
-      y: rect.bottom 
-    }
+    return
   }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  dropdownPosition.value = { x: rect.right, y: rect.bottom }
+  dropdownVisible.value = true
 }
 
-// 关闭下拉菜单
-const closeDropdown = () => {
-  dropdownVisible.value = false
-}
+const closeDropdown = () => { dropdownVisible.value = false }
 
-// 处理全局点击事件
+// 全局点击关闭
 const handleClickOutside = (event: MouseEvent) => {
   if (!dropdownVisible.value) return
-  
   const target = event.target as HTMLElement
-  
-  // 检查点击是否在下拉菜单内部
-  if (dropdownRef.value && dropdownRef.value.contains(target)) {
-    return
-  }
-  
-  // 检查点击是否是触发按钮本身
-  const moreIcon = document.querySelector('.more-icon')
-  if (moreIcon && moreIcon.contains(target)) {
-    return
-  }
-  
-  // 点击了外部区域，关闭下拉菜单
+  if (dropdownRef.value?.contains(target)) return
+  if ((event.target as HTMLElement).closest('.more-icon')) return
   dropdownVisible.value = false
 }
 
-// 组件挂载时添加全局点击监听
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
+onMounted(() => document.addEventListener('click', handleClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 
-// 组件卸载时移除全局点击监听
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
-
-// 新建子文件夹
+// 文件夹操作 —— 直接调用 composable，无需向上 emit
 const handleCreateSubFolder = async () => {
   closeDropdown()
-  emit('create-sub-folder', props.folder)
+  await createSubFolder(props.folder)
 }
 
-// 重命名文件夹
-const handleRenameFolder = () => {
+const handleRenameFolder = async () => {
   closeDropdown()
-  emit('rename-folder', props.folder)
+  await renameFolder(props.folder)
 }
 
-// 移动文件夹
-const handleMoveFolder = () => {
+const handleMoveFolder = async () => {
   closeDropdown()
-  emit('move-folder', props.folder)
+  await moveFolder(props.folder)
 }
 
-// 复制文件夹
-const handleCopyFolder = () => {
+const handleCopyFolder = async () => {
   closeDropdown()
-  emit('copy-folder', props.folder)
+  await copyFolder(props.folder)
 }
 
-// 删除文件夹
-const handleDeleteFolder = () => {
+const handleDeleteFolder = async () => {
   closeDropdown()
-  emit('delete-folder', props.folder)
+  await deleteFolder(props.folder)
 }
-
-// 计算缩进
-const indentStyle = computed(() => {
-  return {
-    marginLeft: `${props.depth * 1.5}rem`,
-    paddingLeft: '0.5rem'
-  }
-})
-
-import { computed } from 'vue'
 </script>
 
 <template>
@@ -155,12 +105,9 @@ import { computed } from 'vue'
       :class="{ active: selectedFolderId === folder.id }"
       :style="indentStyle"
     >
-      <div 
-        class="folder-item__content"
-        @click="handleSelectFolder"
-      >
-        <!-- 展开/收起图标 -->
-        <el-icon 
+      <div class="folder-item__content" @click="handleSelectFolder">
+        <!-- 展开/收起图标（有子节点时显示） -->
+        <el-icon
           v-if="hasChildren"
           class="expand-icon"
           :class="{ 'is-expanded': isExpanded }"
@@ -169,12 +116,12 @@ import { computed } from 'vue'
           <ArrowRight />
         </el-icon>
         <span v-else class="expand-placeholder"></span>
-        
+
         <el-icon><Folder /></el-icon>
         <span class="folder-name">{{ folder.name }}</span>
-        
-        <!-- 详情按钮 - 仅在 showActions 为 true 时显示 -->
-        <el-icon 
+
+        <!-- 操作菜单按钮（若 showActions 为 true） -->
+        <el-icon
           v-if="showActions"
           class="more-icon"
           @click.stop="toggleDropdown"
@@ -182,9 +129,9 @@ import { computed } from 'vue'
           <MoreFilled />
         </el-icon>
       </div>
-      
+
       <!-- 下拉菜单 -->
-      <div 
+      <div
         v-if="dropdownVisible"
         ref="dropdownRef"
         class="folder-dropdown"
@@ -213,11 +160,8 @@ import { computed } from 'vue'
       </div>
     </div>
 
-    <!-- 递归渲染子文件夹 -->
-    <div 
-      v-if="hasChildren && isExpanded"
-      class="sub-folder-list"
-    >
+    <!-- 递归子文件夹 -->
+    <div v-if="hasChildren && isExpanded" class="sub-folder-list">
       <FolderItem
         v-for="child in folder.children"
         :key="child.id"
@@ -225,14 +169,8 @@ import { computed } from 'vue'
         :depth="depth + 1"
         :selected-folder-id="selectedFolderId"
         :expanded-folders="expandedFolders"
-        :all-folders="allFolders"
         @select-folder="$emit('select-folder', $event)"
         @toggle-expand="$emit('toggle-expand', $event)"
-        @create-sub-folder="$emit('create-sub-folder', $event)"
-        @rename-folder="$emit('rename-folder', $event)"
-        @move-folder="$emit('move-folder', $event)"
-        @copy-folder="$emit('copy-folder', $event)"
-        @delete-folder="$emit('delete-folder', $event)"
       />
     </div>
   </div>
