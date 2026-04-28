@@ -31,5 +31,11 @@ class Settings:
     LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
+    # ──────────────────────────────────────────────
+    # PDF upload settings
+    # ──────────────────────────────────────────────
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
+    MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+
 
 settings = Settings()

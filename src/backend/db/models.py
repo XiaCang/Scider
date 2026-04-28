@@ -87,6 +87,8 @@ class Paper(Base):
     doi = Column(String(255), unique=True, nullable=True)
     year = Column(Integer, nullable=True)
     pdf_path = Column(String(1024), nullable=True)
+    md5_hash = Column(String(64), unique=True, nullable=True)
+    file_size = Column(Integer, nullable=True)
     user_id = Column(String(64), ForeignKey("user.id"), nullable=False)
     folder_id = Column(String(64), ForeignKey("folder.id"), nullable=True)
     status = Column(SAEnum(PaperStatus), nullable=False, server_default=PaperStatus.PENDING_PARSING.value)

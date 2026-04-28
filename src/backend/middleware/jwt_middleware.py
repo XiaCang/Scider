@@ -3,7 +3,7 @@ import jwt
 from fastapi import Request
 from starlette.responses import JSONResponse
 
-from src.backend.module.user.service.auth_service import get_user_by_id
+from module.user.service.auth_service import get_user_by_id
 
 JWT_SECRET = os.getenv("JWT_SECRET", "devsecret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
