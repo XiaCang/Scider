@@ -1,8 +1,0 @@
-### 健康检查
-GET http://127.0.0.1:8000/health
-
-### 提交 ping 任务
-POST http://127.0.0.1:8000/api/tasks/ping
-
-### 查询任务状态（替换为实际 task_id）
-GET http://127.0.0.1:8000/api/tasks/f9011b24-16b8-44ad-ab29-902e0657ce11
