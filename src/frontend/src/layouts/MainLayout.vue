@@ -7,8 +7,7 @@ import {
   Reading,
   Search,
   Share,
-  SwitchButton,
-  Upload,
+  SwitchButton
 } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 import { computed } from 'vue'
@@ -58,10 +57,6 @@ const handleNavigate = async (path: string) => {
 const handleLogout = async () => {
   authStore.logout()
   await router.replace('/login')
-}
-
-const handleUpload = () => {
-  window.alert('Upload entry is ready.')
 }
 
 const handleDiscoverTabChange = (tab: string) => {

@@ -175,7 +175,7 @@ const mockPapers: Record<string, LibraryPaper> = {
 }
 
 // --- 核心逻辑：按需加载与图谱渲染 ---
-const fetchGraphData = async (seedPaperId?: string, expandDirection?: 'upstream' | 'downstream') => {
+const fetchGraphData = async (/*seedPaperId?: string, expandDirection?: 'upstream' | 'downstream'*/) => {
   isLoading.value = true
   try {
     // TODO: 替换为真实 API 调用
