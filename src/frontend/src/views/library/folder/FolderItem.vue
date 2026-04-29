@@ -1,21 +1,22 @@
 <script setup lang="ts">
-import { ArrowRight, Delete, EditPen, Folder, FolderAdd, MoreFilled } from '@element-plus/icons-vue'
-import { ref, onMounted, onUnmounted } from 'vue'
-
-interface LibraryFolder {
-  id: string
-  name: string
-  paperIds: string[]
-  children?: LibraryFolder[]
-}
+import {
+  ArrowRight,
+  Folder,
+  Plus,
+  Setting
+} from '@element-plus/icons-vue'
+import { ref, computed } from 'vue'
+import { useFolderStore } from '../../../store/folder'
+import { useFolderOperations } from '../../../hooks/useFolderOperations'
+import FolderSettingDialog from './FolderSettingDialog.vue'
+import type { Folder as LibraryFolder } from '../../../types/folder'
 
 interface Props {
   folder: LibraryFolder
   depth: number
   selectedFolderId: string
   expandedFolders: Set<string>
-  allFolders: LibraryFolder[]
-  showActions?: boolean // 新增：是否显示操作按钮，默认为 true
+  showActions?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,199 +26,149 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'select-folder': [folderId: string]
   'toggle-expand': [folderId: string]
-  'create-sub-folder': [parentFolder: LibraryFolder]
-  'rename-folder': [folder: LibraryFolder]
-  'move-folder': [folder: LibraryFolder]
-  'copy-folder': [folder: LibraryFolder]
-  'delete-folder': [folder: LibraryFolder]
 }>()
 
-const dropdownVisible = ref(false)
-const dropdownPosition = ref<{ x: number, y: number }>({ x: 0, y: 0 })
-const dropdownRef = ref<HTMLElement | null>(null)
+const folderStore = useFolderStore()
+const { createSubFolder } = useFolderOperations()
 
-const handleSelectFolder = () => {
-  emit('select-folder', props.folder.id)
+// 悬停状态（用于切换图标和显示操作按钮）
+const isHovering = ref(false)
+// 设置对话框可见性
+const settingsVisible = ref(false)
+// 拖拽相关状态
+const isDragOver = ref(false)
+
+// 辅助计算
+const hasChildren = computed(() => !!(props.folder.children?.length))
+const isExpanded = computed(() => props.expandedFolders.has(props.folder.id))
+const indentStyle = computed(() => ({
+  marginLeft: `${props.depth * 10}px`,
+  paddingLeft: '0.5rem'
+}))
+
+// 判断目标文件夹是否是源文件夹的后代（用于拖放校验）
+const isDescendant = (ancestorId: string, descendantId: string): boolean => {
+  const ancestors = new Set<string>()
+  const findAncestors = (list: LibraryFolder[], id: string, path: string[] = []): boolean => {
+    for (const f of list) {
+      if (f.id === id) {
+        path.forEach(p => ancestors.add(p))
+        return true
+      }
+      if (f.children && findAncestors(f.children, id, [...path, f.id])) return true
+    }
+    return false
+  }
+  findAncestors(folderStore.folders, descendantId)
+  return ancestors.has(ancestorId)
 }
+
+// 基础交互
+const handleSelectFolder = () => emit('select-folder', props.folder.id)
 
 const toggleExpand = (event: MouseEvent) => {
   event.stopPropagation()
-  if (hasChildren.value) {
-    emit('toggle-expand', props.folder.id)
-  }
+  if (hasChildren.value) emit('toggle-expand', props.folder.id)
 }
 
-const hasChildren = computed(() => {
-  return props.folder.children && props.folder.children.length > 0
-})
+// 拖拽事件处理
+const onDragStart = (event: DragEvent) => {
+  event.dataTransfer!.setData('text/plain', props.folder.id)
+  event.dataTransfer!.effectAllowed = 'move'
+}
 
-const isExpanded = computed(() => {
-  return props.expandedFolders.has(props.folder.id)
-})
+const onDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  if (!event.dataTransfer) return
+  const draggedId = event.dataTransfer.getData('text/plain')
+  // 不允许拖到自己或后代上
+  if (draggedId === props.folder.id || isDescendant(draggedId, props.folder.id)) {
+    event.dataTransfer.dropEffect = 'none'
+    return
+  }
+  isDragOver.value = true
+  event.dataTransfer.dropEffect = event.ctrlKey ? 'copy' : 'move'
+}
 
-// 切换下拉菜单显示
-const toggleDropdown = (event: MouseEvent) => {
-  event.stopPropagation()
-  if (dropdownVisible.value) {
-    dropdownVisible.value = false
+const onDragLeave = () => {
+  isDragOver.value = false
+}
+
+const onDrop = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = false
+  const draggedId = event.dataTransfer!.getData('text/plain')
+  if (!draggedId || draggedId === props.folder.id) return
+  if (isDescendant(draggedId, props.folder.id)) return
+
+  const ctrlKey = event.ctrlKey || event.metaKey
+  if (ctrlKey) {
+    // 复制
+    folderStore.copyFolder(draggedId, props.folder.id)
   } else {
-    dropdownVisible.value = true
-    const target = event.currentTarget as HTMLElement
-    const rect = target.getBoundingClientRect()
-    dropdownPosition.value = { 
-      x: rect.right, 
-      y: rect.bottom 
-    }
+    // 移动
+    folderStore.moveFolder(draggedId, props.folder.id)
   }
 }
 
-// 关闭下拉菜单
-const closeDropdown = () => {
-  dropdownVisible.value = false
+// 加号按钮：新建子文件夹（自动以当前文件夹为父级）
+const handleAdd = async () => {
+  await createSubFolder(props.folder)
 }
 
-// 处理全局点击事件
-const handleClickOutside = (event: MouseEvent) => {
-  if (!dropdownVisible.value) return
-  
-  const target = event.target as HTMLElement
-  
-  // 检查点击是否在下拉菜单内部
-  if (dropdownRef.value && dropdownRef.value.contains(target)) {
-    return
-  }
-  
-  // 检查点击是否是触发按钮本身
-  const moreIcon = document.querySelector('.more-icon')
-  if (moreIcon && moreIcon.contains(target)) {
-    return
-  }
-  
-  // 点击了外部区域，关闭下拉菜单
-  dropdownVisible.value = false
+// 齿轮按钮：打开设置对话框
+const openSettings = () => {
+  settingsVisible.value = true
 }
-
-// 组件挂载时添加全局点击监听
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-// 组件卸载时移除全局点击监听
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
-
-// 新建子文件夹
-const handleCreateSubFolder = async () => {
-  closeDropdown()
-  emit('create-sub-folder', props.folder)
-}
-
-// 重命名文件夹
-const handleRenameFolder = () => {
-  closeDropdown()
-  emit('rename-folder', props.folder)
-}
-
-// 移动文件夹
-const handleMoveFolder = () => {
-  closeDropdown()
-  emit('move-folder', props.folder)
-}
-
-// 复制文件夹
-const handleCopyFolder = () => {
-  closeDropdown()
-  emit('copy-folder', props.folder)
-}
-
-// 删除文件夹
-const handleDeleteFolder = () => {
-  closeDropdown()
-  emit('delete-folder', props.folder)
-}
-
-// 计算缩进
-const indentStyle = computed(() => {
-  return {
-    marginLeft: `${props.depth * 1.5}rem`,
-    paddingLeft: '0.5rem'
-  }
-})
-
-import { computed } from 'vue'
 </script>
 
 <template>
   <div class="folder-item-wrapper">
     <div
       class="folder-item"
-      :class="{ active: selectedFolderId === folder.id }"
+      :class="{
+        active: selectedFolderId === folder.id,
+        'drag-over': isDragOver
+      }"
       :style="indentStyle"
+      draggable="true"
+      @dragstart="onDragStart"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
+      @mouseenter="isHovering = true"
+      @mouseleave="isHovering = false"
     >
-      <div 
-        class="folder-item__content"
-        @click="handleSelectFolder"
-      >
-        <!-- 展开/收起图标 -->
-        <el-icon 
+      <div class="folder-item__content" @click="handleSelectFolder">
+        <!-- 左侧图标：有子级时悬停显示箭头，否则显示文件夹图标；无子级占位隐藏 -->
+        <el-icon
           v-if="hasChildren"
           class="expand-icon"
           :class="{ 'is-expanded': isExpanded }"
           @click.stop="toggleExpand"
         >
-          <ArrowRight />
+          <ArrowRight v-if="isHovering" />
+          <Folder v-else />
         </el-icon>
-        <span v-else class="expand-placeholder"></span>
-        
-        <el-icon><Folder /></el-icon>
+        <el-icon v-else class="expand-placeholder">
+          <Folder/>
+        </el-icon>
         <span class="folder-name">{{ folder.name }}</span>
-        
-        <!-- 详情按钮 - 仅在 showActions 为 true 时显示 -->
-        <el-icon 
-          v-if="showActions"
-          class="more-icon"
-          @click.stop="toggleDropdown"
-        >
-          <MoreFilled />
-        </el-icon>
-      </div>
-      
-      <!-- 下拉菜单 -->
-      <div 
-        v-if="dropdownVisible"
-        ref="dropdownRef"
-        class="folder-dropdown"
-        :style="{ top: `${dropdownPosition.y}px`, left: `${dropdownPosition.x}px` }"
-      >
-        <div class="dropdown-item" @click="handleCreateSubFolder">
-          <el-icon><FolderAdd /></el-icon>
-          <span>新建子文件夹</span>
-        </div>
-        <div class="dropdown-item" @click="handleRenameFolder">
-          <el-icon><EditPen /></el-icon>
-          <span>重命名</span>
-        </div>
-        <div class="dropdown-item" @click="handleMoveFolder">
-          <el-icon><ArrowRight /></el-icon>
-          <span>移动到</span>
-        </div>
-        <div class="dropdown-item" @click="handleCopyFolder">
-          <el-icon><Folder /></el-icon>
-          <span>复制到</span>
-        </div>
-        <div class="dropdown-item delete" @click="handleDeleteFolder">
-          <el-icon><Delete /></el-icon>
-          <span>删除</span>
+
+        <!-- 右侧操作按钮组（hover 或拖放时显示） -->
+        <div v-if="showActions" class="action-group" :class="{ 'is-visible': isHovering || isDragOver }">
+          <el-icon class="action-btn" @click.stop="handleAdd" title="新建子文件夹">
+            <Plus />
+          </el-icon>
+          <el-icon class="action-btn" @click.stop="openSettings" title="文件夹设置">
+            <Setting />
+          </el-icon>
         </div>
       </div>
     </div>
 
-    <!-- 递归渲染子文件夹 -->
-    <div 
-      v-if="hasChildren && isExpanded"
-      class="sub-folder-list"
-    >
+    <!-- 递归子文件夹 -->
+    <div v-if="hasChildren && isExpanded" class="sub-folder-list">
       <FolderItem
         v-for="child in folder.children"
         :key="child.id"
@@ -225,16 +176,17 @@ import { computed } from 'vue'
         :depth="depth + 1"
         :selected-folder-id="selectedFolderId"
         :expanded-folders="expandedFolders"
-        :all-folders="allFolders"
         @select-folder="$emit('select-folder', $event)"
         @toggle-expand="$emit('toggle-expand', $event)"
-        @create-sub-folder="$emit('create-sub-folder', $event)"
-        @rename-folder="$emit('rename-folder', $event)"
-        @move-folder="$emit('move-folder', $event)"
-        @copy-folder="$emit('copy-folder', $event)"
-        @delete-folder="$emit('delete-folder', $event)"
       />
     </div>
+
+    <!-- 文件夹设置对话框 -->
+    <FolderSettingDialog
+      v-if="settingsVisible"
+      v-model="settingsVisible"
+      :folder="folder"
+    />
   </div>
 </template>
 
@@ -247,12 +199,13 @@ import { computed } from 'vue'
 .folder-item {
   display: flex;
   flex-direction: column;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
+  padding: 0.3rem 0.5rem;    /* 减小上下内边距，让高度更紧凑 */
+  border-radius: 6px;        /* 稍微缩小圆角 */
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid transparent;
   position: relative;
+  user-select: none;
 }
 
 .folder-item:hover {
@@ -265,54 +218,67 @@ import { computed } from 'vue'
   border-color: var(--brand);
 }
 
+.folder-item.drag-over {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-light);
+}
+
 .folder-item__content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;              /* 缩小内部间距，让图标更靠左 */
   width: 100%;
   position: relative;
 }
 
-.expand-icon {
-  font-size: 0.9rem;
+/* 左侧展开图标区域 */
+.expand-icon,
+.expand-placeholder {
+  font-size: 0.9rem;        /* 图标缩小一点 */
+  min-width: 16px;          /* 固定最小宽度，保证对齐 */
   color: var(--text-secondary);
   transition: transform 0.2s ease;
   cursor: pointer;
-  min-width: 16px;
 }
-
 .expand-icon.is-expanded {
   transform: rotate(90deg);
 }
 
-.expand-placeholder {
-  min-width: 16px;
+.folder-icon-static {
+  font-size: 0.9rem;        /* 与上方保持一致 */
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .folder-name {
   flex: 1;
-  font-size: 0.9rem;
+  font-size: 0.85rem;       /* 字体缩小 */
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.more-icon {
-  font-size: 1rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s;
+/* 右侧操作按钮组 */
+.action-group {
+  display: flex;
+  gap: 1px;                 /* 缩小按钮间距 */
   opacity: 0;
+  transition: opacity 0.15s;
 }
-
-.folder-item:hover .more-icon {
+.action-group.is-visible {
   opacity: 1;
 }
-
-.more-icon:hover {
+.action-btn {
+  font-size: 1.25rem;       /* 按钮图标缩小 */
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;             /* 减小内边距 */
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.action-btn:hover {
   background: var(--bg-soft);
   color: var(--text-primary);
 }
@@ -320,46 +286,9 @@ import { computed } from 'vue'
 .sub-folder-list {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin-top: 0.2rem;
-  margin-bottom: 0.3rem;
+  gap: 0.1rem;              /* 减小子文件夹之间的垂直间距 */
+  margin-top: 0.1rem;
+  margin-bottom: 0.1rem;
 }
 
-/* 下拉菜单样式 */
-.folder-dropdown {
-  position: fixed;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  padding: 0.5rem 0;
-  min-width: 180px;
-  z-index: 1000;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-
-.dropdown-item:hover {
-  background: var(--bg-soft);
-}
-
-.dropdown-item.delete {
-  color: #f56c6c;
-}
-
-.dropdown-item.delete:hover {
-  background: #fef0f0;
-}
-
-.dropdown-item .el-icon {
-  font-size: 1rem;
-}
 </style>

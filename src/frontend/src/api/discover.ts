@@ -1,4 +1,4 @@
-import request from '../network/request'
+import instance from '../network/request'
 
 export interface RecommendationItem {
   id: string
@@ -10,7 +10,7 @@ export interface RecommendationItem {
 }
 
 export const fetchRecommendationsApi = (direction: string) =>
-  request.get('/recommendations', { params: { direction } })
+  instance.get('/recommendations', { params: { direction } })
 
 export const fetchCitationGraphApi = (doi: string) =>
-  request.get('/recommendations/citations', { params: { doi } })
+  instance.get('/recommendations/citations', { params: { doi } })

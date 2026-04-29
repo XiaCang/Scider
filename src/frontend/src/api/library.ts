@@ -1,26 +1,7 @@
 import request from '../network/request'
 
-// ==================== 论文相关接口 ====================
-
-/**
- * 论文关键点(四维度结构化数据)
- */
-export interface PaperKeyPoints {
-  background: string      // 研究背景：该研究试图解决什么问题？
-  method: string          // 研究方法：采用了何种技术路径或实验设计？
-  innovation: string      // 创新点：与现有工作相比，独特贡献是什么？
-  conclusion: string      // 结论：研究得出了何种关键发现？
-}
-
-export interface LibraryPaper {
-  id: string
-  title: string
-  authors: string
-  year: number
-  status: 'Processing' | 'PendingConfirmation' | 'Confirmed'
-  source: string
-  keyPoints: PaperKeyPoints  // 改为结构化对象
-}
+import type {LibraryPaper, PaperKeyPoints, PaperNote, PaperPdfInfo } from '../types/library'
+import type { Folder } from '../types/folder'
 
 /**
  * 获取论文列表
@@ -33,19 +14,9 @@ export const fetchLibraryApi = () => request.get('/papers')
 export const saveKeyPointsApi = (paperId: string, keyPoints: PaperKeyPoints) =>
   request.patch(`/papers/${paperId}/key-points`, { keyPoints })
 
-// ==================== 文件夹相关接口 ====================
-
-export interface Folder {
-  id: string
-  name: string
-  user_id?: string
-  paperIds: string[]
-  children?: Folder[]
-  created_at?: string
-}
 
 /**
- * 获取用户的文件夹树（支持无限层级）
+ * 获取用户的文件夹树
  */
 export const fetchFoldersApi = () => request.get<Folder[]>('/folders')
 
@@ -122,29 +93,6 @@ export const movePaperToFolderApi = (paperId: string, folderId: string | null) =
   request.patch(`/papers/${paperId}/folder`, { folder_id: folderId })
 
 // ==================== PDF预览相关接口 ====================
-
-/**
- * 论文PDF信息
- */
-export interface PaperPdfInfo {
-  id: string
-  title: string
-  pdfUrl: string
-  pageCount: number
-}
-
-/**
- * 论文笔记
- */
-export interface PaperNote {
-  id: string
-  paperId: string
-  content: string
-  pageNumber: number
-  selectedText?: string
-  createdAt: string
-  updatedAt: string
-}
 
 /**
  * 获取论文PDF信息

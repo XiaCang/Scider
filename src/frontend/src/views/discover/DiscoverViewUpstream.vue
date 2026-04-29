@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Search, Document } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
-import type { LibraryPaper } from '../../api/library'
+import type { LibraryPaper } from '../../types/library'
 
 const quickSearch = ref('')
 const selectedPaperId = ref<string>('')

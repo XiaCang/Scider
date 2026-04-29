@@ -2,20 +2,9 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Back } from '@element-plus/icons-vue'
-import type { LibraryPaper } from '../../api/library'
+import type { LibraryPaper } from '../../types/library'
 
-// 节点类型定义
-type NodeType = 'paper' | 'background' | 'method' | 'innovation' | 'conclusion'
-
-interface GraphNodeData {
-  id: string
-  name: string
-  type: NodeType
-  paperId?: string  // 关联的论文ID（仅四要素节点有）
-  paperTitle?: string  // 论文名称简称（用于显示）
-  content?: string  // 要素内容文本
-  paperInfo?: LibraryPaper  // 论文完整信息（仅论文节点有）
-}
+import type { GraphNodeData, NodeType } from '../../types/graph'
 
 interface Props {
   modelValue: boolean
