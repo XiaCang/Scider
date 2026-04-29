@@ -1,12 +1,13 @@
 ﻿<script setup lang="ts">
 import { Lock, Message, User } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { reactive, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppLogo from '../../components/AppLogo.vue'
 import NetworkBackdrop from '../../components/NetworkBackdrop.vue'
 import { useAuthStore } from '../../store/auth'
+import { sendCodeApi } from '../../api/auth'  // 根据你的实际路径调整
 
 type AuthMode = 'login' | 'register'
 
@@ -14,54 +15,130 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
+// 表单 ref
+const formRef = ref<FormInstance>()
+
 const mode = ref<AuthMode>('login')
 const loading = ref(false)
+const codeSending = ref(false)
+const countdown = ref(0)
 
 const form = reactive({
   name: '',
-  institution: '',
   email: '',
   password: '',
-  remember: true,
+  code: ''
 })
+
+// 表单校验规则
+const rules = computed<FormRules>(() => {
+  const baseRules: FormRules = {
+    email: [
+      { required: true, message: '请输入邮箱', trigger: 'blur' },
+      { type: 'email', message: '请输入正确的邮箱格式', trigger: ['blur', 'change'] }
+    ],
+    password: [
+      { required: true, message: '请输入密码', trigger: 'blur' },
+      { min: 6, max: 20, message: '密码长度应为 6-20 位', trigger: 'blur' }
+    ]
+  }
+
+  if (mode.value === 'register') {
+    baseRules.name = [
+      { required: true, message: '请输入姓名', trigger: 'blur' },
+      { min: 2, max: 20, message: '姓名长度应为 2-20 个字符', trigger: 'blur' }
+    ]
+    baseRules.code = [
+      { required: true, message: '请输入验证码', trigger: 'blur' },
+      { len: 6, message: '验证码应为 6 位数字', trigger: 'blur' } // 假设验证码6位
+    ]
+  }
+
+  return baseRules
+})
+
+// 倒计时定时器句柄
+let timer: number | null = null
+
+const startCountdown = (seconds: number) => {
+  if (timer) clearInterval(timer)
+  countdown.value = seconds
+  timer = window.setInterval(() => {
+    if (countdown.value <= 1) {
+      if (timer) clearInterval(timer)
+      timer = null
+      countdown.value = 0
+    } else {
+      countdown.value--
+    }
+  }, 1000)
+}
+
+const sendCode = async () => {
+  // 先校验邮箱
+  if (!formRef.value) return
+  await formRef.value.validateField('email', (valid) => {
+    if (!valid) return
+  })
+
+  codeSending.value = true
+  try {
+    await sendCodeApi({ email: form.email })
+    ElMessage.success('验证码已发送至邮箱，请查收')
+    startCountdown(60)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '发送验证码失败')
+  } finally {
+    codeSending.value = false
+  }
+}
 
 const switchMode = (nextMode: AuthMode) => {
   mode.value = nextMode
+  // 切换模式时清空验证码和倒计时，并重置表单校验状态
+  form.code = ''
+  if (timer) clearInterval(timer)
+  countdown.value = 0
+  formRef.value?.clearValidate()
 }
 
 const handleSubmit = async () => {
-  loading.value = true
+  if (!formRef.value) return
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return
 
-  try {
-    if (mode.value === 'login') {
-      await authStore.login({
-        email: form.email,
-        password: form.password,
-        remember: form.remember,
-      })
-      ElMessage.success('Login successful.')
-    } else {
-      await authStore.register({
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        institution: form.institution,
-      })
-      ElMessage.success('Account created successfully.')
+    loading.value = true
+    try {
+      if (mode.value === 'login') {
+        await authStore.login({
+          email: form.email,
+          password: form.password
+        })
+        ElMessage.success('Login successful.')
+      } else {
+        await authStore.register({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          code: form.code
+        })
+        ElMessage.success('Account created successfully.')
+      }
+
+      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/app/dashboard'
+      await router.replace(redirect)
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : 'Authentication failed.')
+    } finally {
+      loading.value = false
     }
-
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/app/dashboard'
-    await router.replace(redirect)
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Authentication failed.')
-  } finally {
-    loading.value = false
-  }
+  })
 }
 </script>
 
 <template>
   <div class="auth-page">
+    <!-- 背景网格（保持不变） -->
     <div class="auth-page__mesh auth-page__mesh--left">
       <NetworkBackdrop />
     </div>
@@ -116,8 +193,16 @@ const handleSubmit = async () => {
           </p>
         </div>
 
-        <el-form class="auth-form" label-position="top" @submit.prevent="handleSubmit">
-          <el-form-item v-if="mode === 'register'" label="姓名">
+        <el-form
+          ref="formRef"
+          class="auth-form"
+          label-position="top"
+          :model="form"
+          :rules="rules"
+          @submit.prevent="handleSubmit"
+        >
+          <!-- 注册时显示姓名 -->
+          <el-form-item v-if="mode === 'register'" label="姓名" prop="name">
             <el-input v-model="form.name" placeholder="例如：张同学">
               <template #prefix>
                 <el-icon><User /></el-icon>
@@ -125,11 +210,8 @@ const handleSubmit = async () => {
             </el-input>
           </el-form-item>
 
-          <el-form-item v-if="mode === 'register'" label="机构 / 学校">
-            <el-input v-model="form.institution" placeholder="例如：XX University" />
-          </el-form-item>
-
-          <el-form-item label="邮箱">
+          <!-- 邮箱（登录/注册均需要） -->
+          <el-form-item label="邮箱" prop="email">
             <el-input v-model="form.email" placeholder="Enter your academic email">
               <template #prefix>
                 <el-icon><Message /></el-icon>
@@ -137,7 +219,8 @@ const handleSubmit = async () => {
             </el-input>
           </el-form-item>
 
-          <el-form-item label="密码">
+          <!-- 密码 -->
+          <el-form-item label="密码" prop="password">
             <el-input v-model="form.password" type="password" show-password placeholder="Password">
               <template #prefix>
                 <el-icon><Lock /></el-icon>
@@ -145,10 +228,26 @@ const handleSubmit = async () => {
             </el-input>
           </el-form-item>
 
-          <div v-if="mode === 'login'" class="auth-form__meta">
-            <el-checkbox v-model="form.remember">Remember me</el-checkbox>
-            <a href="/">Forgot password?</a>
-          </div>
+          <!-- 注册时显示验证码 + 发送按钮 -->
+          <el-form-item v-if="mode === 'register'" label="验证码" prop="code">
+            <div class="captcha-wrapper">
+              <el-input v-model="form.code" placeholder="请输入验证码" style="flex: 1;">
+                <template #prefix>
+                  <el-icon><Message /></el-icon>
+                </template>
+              </el-input>
+              <el-button
+                :disabled="countdown > 0 || codeSending"
+                @click="sendCode"
+                type="primary"
+                plain
+              >
+                {{ countdown > 0 ? `${countdown}s 后重试` : '获取验证码' }}
+              </el-button>
+            </div>
+          </el-form-item>
+
+          <!-- 登录时不再显示 remember me 选项（已移除） -->
 
           <el-button class="auth-form__submit" type="primary" :loading="loading" @click="handleSubmit">
             {{ mode === 'login' ? 'Sign In' : 'Create Account' }}
@@ -160,6 +259,19 @@ const handleSubmit = async () => {
 </template>
 
 <style scoped>
+/* 原有样式保持不变，仅补充验证码布局 */
+.captcha-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.captcha-wrapper .el-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 以下是你原有的样式，请完整保留 */
 .auth-page {
   position: relative;
   min-height: 100vh;
@@ -254,25 +366,24 @@ const handleSubmit = async () => {
   gap: 1rem;
 }
 
-
 .auth-switcher {
   display: inline-flex;
   padding: 0.25rem;
   border-radius: 999px;
   background: var(--bg-muted);
-  flex-shrink: 0; /* 防止切换器被挤压 */
+  flex-shrink: 0;
 }
 
 .auth-switcher__item {
   border: 0;
   background: transparent;
-  padding: 0.5rem 1.2rem; /* 调整内边距 */
+  padding: 0.5rem 1.2rem;
   border-radius: 999px;
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
-  white-space: nowrap; /* 核心修复：防止文字竖排 */
+  white-space: nowrap;
   transition: all 0.2s ease;
 }
 
@@ -298,15 +409,7 @@ const handleSubmit = async () => {
   line-height: 1.7;
 }
 
-.auth-form__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: -0.35rem;
-  color: var(--text-secondary);
-  font-size: 0.92rem;
-}
+/* 已删除 .auth-form__meta 相关样式，因为 remember me 被移除 */
 
 .auth-form__submit {
   width: 100%;
@@ -345,6 +448,14 @@ const handleSubmit = async () => {
   .auth-switcher__item {
     flex: 1;
   }
+
+  .captcha-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .captcha-wrapper .el-button {
+    margin-left: 0;
+  }
 }
 </style>
-

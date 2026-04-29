@@ -3,7 +3,7 @@ import { Check, Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 
-import type { LibraryPaper, PaperKeyPoints } from '../../../api/library'
+import type { LibraryPaper, PaperKeyPoints } from '../../../types/library'
 
 interface Props {
   modelValue: boolean

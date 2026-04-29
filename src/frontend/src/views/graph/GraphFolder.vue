@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { ArrowRight, Folder as FolderIcon } from '@element-plus/icons-vue'
 import FolderItem from '../library/folder/FolderItem.vue'
-import type { Folder } from '../../api/library'
+import type { Folder } from '../../types/folder'
 
 interface Props {
   modelValue: boolean

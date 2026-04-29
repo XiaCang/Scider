@@ -8,7 +8,6 @@ const route = useRoute()
 const router = useRouter()
 const folderStore = useFolderStore()
 
-const folderPanelVisible = ref(true)
 const expandedFolders = ref<Set<string>>(new Set())
 
 const activeFolderId = computed(() => (route.params.folderId as string) || 'all')
@@ -17,34 +16,83 @@ const handleSelectFolder = (folderId: string) => {
   folderStore.setCurrentFolder(folderId === 'all' ? null : folderId)
   router.push({ name: 'library-folder', params: { folderId } })
 }
+
+// 分割栏状态
+const leftWidth = ref(280) // 左侧宽度，单位 px
+const minLeftWidth = 240
+const maxLeftWidth = 500
+const isResizing = ref(false)
+
+const startResize = (e: MouseEvent) => {
+  isResizing.value = true
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', stopResize)
+  e.preventDefault()
+}
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!isResizing.value) return
+  let newWidth = e.clientX
+  if (newWidth < minLeftWidth) newWidth = minLeftWidth
+  if (newWidth > maxLeftWidth) newWidth = maxLeftWidth
+  leftWidth.value = newWidth
+}
+
+const stopResize = () => {
+  isResizing.value = false
+  document.removeEventListener('mousemove', onMouseMove)
+  document.removeEventListener('mouseup', stopResize)
+}
 </script>
 
 <template>
-  <LibraryFolderTree
-    :active-folder-id="activeFolderId"
-    v-model:expanded-folders="expandedFolders"
-    @select-folder="handleSelectFolder"
-  >
-    <router-view />
-  </LibraryFolderTree>
+  <div class="library-layout">
+    <div class="left-panel" :style="{ width: leftWidth + 'px' }">
+      <LibraryFolderTree
+        :active-folder-id="activeFolderId"
+        v-model:expanded-folders="expandedFolders"
+        @select-folder="handleSelectFolder"
+      />
+    </div>
+    <div class="resize-handle" @mousedown="startResize"></div>
+    <div class="right-panel">
+      <router-view />
+    </div>
+  </div>
 </template>
+
 <style scoped>
 .library-layout {
+  display: flex;
   position: relative;
   min-height: calc(100vh - 60px);
+  width: 100%;
+  overflow-x: hidden;
 }
 
-.load-test-btn {
-  position: absolute;
-  top: 12px;
-  right: 20px;
-  z-index: 10;
-  padding: 0.4rem 1rem;
-  border-radius: 8px;
-  border: 1px dashed var(--brand);
-  background: rgba(var(--brand-rgb), 0.05);
-  color: var(--brand);
-  font-size: 0.9rem;
-  cursor: pointer;
+.left-panel {
+  flex-shrink: 0;
+  overflow-y: auto;
+  height: 100vh;
+  padding : 12px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.resize-handle {
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover {
+  background: var(--brand);
+}
+
+.right-panel {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0; /* 防止内容溢出 */
 }
 </style>

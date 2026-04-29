@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import type { PaperNote, PaperPdfInfo } from '../../../api/library'
+import type { PaperNote, PaperPdfInfo } from '../../../types/library'
 import { 
   fetchPaperPdfInfoApi,
   fetchPaperNotesApi,

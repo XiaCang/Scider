@@ -1,18 +1,34 @@
 // composables/useFolderOperations.ts
 import { h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useFolderStore } from '@/stores/folder'
-import type { Folder } from '@/types/folder'
+import { useFolderStore } from '../store/folder'
+import type { Folder } from '../types/folder'
 
 /**
- * 文件夹操作逻辑（仅负责新建操作弹窗，其余操作由 FolderSettingsDialog 承担）
+ * 扁平化所有文件夹，用于下拉列表等
  */
+export function getAllFolders(tree: Folder[]): Folder[] {
+  let result: Folder[] = []
+  for (const node of tree) {
+    result.push(node)
+    if (node.children) result = result.concat(getAllFolders(node.children))
+  }
+  return result
+}
+
+/**
+ * 判断 childId 是否是 parentId 的后代
+ */
+export function isDescendant(tree: Folder[], parentId: string, childId: string): boolean {
+  const parent = tree.find(f => f.id === parentId)
+  if (!parent?.children) return false
+  return parent.children.some(c => c.id === childId) || parent.children.some(c => isDescendant([c], c.id, childId))
+}
+
 export function useFolderOperations() {
   const folderStore = useFolderStore()
 
-  /**
-   * 新建根文件夹（通常在"全部论文"视图下点击"+"触发）
-   */
+  // ------------------- 创建操作（需要对话框） -------------------
   async function createRootFolder() {
     let name = ''
     try {
@@ -24,8 +40,8 @@ export function useFolderOperations() {
             class: 'dialog-input',
             value: name,
             placeholder: '文件夹名称',
-            onInput: (e: Event) => (name = (e.target as HTMLInputElement).value),
-          }),
+            onInput: (e: Event) => (name = (e.target as HTMLInputElement).value)
+          })
         ]),
         confirmButtonText: '确定',
         cancelButtonText: '取消',
@@ -36,20 +52,15 @@ export function useFolderOperations() {
             return
           }
           done()
-        },
+        }
       })
-      // 根文件夹用户ID暂时写死，正式项目应从 auth store 获取
       await folderStore.createRootFolder(name.trim(), 'current-user')
       ElMessage.success('根文件夹创建成功')
     } catch {
-      // 取消操作
+      // 取消
     }
   }
 
-  /**
-   * 新建子文件夹
-   * @param parentFolder 父文件夹对象，将自动作为“移动到”的目标
-   */
   async function createSubFolder(parentFolder: Folder) {
     let name = ''
     try {
@@ -61,8 +72,8 @@ export function useFolderOperations() {
             class: 'dialog-input',
             value: name,
             placeholder: '子文件夹名称',
-            onInput: (e: Event) => (name = (e.target as HTMLInputElement).value),
-          }),
+            onInput: (e: Event) => (name = (e.target as HTMLInputElement).value)
+          })
         ]),
         confirmButtonText: '确定',
         cancelButtonText: '取消',
@@ -73,18 +84,36 @@ export function useFolderOperations() {
             return
           }
           done()
-        },
+        }
       })
       await folderStore.createSubFolder(parentFolder.id, name.trim())
       ElMessage.success('子文件夹创建成功')
-    } catch {
-      // 取消操作
-    }
+    } catch {}
   }
 
+  // ------------------- 纯 store 操作（供 FolderSettingsDialog 调用） -------------------
+  async function renameFolder(folderId: string, newName: string) {
+    await folderStore.renameFolder(folderId, newName)
+  }
+
+  async function moveFolder(folderId: string, targetId: string) {
+    await folderStore.moveFolder(folderId, targetId)
+  }
+
+  async function copyFolder(folderId: string, targetId: string) {
+    await folderStore.copyFolder(folderId, targetId)
+  }
+
+  async function deleteFolder(folderId: string) {
+    await folderStore.deleteFolder(folderId)
+  }
 
   return {
     createRootFolder,
-    createSubFolder
+    createSubFolder,
+    renameFolder,
+    moveFolder,
+    copyFolder,
+    deleteFolder,
   }
 }

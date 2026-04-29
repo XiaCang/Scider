@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { Plus } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../../store/folder'
+import { useFolderOperations } from '../../../hooks/useFolderOperations'
+import { useFolderTreeFilter } from '../../../hooks/useFolderTreeFilter'
 import FolderItem from './FolderItem.vue'
+import FolderSearchBar from '../../../components/FolderSearchBar.vue'
+import FolderSortPopover from '../../../components/FolderSortPopover.vue'
 
 interface Props {
   activeFolderId: string
@@ -15,14 +20,24 @@ const emit = defineEmits<{
 }>()
 
 const folderStore = useFolderStore()
+const { createRootFolder } = useFolderOperations()
+const {
+  searchQuery,
+  sortField,
+  sortOrder,
+  setSort,
+  filterAndSort
+} = useFolderTreeFilter()
 
 folderStore.loadTestData()
 
 const disableTransition = ref(true)
 onMounted(() => requestAnimationFrame(() => requestAnimationFrame(() => (disableTransition.value = false))))
 
-// 视图模式：'all' 显示文件夹树，'recent' 显示占位
 const viewMode = ref<'all' | 'recent'>('all')
+
+// 过滤排序后的根文件夹列表
+const filteredFolders = computed(() => filterAndSort(folderStore.folders))
 
 const toggleExpand = (id: string) => {
   const copy = new Set(props.expandedFolders)
@@ -30,13 +45,11 @@ const toggleExpand = (id: string) => {
   emit('update:expandedFolders', copy)
 }
 
-// 文件夹选择
 const handleSelectFolder = (id: string) => {
   viewMode.value = 'all'
   emit('select-folder', id)
 }
 
-// 顶部选项卡切换
 const handleTabClick = (tab: 'recent' | 'all') => {
   if (tab === 'all') {
     viewMode.value = 'all'
@@ -45,12 +58,29 @@ const handleTabClick = (tab: 'recent' | 'all') => {
     viewMode.value = 'recent'
   }
 }
+
+const handleAddRootFolder = () => {
+  createRootFolder()
+}
 </script>
 
 <template>
   <div class="folder-panel">
     <div class="folder-panel__header">
-      <h3 class="folder-panel__title">文库文件夹</h3>
+      <div class="title-row">
+        <h3 class="folder-panel__title">文库文件夹</h3>
+        <div class="title-actions">
+          <el-icon class="action-icon" @click="handleAddRootFolder" title="新建根文件夹">
+            <Plus />
+          </el-icon>
+          <FolderSortPopover
+            :sort-field="sortField"
+            :sort-order="sortOrder"
+            @update:sort-field="(f) => setSort(f, sortOrder)"
+            @update:sort-order="(o) => setSort(sortField, o)"
+          />
+        </div>
+      </div>
       <div class="folder-tabs">
         <button
           class="tab-btn"
@@ -67,17 +97,17 @@ const handleTabClick = (tab: 'recent' | 'all') => {
           全部论文
         </button>
       </div>
+      <!-- 搜索栏（仅在全部论文视图显示） -->
+      <FolderSearchBar v-if="viewMode === 'all'" v-model="searchQuery" />
     </div>
 
     <div class="folder-manager">
-      <!-- 文件夹树视图 -->
       <div v-if="viewMode === 'all'" class="folder-list">
-        <!-- 直接渲染顶层文件夹（无“全部论文”项） -->
         <FolderItem
-          v-for="folder in folderStore.folders"
+          v-for="folder in filteredFolders"
           :key="folder.id"
           :folder="folder"
-          :depth="1"
+          :depth="0"
           :selected-folder-id="activeFolderId"
           :expanded-folders="expandedFolders"
           :show-actions="true"
@@ -85,44 +115,23 @@ const handleTabClick = (tab: 'recent' | 'all') => {
           @toggle-expand="toggleExpand"
         />
       </div>
-
-      <!-- 最近论文占位 -->
       <div v-else class="recent-placeholder">
         <p>最近论文功能即将开放</p>
       </div>
     </div>
   </div>
-
-  <!-- 主内容区插槽 -->
-  <section class="library-page">
-    <slot></slot>
-  </section>
 </template>
 
 <style scoped>
-.library-page {
-  display: flex;
-  gap: 0;
-  min-height: calc(100vh - 60px);
-  position: relative;
-}
-
-/* 圆角卡片式文件夹面板 */
 .folder-panel {
-  width: 280px;
-  min-width: 280px;
   background: white;
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  margin: 20px 16px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: fixed;
-  left: 0;
-  top: 64px; /* 主 header 高度 */
-  bottom: 20px;
-  z-index: 50;
+  height: 100%;
+  width: 100%;
 }
 
 .folder-panel__header {
@@ -133,10 +142,37 @@ const handleTabClick = (tab: 'recent' | 'all') => {
   background: transparent;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
 .folder-panel__title {
-  margin: 0 0 12px 0;
+  margin: 0;
   font-size: 1rem;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-icon {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.action-icon:hover {
+  background: var(--bg-soft);
   color: var(--text-primary);
 }
 
@@ -170,8 +206,8 @@ const handleTabClick = (tab: 'recent' | 'all') => {
 
 .folder-manager {
   flex: 1;
-  overflow-y: auto;
   padding: 12px 12px 16px;
+  overflow-y: auto;
 }
 
 .folder-list {
@@ -189,6 +225,4 @@ const handleTabClick = (tab: 'recent' | 'all') => {
   font-size: 0.9rem;
   opacity: 0.8;
 }
-
-/* 移除不再需要的触发器样式 */
 </style>

@@ -62,10 +62,9 @@ import NavBar from '../components/NavBar.vue'
 /* 内容区域 */
 .workspace-content {
   flex: 1;
-  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 0rem;
   box-sizing: border-box;
 }
 
