@@ -1,5 +1,8 @@
 <template>
-  <div class="app-logo">
+  <div 
+    class="app-logo" 
+    :style="{ '--logo-size': `${size}px` }"
+  >
     <img 
       src="../assets/logo.png" 
       alt="Scider Logo" 
@@ -8,44 +11,46 @@
     
     <div class="app-logo__text">
       <strong>Scider</strong>
-      <small>Academic Reading Companion</small>
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+const props = defineProps({
+  // 定义 size 属性，默认值为 32
+  size: {
+    type: [Number, String],
+    default: 32
+  }
+});
+</script>
 
 <style scoped>
 .app-logo {
   display: inline-flex;
   align-items: center;
-  gap: 0.9rem;
+  /* 使用传入的 size 比例化间距 */
+  gap: calc(var(--logo-size) * 0.3); 
 }
 
-/* 新的图片样式控制 */
 .app-logo__img {
-  width: 2rem;       /* 保持与原图标一致的宽度 */
-  height: 2rem;      /* 保持与原图标一致的高度 */
-  object-fit: contain; /* 确保图片比例不失真 */
-  /* 如果你的图片没有自带圆角，可以按需开启下方属性 */
-  border-radius: 0.72rem;
+  /* 这里的宽高直接响应 size 属性 */
+  width: var(--logo-size);
+  height: var(--logo-size);
+  object-fit: contain;
+  border-radius: calc(var(--logo-size) * 0.2);
 }
 
 .app-logo__text {
   display: flex;
   flex-direction: column;
-  gap: 0.08rem;
 }
 
 .app-logo__text strong {
-  font-size: 1.1rem;
+  /* 字体大小根据图标大小自动缩放 */
+  font-size: calc(var(--logo-size) * 0.6);
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #173668; /* 建议给文字一个深色，保持对比度 */
-}
-
-.app-logo__text small {
-  color: var(--text-tertiary, #666); /* 增加备用色以防变量失效 */
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: #173668;
 }
 </style>

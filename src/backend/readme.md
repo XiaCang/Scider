@@ -43,6 +43,15 @@ GET http://127.0.0.1:8000/health
 
 新开一个终端，**确保在 `src/backend` 目录下**执行：
 
+Windows（本地开发推荐，避免 prefork 兼容问题）：
+
+```bash
+cd src/backend
+celery -A app.worker:celery_app worker --loglevel=info --pool=solo --concurrency=1
+```
+
+Linux / macOS：
+
 ```bash
 cd src/backend
 celery -A app.worker:celery_app worker --loglevel=info

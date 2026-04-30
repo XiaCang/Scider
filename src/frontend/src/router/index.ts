@@ -9,8 +9,9 @@ import DiscoverView from '../views/discover/DiscoverView.vue'
 import DiscoverViewUpstream from '../views/discover/DiscoverViewUpstream.vue'
 import GraphView from '../views/graph/GraphView.vue'
 import LibraryView from '../views/library/LibraryView.vue'
+import PaperPDFView from '../views/library/paper/PaperPDFView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
-
+import PaperList from '../views/library/PaperList.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -52,6 +53,18 @@ const router = createRouter({
           component: LibraryView,
           meta: {
             title: 'Scider | Library',
+          },  
+          children: [
+            { path: '', redirect: { name: 'library-folder', params: { folderId: 'all' } } },
+            { path: 'folder/:folderId', name: 'library-folder', component: PaperList },
+          ]
+        },
+        {
+          path: 'library/paper/:paperId/pdf',
+          name: 'paper-pdf',
+          component: PaperPDFView,
+          meta: {
+            title: 'Scider | PDF Preview',
           },
         },
         {
