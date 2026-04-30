@@ -244,3 +244,20 @@ curl -X POST http://127.0.0.1:8000/api/papers/upload \
   }
 }
 ```
+
+## 9. 文件夹管理（CRUD）
+
+文件夹用于对论文进行分类管理，所有接口均需 JWT 认证。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/folders/` | 创建文件夹 |
+| `GET` | `/api/folders/` | 获取当前用户的文件夹列表 |
+| `GET` | `/api/folders/{id}` | 获取单个文件夹详情 |
+| `PATCH` | `/api/folders/{id}` | 重命名文件夹 |
+| `DELETE` | `/api/folders/{id}` | 删除文件夹（其中的论文自动解绑，论文本身不受影响） |
+
+### 实现文件
+
+- `db/crud_folder.py` — 文件夹 CRUD 异步方法
+- `app/api/routes/folders.py` — 5 个 RESTful 接口，含用户归属校验

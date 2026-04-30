@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.papers import router as papers_router
+from app.api.routes.folders import router as folders_router
 from app.core.config import settings
 from middleware.jwt_middleware import JWTAuthMiddleware
 from module.user.controller.auth_router import router as auth_router
@@ -31,5 +32,6 @@ def health_check() -> dict:
 
 app.include_router(tasks_router, prefix=settings.API_PREFIX)
 app.include_router(papers_router, prefix=settings.API_PREFIX)
+app.include_router(folders_router, prefix=settings.API_PREFIX)
 app.include_router(auth_router)
 app.include_router(user_router)
