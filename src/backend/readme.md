@@ -79,7 +79,7 @@ celery -A app.worker:celery_app worker --loglevel=info
 ### 方式一：VS Code REST Client 插件（推荐）
 
 1. 在 VS Code 扩展市场搜索并安装 **REST Client**
-2. 打开项目根目录下的 `test.http` 文件
+2. 打开项目根目录下的 `test_example.http` 文件，然后拷贝一份，命名为 `test.http`，**不要直接在 `test_example.http` 文件里修改内容**
 3. 点击每条请求上方出现的 **Send Request**，结果显示在右侧面板
 
 ```http

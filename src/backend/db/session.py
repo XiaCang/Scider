@@ -45,6 +45,19 @@ async def get_session(echo: bool = False):
         yield session
 
 
+async def get_db(echo: bool = False):
+    """FastAPI dependency that yields an AsyncSession.
+
+    Usage in routes:
+        @router.post("/")
+        async def handler(session: AsyncSession = Depends(get_db)):
+            ...
+    """
+    factory = get_session_factory(echo=echo)
+    async with factory() as session:
+        yield session
+
+
 async def create_tables_if_needed(echo: bool = False):
     """Helper to create tables from metadata in-code for quick testing.
     This runs `Base.metadata.create_all()` using an async engine.

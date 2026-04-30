@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from db.crud_paper import create_paper, get_paper_by_md5
-from db.session import get_session
+from db.session import get_db
 from utils.response import success, error
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -19,7 +19,7 @@ ALLOWED_EXTENSIONS = {".pdf"}
 async def upload_pdf(
     request: Request,
     file: UploadFile = File(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     # ── 1. JWT 认证检查 ──
     user = getattr(request.state, "user", None)

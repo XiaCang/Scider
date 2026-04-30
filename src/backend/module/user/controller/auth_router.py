@@ -62,6 +62,9 @@ async def register(payload: RegisterIn):
         return success(data=data, msg="注册成功", code=0, status_code=200)
     except ValueError as e:
         return error(msg=str(e), code=400, data=None, status_code=200)
+    except Exception as e:
+        logger.exception("register failed")
+        return error(msg=f"服务器内部错误: {str(e)}", code=500, data=None, status_code=500)
 
 
 @router.post("/api/user/login")

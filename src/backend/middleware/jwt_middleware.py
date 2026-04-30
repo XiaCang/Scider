@@ -14,6 +14,7 @@ EXEMPT_PATHS = (
     "/api/user/token",
     "/api/user/send-code",
     "/api/user/change-password",
+    "/api/tasks/",
     "/docs",
     "/openapi.json",
     "/redoc",
