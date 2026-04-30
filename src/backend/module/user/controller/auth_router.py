@@ -3,12 +3,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 
 
-from src.backend.module.user.service.auth_service import (
+from module.user.service.auth_service import (
     register_user,
     authenticate_user,
 )
-from src.backend.utils.response import success, error
-from src.backend.utils.redis_client import get_redis
+from utils.response import success, error
+from utils.redis_client import get_redis
 import random
 import os
 import smtplib
@@ -138,7 +138,7 @@ async def change_password(payload: ChangePasswordIn):
         await r.delete(key)
 
         # perform password change via service
-        from src.backend.module.user.service.auth_service import change_user_password
+        from module.user.service.auth_service import change_user_password
 
         updated = await change_user_password(payload.email, payload.new_password)
         if not updated:

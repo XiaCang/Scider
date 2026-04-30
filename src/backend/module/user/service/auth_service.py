@@ -7,8 +7,8 @@ import jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 
-from src.backend.db.session import get_session
-from src.backend.db.models import User
+from db.session import get_session
+from db.models import User
 
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
