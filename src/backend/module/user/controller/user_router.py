@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
-from src.backend.module.user.service.auth_service import (
+from module.user.service.auth_service import (
     get_user_by_id,
     update_user_name,
 )
-from src.backend.utils.response import success, error
+from utils.response import success, error
 
 
 router = APIRouter()
