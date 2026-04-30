@@ -74,3 +74,35 @@ Content-Type: application/pdf
 
 < ./1.pdf
 ------boundary--
+
+### ──── 文件夹接口（需先登录获取 token）────
+
+### 创建文件夹
+POST http://127.0.0.1:8000/api/folders/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "我的论文"
+}
+
+### 获取文件夹列表
+GET http://127.0.0.1:8000/api/folders/
+Authorization: Bearer <token>
+
+### 获取单个文件夹详情（替换 <folder_id>）
+GET http://127.0.0.1:8000/api/folders/<folder_id>
+Authorization: Bearer <token>
+
+### 重命名文件夹（替换 <folder_id>）
+PATCH http://127.0.0.1:8000/api/folders/<folder_id>
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "重命名后的文件夹"
+}
+
+### 删除文件夹（替换 <folder_id>）
+DELETE http://127.0.0.1:8000/api/folders/<folder_id>
+Authorization: Bearer <token>
