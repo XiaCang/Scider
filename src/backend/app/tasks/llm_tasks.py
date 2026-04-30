@@ -14,12 +14,25 @@ import asyncio
 import json
 import logging
 import re
+import sys
+from pathlib import Path
 
 from app.celery_app import celery_app
 from app.core.llm_client import chat_completion
 from app.core.prompts import EXTRACT_SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_backend_root_in_path() -> None:
+    """
+    Ensure `src/backend` is in sys.path so `import db...` works
+    under different worker launch locations/environments.
+    """
+    backend_root = Path(__file__).resolve().parents[2]
+    backend_root_str = str(backend_root)
+    if backend_root_str not in sys.path:
+        sys.path.insert(0, backend_root_str)
 
 # ─── JSON 解析 ────────────────────────────────────────────────────────────────
 
@@ -57,6 +70,7 @@ def _parse_json_response(raw: str) -> dict:
 async def _set_paper_extracting(paper_id: str) -> None:
     """将 Paper.status 设为 EXTRACTING。"""
     from sqlalchemy import select
+    _ensure_backend_root_in_path()
     from db.session import get_session
     from db.models import Paper, PaperStatus
 
@@ -71,6 +85,7 @@ async def _set_paper_extracting(paper_id: str) -> None:
 async def _persist_result(paper_id: str, key_points: dict) -> None:
     """将四要素写入 KeyPoints 表，并将 Paper.status 更新为 PENDING_CONFIRMATION。"""
     from sqlalchemy import select
+    _ensure_backend_root_in_path()
     from db.session import get_session
     from db.models import Paper, KeyPoints, PaperStatus
 
@@ -103,6 +118,7 @@ async def _persist_result(paper_id: str, key_points: dict) -> None:
 async def _set_paper_failed(paper_id: str) -> None:
     """将 Paper.status 设为 FAILED。"""
     from sqlalchemy import select
+    _ensure_backend_root_in_path()
     from db.session import get_session
     from db.models import Paper, PaperStatus
 
