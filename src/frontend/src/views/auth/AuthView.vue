@@ -125,7 +125,7 @@ const handleSubmit = async () => {
         ElMessage.success('Account created successfully.')
       }
 
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/app/dashboard'
+      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/app/library'
       await router.replace(redirect)
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : 'Authentication failed.')
