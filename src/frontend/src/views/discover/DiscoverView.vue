@@ -11,7 +11,7 @@ const {
   loading,
   error,
   filteredResults,
-  search,
+  // search,
 } = useSearch()
 
 function viewDetails(itemId: string) {
