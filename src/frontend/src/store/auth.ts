@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { loginApi, registerApi } from '../api/auth'
 import type { AuthUser, LoginPayload, RegisterPayload } from '../types/auth'
 import { authStorage } from '../utils/auth_storage'
+import { hashPassword } from '../utils/crypto'
 
 export const useAuthStore = defineStore('auth', () => {
   // state
@@ -24,13 +25,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(payload: LoginPayload) {
-    const response = await loginApi(payload)
+    const response = await loginApi({
+      ...payload,
+      password: await hashPassword(payload.password),
+    })
     applySession(response.accessToken, response.user)
     return response
   }
 
   async function register(payload: RegisterPayload) {
-    const response = await registerApi(payload)
+    const response = await registerApi({
+      ...payload,
+      password: await hashPassword(payload.password),
+    })
     applySession(response.accessToken, response.user)
     return response
   }
