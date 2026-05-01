@@ -1,79 +1,43 @@
 <script setup lang="ts">
 import { ArrowDown, Search } from '@element-plus/icons-vue'
-import { ref } from 'vue'
+import { useSearch } from '../../discover/composables/useSearch'
+import { yearOptions, venueOptions, sortOptions } from '../../discover/constants'
 
-const quickSearch = ref('')
-const selectedYear = ref<string>('')
-const selectedVenue = ref<string>('')
-const sortBy = ref<string>('relevance')
+const {
+  keyword,
+  selectedYear,
+  selectedVenue,
+  sortBy,
+  loading,
+  error,
+  filteredResults,
+  // search,
+} = useSearch()
 
-const yearOptions = [
-  { label: '全部年份', value: '' },
-  { label: '2025', value: '2025' },
-  { label: '2024', value: '2024' },
-  { label: '2023', value: '2023' },
-  { label: '2022', value: '2022' },
-  { label: '2021及更早', value: '2021' },
-]
+function viewDetails(itemId: string) {
+  // TODO: 导航到论文详情页面
+  console.log('view details:', itemId)
+}
 
-const venueOptions = [
-  { label: '全部来源', value: '' },
-  { label: 'arXiv', value: 'arXiv' },
-  { label: 'SIGIR', value: 'SIGIR' },
-  { label: 'CHI', value: 'CHI' },
-  { label: 'ACL', value: 'ACL' },
-  { label: 'NeurIPS', value: 'NeurIPS' },
-]
-
-const sortOptions = [
-  { label: '相关性', value: 'relevance' },
-  { label: '最新发表', value: 'year-desc' },
-  { label: '最早发表', value: 'year-asc' },
-  { label: '标题 A-Z', value: 'title-asc' },
-]
-
-const recommendations = [
-  {
-    id: 'rec-1',
-    title: 'Scientific Document VLMs for Reading Assistance',
-    authors: 'Smith, J. et al.',
-    venue: 'arXiv',
-    year: 2025,
-    relation: 'Trending',
-    reason: '和你当前的"多模态论文理解"方向高度接近，可作为入门综述入口。',
-    description: '该研究探讨了视觉语言模型在科学文档阅读辅助中的应用，提供了系统性的分析和评估。',
-  },
-  {
-    id: 'rec-2',
-    title: 'Citation-aware Retrieval for Research Exploration',
-    authors: 'Johnson, M. et al.',
-    venue: 'SIGIR',
-    year: 2024,
-    relation: 'Upstream',
-    reason: '适合作为文献追踪与上下游检索能力的技术参考。',
-    description: '提出了一种基于引用感知的检索方法，能够有效追踪学术文献的上下游关系。',
-  },
-  {
-    id: 'rec-3',
-    title: 'Interactive Knowledge Graphs for Scholarly Search',
-    authors: 'Williams, K. et al.',
-    venue: 'CHI',
-    year: 2024,
-    relation: 'Downstream',
-    reason: '和知识图谱可视化及科研探索交互关系较强。',
-    description: '研究了交互式知识图谱在学术搜索中的应用，提升了用户探索和理解复杂研究领域的能力。',
-  },
-]
+function handleSearchInput() {
+  // 用户输入时实时过滤（已通过 computed filteredResults 实现）
+}
 </script>
 
 <template>
   <section class="discover-page">
+    <!-- 搜索栏 -->
     <div class="discover-search-bar">
       <label class="discover-search">
         <el-icon><Search /></el-icon>
-        <input v-model="quickSearch" type="text" placeholder="Search papers, authors, topics..." />
+        <input
+          v-model="keyword"
+          type="text"
+          placeholder="搜索论文、作者、主题..."
+          @input="handleSearchInput"
+        />
       </label>
-      
+
       <div class="discover-filters">
         <el-dropdown trigger="click">
           <el-button plain>
@@ -131,8 +95,28 @@ const recommendations = [
       </div>
     </div>
 
-    <section class="discover-list">
-      <article v-for="item in recommendations" :key="item.id" class="discover-item">
+    <!-- 推荐理由 -->
+    <p v-if="!keyword" class="discover-hint">
+      基于你的文库和阅读记录为你推荐以下论文
+    </p>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="state-message">
+      <p>正在加载推荐...</p>
+    </div>
+
+    <!-- 错误提示 -->
+    <div v-if="error" class="state-message state-error">
+      <p>{{ error }}</p>
+    </div>
+
+    <!-- 搜索结果 -->
+    <section v-if="!loading" class="discover-list">
+      <div v-if="filteredResults.length === 0" class="empty-list">
+        <p>{{ keyword ? '未找到匹配的论文' : '暂无推荐内容' }}</p>
+      </div>
+
+      <article v-for="item in filteredResults" :key="item.id" class="discover-item">
         <div class="discover-item__main">
           <h2 class="item-title">{{ item.title }}</h2>
           <div class="item-meta">
@@ -142,9 +126,12 @@ const recommendations = [
             <span class="meta-separator">·</span>
             <span>{{ item.venue }}</span>
           </div>
+          <p v-if="item.reason" class="item-reason">
+            {{ item.reason }}
+          </p>
           <p class="item-description">{{ item.description }}</p>
         </div>
-        <el-button plain>View Details</el-button>
+        <el-button plain @click="viewDetails(item.id)">View Details</el-button>
       </article>
     </section>
   </section>
@@ -154,12 +141,13 @@ const recommendations = [
 .discover-page {
   display: grid;
   gap: 0.9rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem;
 }
 
+/* 搜索栏 */
 .discover-search-bar {
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--line-soft);
   display: flex;
   flex-wrap: wrap;
   gap: 0.8rem;
@@ -170,8 +158,8 @@ const recommendations = [
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  width: 100%;
-  min-width: min(500px, 48vw);
+  flex: 1;
+  min-width: min(400px, 48vw);
   padding: 0.56rem 0.8rem;
   border-radius: 10px;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -186,6 +174,7 @@ const recommendations = [
   background: transparent;
   outline: none;
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
 .discover-filters {
@@ -194,44 +183,74 @@ const recommendations = [
   flex-wrap: wrap;
 }
 
+/* 推荐提示 */
+.discover-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+/* 状态提示 */
+.state-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 0.95rem;
+}
+
+.state-error {
+  color: #ef4444;
+}
+
+/* 列表 */
 .discover-list {
   display: grid;
   gap: 1rem;
-  padding-top: 1rem;
 }
 
 .discover-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--line-soft);
+  padding: 1rem 0;
+  border-top: 1px solid var(--line-soft, #e2e8f0);
 }
 
 .discover-item:first-child {
-  padding-top: 0;
   border-top: 0;
+  padding-top: 0;
 }
 
 .item-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.4rem;
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
   font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.4;
 }
 
 .item-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   color: var(--text-secondary);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
 }
 
 .meta-separator {
   opacity: 0.6;
+}
+
+.item-reason {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  color: var(--brand, #4f46e5);
+  line-height: 1.5;
 }
 
 .item-description {
@@ -241,7 +260,25 @@ const recommendations = [
   line-height: 1.6;
 }
 
+.empty-list {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 8px;
+  border: 1px dashed var(--line-soft, #e2e8f0);
+}
+
+.empty-list p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 820px) {
+  .discover-page {
+    padding: 1rem;
+  }
+
   .discover-item {
     flex-direction: column;
     align-items: flex-start;
@@ -254,11 +291,6 @@ const recommendations = [
 
   .discover-filters {
     width: 100%;
-  }
-
-  .discover-filters :deep(.el-select) {
-    flex: 1;
-    min-width: 120px;
   }
 }
 </style>

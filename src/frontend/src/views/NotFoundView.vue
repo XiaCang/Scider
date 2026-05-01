@@ -2,7 +2,7 @@
   <section class="not-found panel-surface">
     <h1>Page not found</h1>
     <p>The page you are looking for does not exist yet.</p>
-    <router-link to="/app/dashboard">Back to dashboard</router-link>
+    <router-link to="/app/library">Back to library</router-link>
   </section>
 </template>
 

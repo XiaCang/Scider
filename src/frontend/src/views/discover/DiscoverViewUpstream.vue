@@ -1,191 +1,46 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { Search, Document } from '@element-plus/icons-vue'
-import { computed, ref } from 'vue'
-import type { LibraryPaper } from '../../types/library'
+import { useCitationGraph } from '../../discover/composables/useCitationGraph'
 
-const quickSearch = ref('')
-const selectedPaperId = ref<string>('')
+const {
+  selectedPaperId,
+  selectedPaper,
+  libraryPapers,
+  upstreamLoading,
+  downstreamLoading,
+  upstreamError,
+  downstreamError,
+  upstreamKeyword,
+  downstreamKeyword,
+  filteredUpstreamPapers,
+  filteredDownstreamPapers,
+  selectPaper,
+  clearSelection,
+  ensureLibraryLoaded,
+} = useCitationGraph()
 
-// 模拟文库中的论文数据（实际应从API获取）
-const libraryPapers = ref<LibraryPaper[]>([
-  {
-    id: 'paper-1',
-    title: 'Transformers in Vision',
-    authors: 'A. Calianham',
-    year: 2022,
-    status: 'Confirmed',
-    source: 'CVPR',
-    keyPoints: {
-      background: '视觉任务中传统CNN的局限性，需要更好的长距离依赖建模',
-      method: '将图像分割为visual tokens，使用Transformer编码器处理',
-      innovation: '首次将纯Transformer架构应用于计算机视觉任务',
-      conclusion: 'ViT在大规模数据集上可以达到甚至超越SOTA CNN的性能'
-    },
-  },
-  {
-    id: 'paper-2',
-    title: 'Transformers in Poraios and Grapheni Methods',
-    authors: 'R. K. Rainur',
-    year: 2023,
-    status: 'Confirmed',
-    source: 'arXiv',
-    keyPoints: {
-      background: '多模态数据对齐和检索存在语义鸿沟问题',
-      method: '采用跨模态对齐技术和混合检索策略',
-      innovation: '提出新颖的跨模态表示学习方法',
-      conclusion: '显著提升了跨模态检索的准确性和效率'
-    },
-  },
-  {
-    id: 'paper-3',
-    title: 'Transformers in Vision',
-    authors: 'R. S. Soft',
-    year: 2023,
-    status: 'Confirmed',
-    source: 'NeurIPS',
-    keyPoints: {
-      background: '域适应和零样本迁移在实际应用中面临挑战',
-      method: '利用领域自适应技术和零样本学习框架',
-      innovation: '设计了新的域不变特征提取器',
-      conclusion: '在多个基准测试中实现了优异的零样本迁移性能'
-    },
-  },
-  {
-    id: 'paper-4',
-    title: 'Transformers in Vision',
-    authors: 'R. C. Bamer, R.A',
-    year: 2022,
-    status: 'Confirmed',
-    source: 'ICLR',
-    keyPoints: {
-      background: '传统序列模型的训练效率和并行化能力不足',
-      method: '引入自注意力机制实现并行处理',
-      innovation: 'Attention机制大幅减少训练时间并提升模型表现',
-      conclusion: 'Transformer成为NLP和CV领域的基础架构'
-    },
-  },
-])
-
-// 根据选择的论文生成上下游论文数据
-const upstreamPapers = computed(() => {
-  if (!selectedPaperId.value) return []
-  
-  const selectedPaper = libraryPapers.value.find(p => p.id === selectedPaperId.value)
-  if (!selectedPaper) return []
-
-  // 这里应该调用API获取真实的上下游论文
-  // 目前使用模拟数据
-  return [
-    {
-      id: 'up-1',
-      title: 'Transformer Architecture Analysis',
-      authors: 'Vaswani, A. et al.',
-      venue: 'NeurIPS',
-      year: 2017,
-      relation: 'Upstream',
-      citationCount: 15240,
-      description: `基于 "${selectedPaper.title}" 的原始Transformer论文，奠定了注意力机制的基础。`,
-    },
-    {
-      id: 'up-2',
-      title: 'BERT: Pre-training of Deep Bidirectional Transformers',
-      authors: 'Devlin, J. et al.',
-      venue: 'NAACL',
-      year: 2019,
-      relation: 'Upstream',
-      citationCount: 24320,
-      description: 'BERT模型开创了双向预训练的新时代。',
-    },
-    {
-      id: 'up-3',
-      title: 'RoBERTa: A Robustly Optimized BERT Pretraining Approach',
-      authors: 'Liu, Y. et al.',
-      venue: 'arXiv',
-      year: 2019,
-      relation: 'Upstream',
-      citationCount: 8760,
-      description: '对BERT的训练方式进行了优化，提升了性能。',
-    },
-  ]
+onMounted(() => {
+  ensureLibraryLoaded()
 })
-
-const downstreamPapers = computed(() => {
-  if (!selectedPaperId.value) return []
-  
-  const selectedPaper = libraryPapers.value.find(p => p.id === selectedPaperId.value)
-  if (!selectedPaper) return []
-
-  // 这里应该调用API获取真实的上下游论文
-  // 目前使用模拟数据
-  return [
-    {
-      id: 'down-1',
-      title: 'GPT-3: Language Models are Few-Shot Learners',
-      authors: 'Brown, T. et al.',
-      venue: 'NeurIPS',
-      year: 2020,
-      relation: 'Downstream',
-      citationCount: 12540,
-      description: 'GPT-3展示了大规模语言模型的强大能力。',
-    },
-    {
-      id: 'down-2',
-      title: 'T5: Exploring the Limits of Transfer Learning',
-      authors: 'Raffel, C. et al.',
-      venue: 'JMLR',
-      year: 2020,
-      relation: 'Downstream',
-      citationCount: 7890,
-      description: 'Text-to-Text Transfer Transformer统一了NLP任务框架。',
-    },
-  ]
-})
-
-// 过滤后的论文列表
-const filteredUpstreamPapers = computed(() => {
-  const keyword = quickSearch.value.trim().toLowerCase()
-  if (!keyword) return upstreamPapers.value
-  
-  return upstreamPapers.value.filter(
-    paper => 
-      paper.title.toLowerCase().includes(keyword) ||
-      paper.authors.toLowerCase().includes(keyword) ||
-      paper.description.toLowerCase().includes(keyword)
-  )
-})
-
-const filteredDownstreamPapers = computed(() => {
-  const keyword = quickSearch.value.trim().toLowerCase()
-  if (!keyword) return downstreamPapers.value
-  
-  return downstreamPapers.value.filter(
-    paper => 
-      paper.title.toLowerCase().includes(keyword) ||
-      paper.authors.toLowerCase().includes(keyword) ||
-      paper.description.toLowerCase().includes(keyword)
-  )
-})
-
-// 处理论文选择
-const handlePaperSelect = (paperId: string) => {
-  selectedPaperId.value = paperId
-  quickSearch.value = '' // 清空搜索框
-}
 </script>
 
 <template>
   <section class="discover-page">
-    <!-- 论文选择区域 -->
+    <!-- 论文选择器 -->
     <div class="discover-paper-selector">
       <label class="selector-label">
         <el-icon><Document /></el-icon>
-        <span>从我的文库中选择论文：</span>
+        <span>从文库中选择论文：</span>
       </label>
       <el-select
         v-model="selectedPaperId"
         placeholder="请选择一篇已确认的论文"
         class="paper-select"
-        @change="handlePaperSelect"
+        filterable
+        clearable
+        @change="selectPaper"
+        @clear="clearSelection"
       >
         <el-option
           v-for="paper in libraryPapers"
@@ -201,33 +56,41 @@ const handlePaperSelect = (paperId: string) => {
       </el-select>
     </div>
 
-    <!-- 搜索栏 -->
-    <div v-if="selectedPaperId" class="discover-search-bar">
-      <label class="discover-search">
-        <el-icon><Search /></el-icon>
-        <input v-model="quickSearch" type="text" placeholder="在结果中搜索..." />
-      </label>
-    </div>
-
     <!-- 未选择论文时的提示 -->
     <div v-if="!selectedPaperId" class="empty-state">
       <el-icon class="empty-icon"><Document /></el-icon>
       <p>请从上方下拉框选择一篇文库中的论文，查看其上下游关联研究</p>
     </div>
 
-    <!-- 上下游论文列表 -->
+    <!-- 已选择论文 —— 上下游结果 -->
     <template v-if="selectedPaperId">
+      <!-- 上游搜索 -->
+      <div class="citation-search-bar">
+        <label class="citation-search">
+          <el-icon><Search /></el-icon>
+          <input v-model="upstreamKeyword" type="text" placeholder="在上游论文中搜索..." />
+        </label>
+      </div>
+
       <!-- 上游论文 -->
       <section class="relation-section">
         <h2 class="section-title">
           <span class="title-badge upstream">↑</span>
-          上游论文 ({{ filteredUpstreamPapers.length }})
+          上游论文
+          <span class="count-badge">{{ filteredUpstreamPapers.length }}</span>
+          <span v-if="selectedPaper" class="selected-hint">
+            基于 · {{ selectedPaper.title }}
+          </span>
         </h2>
-        <div v-if="filteredUpstreamPapers.length === 0" class="empty-list">
+
+        <div v-if="upstreamLoading" class="state-message">加载上游论文中...</div>
+        <div v-else-if="upstreamError" class="state-message state-error">{{ upstreamError }}</div>
+        <div v-else-if="filteredUpstreamPapers.length === 0" class="paper-empty">
           <p>暂无上游论文</p>
         </div>
-        <article v-for="item in filteredUpstreamPapers" :key="item.id" class="discover-item">
-          <div class="discover-item__main">
+
+        <article v-for="item in filteredUpstreamPapers" :key="item.id" class="citation-item">
+          <div class="citation-item__main">
             <h3 class="item-title">{{ item.title }}</h3>
             <div class="item-meta">
               <span>{{ item.year }}</span>
@@ -244,17 +107,30 @@ const handlePaperSelect = (paperId: string) => {
         </article>
       </section>
 
+      <!-- 下游搜索 -->
+      <div class="citation-search-bar">
+        <label class="citation-search">
+          <el-icon><Search /></el-icon>
+          <input v-model="downstreamKeyword" type="text" placeholder="在下游论文中搜索..." />
+        </label>
+      </div>
+
       <!-- 下游论文 -->
       <section class="relation-section">
         <h2 class="section-title">
           <span class="title-badge downstream">↓</span>
-          下游论文 ({{ filteredDownstreamPapers.length }})
+          下游论文
+          <span class="count-badge">{{ filteredDownstreamPapers.length }}</span>
         </h2>
-        <div v-if="filteredDownstreamPapers.length === 0" class="empty-list">
+
+        <div v-if="downstreamLoading" class="state-message">加载下游论文中...</div>
+        <div v-else-if="downstreamError" class="state-message state-error">{{ downstreamError }}</div>
+        <div v-else-if="filteredDownstreamPapers.length === 0" class="paper-empty">
           <p>暂无下游论文</p>
         </div>
-        <article v-for="item in filteredDownstreamPapers" :key="item.id" class="discover-item">
-          <div class="discover-item__main">
+
+        <article v-for="item in filteredDownstreamPapers" :key="item.id" class="citation-item">
+          <div class="citation-item__main">
             <h3 class="item-title">{{ item.title }}</h3>
             <div class="item-meta">
               <span>{{ item.year }}</span>
@@ -278,17 +154,20 @@ const handlePaperSelect = (paperId: string) => {
 .discover-page {
   display: grid;
   gap: 0.9rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem;
 }
 
-/* 论文选择器样式 */
+/* 论文选择器 */
 .discover-paper-selector {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1rem;
-  background: var(--bg-secondary);
+  padding: 1rem 1.2rem;
+  background: var(--bg-secondary, #f8fafc);
   border-radius: 10px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line-soft, #e2e8f0);
 }
 
 .selector-label {
@@ -320,39 +199,38 @@ const handlePaperSelect = (paperId: string) => {
 
 .option-meta {
   font-size: 0.85rem;
-  color: var(--text-tertiary);
+  color: var(--text-tertiary, #94a3b8);
 }
 
-/* 搜索栏样式 */
-.discover-search-bar {
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--line-soft);
+/* 搜索栏 */
+.citation-search-bar {
+  margin-top: 0.5rem;
 }
 
-.discover-search {
+.citation-search {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  min-width: min(500px, 48vw);
-  padding: 0.56rem 0.8rem;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  max-width: 400px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft, #e2e8f0);
   background: white;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
-.discover-search input {
+.citation-search input {
   width: 100%;
   border: 0;
   background: transparent;
   outline: none;
   color: var(--text-primary);
+  font-size: 0.85rem;
 }
 
-/* 空状态样式 */
+/* 空状态 */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -360,7 +238,7 @@ const handlePaperSelect = (paperId: string) => {
   justify-content: center;
   padding: 3rem 1rem;
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--text-tertiary, #94a3b8);
 }
 
 .empty-icon {
@@ -374,9 +252,22 @@ const handlePaperSelect = (paperId: string) => {
   margin: 0;
 }
 
-/* 关系分区样式 */
+.state-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 0.9rem;
+}
+
+.state-error {
+  color: #ef4444;
+}
+
+/* 关系分区 */
 .relation-section {
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
 }
 
 .section-title {
@@ -384,7 +275,7 @@ const handlePaperSelect = (paperId: string) => {
   align-items: center;
   gap: 0.6rem;
   margin: 0 0 1rem;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -398,6 +289,7 @@ const handlePaperSelect = (paperId: string) => {
   border-radius: 6px;
   font-size: 1rem;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .title-badge.upstream {
@@ -410,58 +302,65 @@ const handlePaperSelect = (paperId: string) => {
   color: #10b981;
 }
 
-.empty-list {
-  padding: 2rem;
-  text-align: center;
-  color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  border: 1px dashed var(--line-soft);
-}
-
-.empty-list p {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.discover-list {
-  display: grid;
-  gap: 1rem;
-  padding-top: 1rem;
-}
-
-.discover-item {
-  display: flex;
+.count-badge {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.selected-hint {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+/* 论文卡片 */
+.citation-item {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem;
   margin-bottom: 0.8rem;
   border-radius: 8px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line-soft, #e2e8f0);
   background: white;
   transition: all 0.2s ease;
 }
 
-.discover-item:hover {
+.citation-item:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border-color: var(--brand-color);
+  border-color: var(--brand, #4f46e5);
+}
+
+.citation-item:last-child {
+  margin-bottom: 0;
 }
 
 .item-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.1rem;
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.4;
 }
 
 .item-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.83rem;
   flex-wrap: wrap;
 }
 
@@ -470,7 +369,7 @@ const handlePaperSelect = (paperId: string) => {
 }
 
 .citation-count {
-  color: var(--brand-color);
+  color: var(--brand, #4f46e5);
   font-weight: 500;
 }
 
@@ -481,34 +380,35 @@ const handlePaperSelect = (paperId: string) => {
   line-height: 1.6;
 }
 
-/* 自定义 el-select 白色样式 */
-:deep(.paper-select .el-input__wrapper),
+.paper-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 8px;
+  border: 1px dashed var(--line-soft, #e2e8f0);
+}
+
+.paper-empty p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Element Plus overrides */
 :deep(.paper-select .el-select__wrapper) {
-  background-color: white !important;
-  border: 1px solid var(--line-soft) !important;
-}
-
-:deep(.paper-select .el-input__inner) {
   background-color: white;
-  color: var(--text-primary);
+  border: 1px solid var(--line-soft, #e2e8f0);
 }
 
-:deep(.paper-select .el-input__suffix) {
-  color: var(--text-secondary);
-}
-
-/* 选项高亮样式 */
-:deep(.el-select .el-select-dropdown__item.hover),
-:deep(.el-select .el-select-dropdown__item:hover) {
-  background-color: var(--bg-secondary);
-}
-
-/* 选择器聚焦样式 */
-:deep(.paper-select.is-focus .el-input__wrapper) {
-  box-shadow: 0 0 0 1px var(--brand-color) inset !important;
+:deep(.paper-select.is-focus .el-select__wrapper) {
+  box-shadow: 0 0 0 1px var(--brand, #4f46e5) inset;
 }
 
 @media (max-width: 820px) {
+  .discover-page {
+    padding: 1rem;
+  }
+
   .discover-paper-selector {
     flex-direction: column;
     align-items: stretch;
@@ -518,14 +418,13 @@ const handlePaperSelect = (paperId: string) => {
     min-width: 0;
   }
 
-  .discover-item {
+  .citation-item {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .discover-search {
-    width: 100%;
-    min-width: 0;
+  .citation-search {
+    max-width: 100%;
   }
 }
 </style>

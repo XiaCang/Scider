@@ -16,7 +16,6 @@ import {
   fetchFolderPapersApi,
 } from '../api/library'
 import { usePaperStore } from './paper'
-import { testFolders, testPapers } from '../test/test_data'
 
 // 辅助函数：递归查找文件夹
 function findFolderById(tree: Folder[], id: string): Folder | undefined {
@@ -204,15 +203,6 @@ export const useFolderStore = defineStore('folder', () => {
     currentFolderId.value = id
   }
 
-  function loadTestData() {
-    const paperStore = usePaperStore()
-    // 深拷贝测试数据以避免引用污染
-    paperStore.papers = JSON.parse(JSON.stringify(testPapers))
-    folders.value = JSON.parse(JSON.stringify(testFolders))
-    currentFolderId.value = null // 重置选中为“全部”
-  }
-
-
   return {
     folders,
     currentFolderId,
@@ -232,7 +222,6 @@ export const useFolderStore = defineStore('folder', () => {
     removePaperGlobally,
     movePaperIntoFolder,
     loadFolderPapers,
-    setCurrentFolder,
-    loadTestData
+    setCurrentFolder
   }
 })

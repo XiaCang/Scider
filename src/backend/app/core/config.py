@@ -1,4 +1,11 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load `src/backend/.env` explicitly so config does not depend on current cwd.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_ENV_FILE)
 
 
 class Settings:

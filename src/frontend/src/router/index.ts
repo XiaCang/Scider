@@ -4,7 +4,6 @@ import MainLayout from '../layouts/MainLayout.vue'
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
 import AuthView from '../views/auth/AuthView.vue'
-import DashboardView from '../views/dashboard/DashboardView.vue'
 import DiscoverView from '../views/discover/DiscoverView.vue'
 import DiscoverViewUpstream from '../views/discover/DiscoverViewUpstream.vue'
 import GraphView from '../views/graph/GraphView.vue'
@@ -17,7 +16,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/app/dashboard',
+      redirect: '/app/library',
     },
     {
       path: '/login',
@@ -37,15 +36,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/app/dashboard',
-        },
-        {
-          path: 'dashboard',
-          name: 'dashboard',
-          component: DashboardView,
-          meta: {
-            title: 'Scider | Dashboard',
-          },
+          redirect: '/app/library',
         },
         {
           path: 'library',
@@ -125,7 +116,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && authStore.isAuthenticated) {
-    return '/app/dashboard'
+    return '/app/library'
   }
 
   return true
