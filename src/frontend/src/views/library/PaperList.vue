@@ -162,14 +162,14 @@ const onSearch = () => {
       <!-- 左侧：动态显示全选或已选标签 -->
       <div class="selection-area">
         <template v-if="selectedPaperIds.size === 0">
-          <button class="select-all-btn" @click="handleSelectAll">Select all</button>
+          <button class="select-all-btn" @click="handleSelectAll">全选</button>
         </template>
         <template v-else>
           <div class="selected-badge">
-            <span>{{ selectedPaperIds.size }} Selected</span>
+            <span>已选 {{ selectedPaperIds.size }} 篇</span>
             <button class="clear-all-btn" @click="handleClearAll">
               <el-icon><Close /></el-icon>
-              Clear all
+              清除
             </button>
           </div>
         </template>
@@ -182,7 +182,7 @@ const onSearch = () => {
         </label>
         <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
           <el-icon><Delete /></el-icon>
-          Delete
+          删除
         </button>
       </div>
     </header>
@@ -242,26 +242,27 @@ const onSearch = () => {
   background: none;
   border: none;
   font-size: 0.8rem;
-  color: #3b82f6;
+  color: var(--text-secondary, #526071);
   cursor: pointer;
   padding: 0;
   font-weight: 500;
+  transition: color 0.2s;
 }
 
 .select-all-btn:hover {
-  text-decoration: underline;
+  color: var(--text-primary, #101828);
 }
 
 .selected-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background-color: #eef2ff;
+  background-color: #f1f5f9;
   border-radius: 20px;
   padding: 4px 12px;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #1e40af;
+  color: #475569;
 }
 
 .clear-all-btn {
@@ -300,8 +301,8 @@ const onSearch = () => {
 }
 
 .library-search:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+  border-color: var(--text-tertiary, #8a94a6);
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.12);
 }
 
 .library-search input {
@@ -316,23 +317,22 @@ const onSearch = () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #1f2937;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #526071);
   font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s;
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  color: #dc2626;
 }
 
 .delete-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 

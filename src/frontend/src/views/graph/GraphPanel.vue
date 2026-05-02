@@ -333,7 +333,7 @@ onUnmounted(() => {
       </div>
       <div class="graph-tags">
         <span class="status-pill is-brand">
-          <span class="pill-icon">🔬</span> Semantic Units
+          <span class="pill-icon">🔬</span> 语义单元
         </span>
       </div>
     </header>

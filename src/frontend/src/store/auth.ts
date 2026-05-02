@@ -13,7 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // getters
   const isAuthenticated = computed(() => Boolean(token.value))
-  const displayName = computed(() => user.value?.username || 'Researcher')
+  const displayName = computed(() => user.value?.username || '研究者')
 
   // actions
   function hydrate() {

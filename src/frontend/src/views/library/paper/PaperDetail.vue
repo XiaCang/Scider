@@ -145,7 +145,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
       <!-- 关键点编辑区(四维度结构化) -->
       <section class="keypoints-section">
         <h3 class="section-title">
-          关键点（Key Points）
+          关键点
         </h3>
         <p class="section-description">
           通过大语言模型从论文全文中提取的四个维度核心要素

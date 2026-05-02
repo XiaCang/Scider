@@ -23,7 +23,7 @@ const router = createRouter({
       name: 'login',
       component: AuthView,
       meta: {
-        title: 'Scider | Login',
+        title: 'Scider | 登录',
         guestOnly: true,
       },
     },
@@ -43,7 +43,7 @@ const router = createRouter({
           name: 'library',
           component: LibraryView,
           meta: {
-            title: 'Scider | Library',
+            title: 'Scider | 文献库',
           },  
           children: [
             { path: '', redirect: { name: 'library-folder', params: { folderId: 'all' } } },
@@ -55,7 +55,7 @@ const router = createRouter({
           name: 'paper-pdf',
           component: PaperPDFView,
           meta: {
-            title: 'Scider | PDF Preview',
+            title: 'Scider | PDF 预览',
           },
         },
         {
@@ -63,7 +63,7 @@ const router = createRouter({
           name: 'graph',
           component: GraphView,
           meta: {
-            title: 'Scider | Knowledge Graph',
+            title: 'Scider | 知识图谱',
           },
         },
         {
@@ -71,7 +71,7 @@ const router = createRouter({
           name: 'discover',
           component: DiscoverView,
           meta: {
-            title: 'Scider | Discover',
+            title: 'Scider | 发现',
           },
         },
         {
@@ -79,7 +79,7 @@ const router = createRouter({
           name: 'discover-upstream',
           component: DiscoverViewUpstream,
           meta: {
-            title: 'Scider | Discover Upstream',
+            title: 'Scider | 上下游',
           },
         },
       ],
@@ -89,7 +89,7 @@ const router = createRouter({
       name: 'not-found',
       component: NotFoundView,
       meta: {
-        title: 'Scider | Not Found',
+        title: 'Scider | 页面未找到',
       },
     },
   ],

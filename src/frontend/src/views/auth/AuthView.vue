@@ -114,7 +114,7 @@ const handleSubmit = async () => {
           email: form.email,
           password: form.password
         })
-        ElMessage.success('Login successful.')
+        ElMessage.success('登录成功')
       } else {
         await authStore.register({
           name: form.name,
@@ -122,13 +122,13 @@ const handleSubmit = async () => {
           password: form.password,
           code: form.code
         })
-        ElMessage.success('Account created successfully.')
+        ElMessage.success('账号创建成功')
       }
 
       const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/app/library'
       await router.replace(redirect)
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : 'Authentication failed.')
+      ElMessage.error(error instanceof Error ? error.message : '认证失败')
     } finally {
       loading.value = false
     }
@@ -185,7 +185,7 @@ const handleSubmit = async () => {
         </div>
 
         <div class="auth-panel__copy">
-          <h2>{{ mode === 'login' ? 'Sign in to Scider' : 'Create your Scider workspace' }}</h2>
+          <h2>{{ mode === 'login' ? '登录 Scider' : '创建你的 Scider 工作区' }}</h2>
           <p>
             {{ mode === 'login'
               ? '使用邮箱进入你的论文工作台。'
@@ -212,7 +212,7 @@ const handleSubmit = async () => {
 
           <!-- 邮箱（登录/注册均需要） -->
           <el-form-item label="邮箱" prop="email">
-            <el-input v-model="form.email" placeholder="Enter your academic email">
+            <el-input v-model="form.email" placeholder="请输入学术邮箱">
               <template #prefix>
                 <el-icon><Message /></el-icon>
               </template>
@@ -221,7 +221,7 @@ const handleSubmit = async () => {
 
           <!-- 密码 -->
           <el-form-item label="密码" prop="password">
-            <el-input v-model="form.password" type="password" show-password placeholder="Password">
+            <el-input v-model="form.password" type="password" show-password placeholder="请输入密码">
               <template #prefix>
                 <el-icon><Lock /></el-icon>
               </template>
@@ -250,7 +250,7 @@ const handleSubmit = async () => {
           <!-- 登录时不再显示 remember me 选项（已移除） -->
 
           <el-button class="auth-form__submit" type="primary" :loading="loading" @click="handleSubmit">
-            {{ mode === 'login' ? 'Sign In' : 'Create Account' }}
+            {{ mode === 'login' ? '登录' : '注册' }}
           </el-button>
         </el-form>
       </section>

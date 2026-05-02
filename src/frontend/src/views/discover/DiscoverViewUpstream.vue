@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Search, Document } from '@element-plus/icons-vue'
 import { useCitationGraph } from '../../discover/composables/useCitationGraph'
 
@@ -23,261 +23,455 @@ const {
 onMounted(() => {
   ensureLibraryLoaded()
 })
+
+/* ── 自定义下拉选择 ── */
+const selectorOpen = ref(false)
+const searchQuery = ref('')
+
+const filteredLibraryPapers = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return libraryPapers.value
+  return libraryPapers.value.filter(
+    p => p.title.toLowerCase().includes(q) || p.authors?.toLowerCase().includes(q)
+  )
+})
+
+function toggleSelector() {
+  selectorOpen.value = !selectorOpen.value
+  if (selectorOpen.value) searchQuery.value = ''
+}
+
+function onSelectPaper(id: string) {
+  selectPaper(id)
+  selectorOpen.value = false
+}
+
+function onClear() {
+  clearSelection()
+  selectorOpen.value = false
+}
+
+function closeSelector() {
+  selectorOpen.value = false
+}
+
+function viewDetails(itemId: string) {
+  console.log('view details:', itemId)
+}
 </script>
 
 <template>
-  <section class="discover-page">
-    <!-- 论文选择器 -->
-    <div class="discover-paper-selector">
-      <label class="selector-label">
+  <section class="upstream-page" @click="closeSelector">
+
+    <!-- ── 论文选择器 ── -->
+    <div class="paper-selector">
+      <div class="selector-label">
         <el-icon><Document /></el-icon>
-        <span>从文库中选择论文：</span>
-      </label>
-      <el-select
-        v-model="selectedPaperId"
-        placeholder="请选择一篇已确认的论文"
-        class="paper-select"
-        filterable
-        clearable
-        @change="selectPaper"
-        @clear="clearSelection"
-      >
-        <el-option
-          v-for="paper in libraryPapers"
-          :key="paper.id"
-          :label="`${paper.title} (${paper.year})`"
-          :value="paper.id"
-        >
-          <div class="select-option">
-            <span class="option-title">{{ paper.title }}</span>
-            <span class="option-meta">{{ paper.year }} · {{ paper.source }}</span>
-          </div>
-        </el-option>
-      </el-select>
-    </div>
-
-    <!-- 未选择论文时的提示 -->
-    <div v-if="!selectedPaperId" class="empty-state">
-      <el-icon class="empty-icon"><Document /></el-icon>
-      <p>请从上方下拉框选择一篇文库中的论文，查看其上下游关联研究</p>
-    </div>
-
-    <!-- 已选择论文 —— 上下游结果 -->
-    <template v-if="selectedPaperId">
-      <!-- 上游搜索 -->
-      <div class="citation-search-bar">
-        <label class="citation-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="upstreamKeyword" type="text" placeholder="在上游论文中搜索..." />
-        </label>
+        <span>选择论文</span>
       </div>
 
-      <!-- 上游论文 -->
-      <section class="relation-section">
-        <h2 class="section-title">
-          <span class="title-badge upstream">↑</span>
-          上游论文
-          <span class="count-badge">{{ filteredUpstreamPapers.length }}</span>
-          <span v-if="selectedPaper" class="selected-hint">
-            基于 · {{ selectedPaper.title }}
-          </span>
-        </h2>
+      <div class="selector-control">
+        <button class="selector-trigger" @click.stop="toggleSelector">
+          <span v-if="selectedPaper" class="trigger-text">{{ selectedPaper.title }}</span>
+          <span v-else class="trigger-placeholder">从文库中选择一篇论文查看上下游...</span>
+          <svg class="trigger-chevron" :class="{ up: selectorOpen }" width="12" height="8" viewBox="0 0 12 8"><path d="M2 2l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
 
-        <div v-if="upstreamLoading" class="state-message">加载上游论文中...</div>
-        <div v-else-if="upstreamError" class="state-message state-error">{{ upstreamError }}</div>
-        <div v-else-if="filteredUpstreamPapers.length === 0" class="paper-empty">
-          <p>暂无上游论文</p>
+        <Transition name="fade-drop">
+          <div v-if="selectorOpen" class="selector-dropdown" @click.stop>
+            <div class="selector-search-wrap">
+              <el-icon class="selector-search-icon"><Search /></el-icon>
+              <input
+                v-model="searchQuery"
+                class="selector-search"
+                placeholder="搜索论文标题..."
+              />
+            </div>
+            <div class="selector-list">
+              <button
+                v-for="paper in filteredLibraryPapers"
+                :key="paper.id"
+                class="selector-item"
+                :class="{ active: paper.id === selectedPaperId }"
+                @click="onSelectPaper(paper.id)"
+              >
+                <span class="si-title">{{ paper.title }}</span>
+                <span class="si-meta">{{ paper.year }} · {{ paper.source || '文库' }}</span>
+              </button>
+              <div v-if="filteredLibraryPapers.length === 0" class="selector-empty">
+                无匹配结果
+              </div>
+            </div>
+            <div v-if="selectedPaper" class="selector-footer">
+              <button class="selector-clear" @click="onClear">清除选择</button>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </div>
+
+    <!-- ── 未选择 ── -->
+    <div v-if="!selectedPaperId" class="empty-state">
+      <div class="empty-graphic">
+        <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+          <circle cx="28" cy="28" r="26" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+          <path d="M28 16v16M20 24h16" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <p class="empty-text">从上方选择一篇文库中的论文</p>
+      <p class="empty-hint">查看其参考文献（上游）与引证文献（下游）</p>
+    </div>
+
+    <!-- ── 已选择论文 —— 上下游结果 ── -->
+    <template v-if="selectedPaperId">
+      <!-- 上游 -->
+      <section class="relation-section">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="title-badge upstream">↑</span>
+            <h2 class="section-title">上游论文</h2>
+            <span class="count-pill">{{ filteredUpstreamPapers.length }}</span>
+          </div>
+          <div v-if="selectedPaper" class="section-context">
+            基于 <strong>{{ selectedPaper.title }}</strong>
+          </div>
         </div>
 
-        <article v-for="item in filteredUpstreamPapers" :key="item.id" class="citation-item">
-          <div class="citation-item__main">
-            <h3 class="item-title">{{ item.title }}</h3>
-            <div class="item-meta">
-              <span>{{ item.year }}</span>
-              <span class="meta-separator">·</span>
-              <span>{{ item.authors }}</span>
-              <span class="meta-separator">·</span>
-              <span>{{ item.venue }}</span>
-              <span class="meta-separator">·</span>
-              <span class="citation-count">被引 {{ item.citationCount }}</span>
-            </div>
-            <p class="item-description">{{ item.description }}</p>
+        <div v-if="upstreamLoading" class="state-message">
+          <div class="loading-dots"><span /><span /><span /></div>
+          <p>加载上游论文中...</p>
+        </div>
+        <div v-else-if="upstreamError" class="state-message state-error">
+          <p>{{ upstreamError }}</p>
+        </div>
+
+        <template v-else>
+          <!-- 搜索 -->
+          <div class="inline-search">
+            <el-icon class="is-icon"><Search /></el-icon>
+            <input v-model="upstreamKeyword" placeholder="在上游论文中搜索..." />
           </div>
-          <el-button plain size="small">查看详情</el-button>
-        </article>
+
+          <div v-if="filteredUpstreamPapers.length === 0" class="empty-list">
+            <p>{{ upstreamKeyword ? '未找到匹配的论文' : '暂无上游论文' }}</p>
+          </div>
+
+          <TransitionGroup name="card-enter" tag="div" class="card-list">
+            <article v-for="item in filteredUpstreamPapers" :key="item.id" class="paper-card">
+              <div class="card-body">
+                <h3 class="card-title">{{ item.title }}</h3>
+                <div class="card-meta">
+                  <span>{{ item.year }}</span>
+                  <span class="meta-dot">·</span>
+                  <span>{{ item.authors }}</span>
+                  <span v-if="item.venue" class="meta-dot">·</span>
+                  <span v-if="item.venue">{{ item.venue }}</span>
+                  <span class="meta-dot">·</span>
+                  <span class="meta-citation">被引 {{ item.citationCount }}</span>
+                </div>
+                <p class="card-desc">{{ item.description }}</p>
+              </div>
+              <div class="card-actions">
+                <button class="view-link" @click="viewDetails(item.id)">
+                  查看详情
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </article>
+          </TransitionGroup>
+        </template>
       </section>
 
-      <!-- 下游搜索 -->
-      <div class="citation-search-bar">
-        <label class="citation-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="downstreamKeyword" type="text" placeholder="在下游论文中搜索..." />
-        </label>
-      </div>
-
-      <!-- 下游论文 -->
+      <!-- 下游 -->
       <section class="relation-section">
-        <h2 class="section-title">
-          <span class="title-badge downstream">↓</span>
-          下游论文
-          <span class="count-badge">{{ filteredDownstreamPapers.length }}</span>
-        </h2>
-
-        <div v-if="downstreamLoading" class="state-message">加载下游论文中...</div>
-        <div v-else-if="downstreamError" class="state-message state-error">{{ downstreamError }}</div>
-        <div v-else-if="filteredDownstreamPapers.length === 0" class="paper-empty">
-          <p>暂无下游论文</p>
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="title-badge downstream">↓</span>
+            <h2 class="section-title">下游论文</h2>
+            <span class="count-pill">{{ filteredDownstreamPapers.length }}</span>
+          </div>
         </div>
 
-        <article v-for="item in filteredDownstreamPapers" :key="item.id" class="citation-item">
-          <div class="citation-item__main">
-            <h3 class="item-title">{{ item.title }}</h3>
-            <div class="item-meta">
-              <span>{{ item.year }}</span>
-              <span class="meta-separator">·</span>
-              <span>{{ item.authors }}</span>
-              <span class="meta-separator">·</span>
-              <span>{{ item.venue }}</span>
-              <span class="meta-separator">·</span>
-              <span class="citation-count">被引 {{ item.citationCount }}</span>
-            </div>
-            <p class="item-description">{{ item.description }}</p>
+        <div v-if="downstreamLoading" class="state-message">
+          <div class="loading-dots"><span /><span /><span /></div>
+          <p>加载下游论文中...</p>
+        </div>
+        <div v-else-if="downstreamError" class="state-message state-error">
+          <p>{{ downstreamError }}</p>
+        </div>
+
+        <template v-else>
+          <div class="inline-search">
+            <el-icon class="is-icon"><Search /></el-icon>
+            <input v-model="downstreamKeyword" placeholder="在下游论文中搜索..." />
           </div>
-          <el-button plain size="small">查看详情</el-button>
-        </article>
+
+          <div v-if="filteredDownstreamPapers.length === 0" class="empty-list">
+            <p>{{ downstreamKeyword ? '未找到匹配的论文' : '暂无下游论文' }}</p>
+          </div>
+
+          <TransitionGroup name="card-enter" tag="div" class="card-list">
+            <article v-for="item in filteredDownstreamPapers" :key="item.id" class="paper-card">
+              <div class="card-body">
+                <h3 class="card-title">{{ item.title }}</h3>
+                <div class="card-meta">
+                  <span>{{ item.year }}</span>
+                  <span class="meta-dot">·</span>
+                  <span>{{ item.authors }}</span>
+                  <span v-if="item.venue" class="meta-dot">·</span>
+                  <span v-if="item.venue">{{ item.venue }}</span>
+                  <span class="meta-dot">·</span>
+                  <span class="meta-citation">被引 {{ item.citationCount }}</span>
+                </div>
+                <p class="card-desc">{{ item.description }}</p>
+              </div>
+              <div class="card-actions">
+                <button class="view-link" @click="viewDetails(item.id)">
+                  查看详情
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </article>
+          </TransitionGroup>
+        </template>
       </section>
     </template>
   </section>
 </template>
 
 <style scoped>
-.discover-page {
-  display: grid;
-  gap: 0.9rem;
-  max-width: 960px;
+/* ════════ 页面布局 ════════ */
+.upstream-page {
+  max-width: 880px;
   margin: 0 auto;
-  padding: 1.5rem 2rem;
+  padding: 2rem 2rem 3rem;
 }
 
-/* 论文选择器 */
-.discover-paper-selector {
+/* ════════ 论文选择器 ════════ */
+.paper-selector {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.2rem;
-  background: var(--bg-secondary, #f8fafc);
-  border-radius: 10px;
-  border: 1px solid var(--line-soft, #e2e8f0);
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
 }
 
 .selector-label {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--text-primary);
-  font-size: 0.95rem;
-  font-weight: 500;
+}
+
+.selector-control {
+  position: relative;
+}
+
+.selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.4rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.selector-trigger:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.selector-trigger:focus-within {
+  border-color: rgba(47, 107, 255, 0.25);
+  box-shadow: 0 4px 20px rgba(47, 107, 255, 0.06);
+}
+
+.trigger-text {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.paper-select {
+.trigger-placeholder {
   flex: 1;
-  min-width: 300px;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
 }
 
-.select-option {
+.trigger-chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease;
+}
+
+.trigger-chevron.up {
+  transform: rotate(180deg);
+}
+
+/* ── 下拉浮层 ── */
+.selector-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.selector-search-wrap {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
 }
 
-.option-title {
-  font-weight: 500;
-  color: var(--text-primary);
+.selector-search-icon {
+  font-size: 1rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
-.option-meta {
-  font-size: 0.85rem;
-  color: var(--text-tertiary, #94a3b8);
-}
-
-/* 搜索栏 */
-.citation-search-bar {
-  margin-top: 0.5rem;
-}
-
-.citation-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  max-width: 400px;
-  padding: 0.45rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft, #e2e8f0);
-  background: white;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-}
-
-.citation-search input {
+.selector-search {
   width: 100%;
   border: 0;
   background: transparent;
   outline: none;
-  color: var(--text-primary);
   font-size: 0.85rem;
+  color: var(--text-primary);
 }
 
-/* 空状态 */
+.selector-search::placeholder {
+  color: var(--text-tertiary);
+}
+
+.selector-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 0.3rem;
+}
+
+.selector-item {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.selector-item:hover {
+  background: rgba(47, 107, 255, 0.05);
+}
+
+.selector-item.active {
+  background: rgba(47, 107, 255, 0.06);
+}
+
+.si-title {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin-bottom: 0.15rem;
+}
+
+.si-meta {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.selector-empty {
+  padding: 1.5rem 0.75rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+}
+
+.selector-footer {
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.selector-clear {
+  width: 100%;
+  padding: 0.4rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: color 0.2s ease;
+}
+
+.selector-clear:hover {
+  color: #ef4444;
+}
+
+/* ════════ 空状态 ════════ */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
+  padding: 4rem 1rem;
   text-align: center;
-  color: var(--text-tertiary, #94a3b8);
 }
 
-.empty-icon {
-  font-size: 3rem;
+.empty-graphic {
   margin-bottom: 1rem;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
-.empty-state p {
+.empty-text {
+  margin: 0 0 0.3rem;
+  color: var(--text-secondary);
   font-size: 0.95rem;
+}
+
+.empty-hint {
   margin: 0;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
 }
 
-.state-message {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-  color: var(--text-tertiary, #94a3b8);
-  font-size: 0.9rem;
-}
-
-.state-error {
-  color: #ef4444;
-}
-
-/* 关系分区 */
+/* ════════ 分区 ════════ */
 .relation-section {
-  margin-top: 0.5rem;
+  margin-bottom: 2.5rem;
 }
 
-.section-title {
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.section-title-wrap {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin: 0 0 1rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  gap: 0.5rem;
 }
 
 .title-badge {
@@ -286,8 +480,8 @@ onMounted(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
-  font-size: 1rem;
+  border-radius: 50%;
+  font-size: 0.9rem;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -302,129 +496,248 @@ onMounted(() => {
   color: #10b981;
 }
 
-.count-badge {
+.section-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.count-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   padding: 0 6px;
-  border-radius: 11px;
-  background: var(--bg-secondary, #f1f5f9);
-  color: var(--text-tertiary, #94a3b8);
-  font-size: 0.75rem;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
   font-weight: 600;
 }
 
-.selected-hint {
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 400;
-  color: var(--text-tertiary, #94a3b8);
+.section-context {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 论文卡片 */
-.citation-item {
+.section-context strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ════════ 行内搜索 ════════ */
+.inline-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(255, 255, 255, 0.45);
+  margin-bottom: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.inline-search:focus-within {
+  border-color: rgba(47, 107, 255, 0.18);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.inline-search .is-icon {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.inline-search input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.inline-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* ════════ 状态 ════════ */
+.state-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
+}
+
+.state-error {
+  color: #ef4444;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 6px;
+}
+.loading-dots span {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--brand-accent);
+  opacity: 0.3;
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-bounce {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+  40% { opacity: 1; transform: scale(1.3); }
+}
+
+.empty-list {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+}
+
+/* ════════ 论文卡片 ════════ */
+.card-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.paper-card {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem;
-  margin-bottom: 0.8rem;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft, #e2e8f0);
-  background: white;
+  padding: 1.1rem 1.25rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
   transition: all 0.2s ease;
 }
 
-.citation-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border-color: var(--brand, #4f46e5);
+.paper-card:hover {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+  border-color: rgba(148, 163, 184, 0.15);
 }
 
-.citation-item:last-child {
-  margin-bottom: 0;
+.card-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.item-title {
-  margin: 0 0 0.4rem;
-  font-size: 1.05rem;
+.card-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
   font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.item-meta {
+.card-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
-  font-size: 0.83rem;
   flex-wrap: wrap;
 }
 
-.meta-separator {
-  opacity: 0.6;
+.meta-dot {
+  opacity: 0.4;
 }
 
-.citation-count {
-  color: var(--brand, #4f46e5);
+.meta-citation {
+  color: var(--brand-accent);
   font-weight: 500;
+  opacity: 0.85;
 }
 
-.item-description {
-  color: var(--text-tertiary);
-  font-size: 0.88rem;
+.card-desc {
   margin: 0;
+  font-size: 0.83rem;
+  color: var(--text-tertiary);
   line-height: 1.6;
 }
 
-.paper-empty {
-  padding: 2rem;
-  text-align: center;
+.card-actions {
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+}
+
+.view-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-tertiary);
-  background: var(--bg-secondary, #f8fafc);
-  border-radius: 8px;
-  border: 1px dashed var(--line-soft, #e2e8f0);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  white-space: nowrap;
 }
 
-.paper-empty p {
-  margin: 0;
-  font-size: 0.9rem;
+.view-link:hover {
+  color: var(--brand-accent);
 }
 
-/* Element Plus overrides */
-:deep(.paper-select .el-select__wrapper) {
-  background-color: white;
-  border: 1px solid var(--line-soft, #e2e8f0);
+/* ════════ 过渡 ════════ */
+.fade-drop-enter-active,
+.fade-drop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.fade-drop-enter-from,
+.fade-drop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
-:deep(.paper-select.is-focus .el-select__wrapper) {
-  box-shadow: 0 0 0 1px var(--brand, #4f46e5) inset;
+.card-enter-enter-active {
+  transition: all 0.3s ease;
+}
+.card-enter-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
 }
 
+/* ════════ 响应式 ════════ */
 @media (max-width: 820px) {
-  .discover-page {
+  .upstream-page {
     padding: 1rem;
   }
 
-  .discover-paper-selector {
+  .paper-card {
     flex-direction: column;
-    align-items: stretch;
+    gap: 0.6rem;
+    padding: 1rem;
   }
 
-  .paper-select {
-    min-width: 0;
+  .card-actions {
+    align-self: flex-end;
   }
 
-  .citation-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .citation-search {
+  .section-context {
     max-width: 100%;
+  }
+
+  .selector-trigger {
+    padding: 0.65rem 0.85rem;
   }
 }
 </style>
