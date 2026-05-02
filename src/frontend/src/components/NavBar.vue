@@ -15,8 +15,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const navigationItems: NavItem[] = [
-  { label: 'Library', path: '/app/library' },
-  { label: 'Graph', path: '/app/graph' },
+  { label: '文献库', path: '/app/library' },
+  { label: '知识图谱', path: '/app/graph' },
   { label: '搜索', path: '/app/discover' },
   { label: '上下游', path: '/app/discover-upstream' },
 ]
@@ -72,11 +72,11 @@ const handleLogout = async () => {
           <el-dropdown-menu class="user-dropdown-menu">
             <div class="user-dropdown-header">
               <strong>{{ displayName }}</strong>
-              <small>Personal Workspace</small>
+              <small>个人工作区</small>
             </div>
             <el-dropdown-item divided @click="handleLogout" class="logout-item">
               <el-icon><SwitchButton /></el-icon>
-              <span>Sign out</span>
+              <span>退出登录</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>

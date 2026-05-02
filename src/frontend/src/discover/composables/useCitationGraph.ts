@@ -1,11 +1,13 @@
 import { ref, computed } from 'vue'
 import { usePaperStore } from '../../store/paper'
+import { useAuthStore } from '../../store/auth'
 import { fetchUpstreamPapersApi, fetchDownstreamPapersApi } from '../../api/discover'
 import type { LibraryPaper } from '../../types/library'
 import type { CitationPaper } from '../types'
 
 export function useCitationGraph() {
   const paperStore = usePaperStore()
+  const authStore = useAuthStore()
   const selectedPaperId = ref<string>('')
   const upstreamPapers = ref<CitationPaper[]>([])
   const downstreamPapers = ref<CitationPaper[]>([])
@@ -62,8 +64,9 @@ export function useCitationGraph() {
     upstreamLoading.value = true
     upstreamError.value = null
     try {
-      const data = await fetchUpstreamPapersApi(selectedPaperId.value)
-      upstreamPapers.value = data as CitationPaper[]
+      const userId = authStore.user?.userId || ''
+      const res = await fetchUpstreamPapersApi(selectedPaperId.value, userId)
+      upstreamPapers.value = res.data as CitationPaper[]
     } catch (e) {
       upstreamError.value = e instanceof Error ? e.message : '上游论文加载失败'
     } finally {
@@ -75,8 +78,9 @@ export function useCitationGraph() {
     downstreamLoading.value = true
     downstreamError.value = null
     try {
-      const data = await fetchDownstreamPapersApi(selectedPaperId.value)
-      downstreamPapers.value = data as CitationPaper[]
+      const userId = authStore.user?.userId || ''
+      const res = await fetchDownstreamPapersApi(selectedPaperId.value, userId)
+      downstreamPapers.value = res.data as CitationPaper[]
     } catch (e) {
       downstreamError.value = e instanceof Error ? e.message : '下游论文加载失败'
     } finally {

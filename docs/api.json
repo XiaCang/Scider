@@ -1,0 +1,1641 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "默认模块",
+    "description": "文件夹的增删改查接口。所有接口均需 JWT 认证（Authorization: Bearer <token>）。\n\n**前置条件**：先调用 `POST /api/user/login` 获取 token。\n",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "papers"
+    },
+    {
+      "name": "discover"
+    },
+    {
+      "name": "tasks"
+    },
+    {
+      "name": "folders"
+    }
+  ],
+  "paths": {
+    "/api/papers/upload": {
+      "post": {
+        "summary": "上传 PDF 论文",
+        "deprecated": false,
+        "description": "#### 功能说明\n\n用户上传 PDF 格式的学术论文。服务端会依次执行 **文件类型校验 → 大小校验 → MD5 内容去重 → 文件存储 → 数据库记录创建**，最终返回论文的元数据。\n\n#### 前置条件\n\n1. 用户已注册并登录（获取 JWT Token）\n2. 调用前需先调用 `POST /api/user/login` 获取 token，放入请求头 `Authorization: Bearer <token>`\n\n---\n\n#### 请求说明\n\n| 项目 | 说明 |\n|------|------|\n| **请求方式** | `POST` |\n| **接口路径** | `/api/papers/upload` |\n| **认证方式** | Bearer Token（JWT） |\n| **Content-Type** | `multipart/form-data` |\n\n**请求参数：**\n\n| 参数名 | 位置 | 类型 | 必填 | 说明 |\n|--------|------|------|------|------|\n| `Authorization` | Header | string | ✅ | `Bearer <token>`，登录后获取 |\n| `file` | Body | file | ✅ | 仅支持 `.pdf` 格式，最大 50MB |\n\n---\n\n#### 响应说明\n\n**✅ 上传成功（200）：**\n\n```json\n{\n  \"code\": 0,\n  \"msg\": \"上传成功\",\n  \"data\": {\n    \"paper_id\": \"a1b2c3d4e5f6...\",\n    \"filename\": \"example.pdf\",\n    \"file_size\": 1048576,\n    \"md5\": \"d41d8cd98f00b204e9800998ecf8427e\",\n    \"status\": \"pending_parsing\"\n  }\n}\n```\n\n| 字段 | 类型 | 说明 |\n|------|------|------|\n| `paper_id` | string | 论文记录 ID（UUID hex） |\n| `filename` | string | 原始文件名 |\n| `file_size` | int | 文件大小（字节） |\n| `md5` | string | 文件内容 MD5 哈希值 |\n| `status` | string | 论文状态，初始为 `pending_parsing` |\n\n---\n\n#### 后端处理流程\n\n```\n请求到达\n   │\n   ├─ 1. JWT 鉴权 ─────────────── 失败 → 401\n   │\n   ├─ 2. 文件扩展名校验 (.pdf) ─── 失败 → 400\n   │\n   ├─ 3. 文件大小校验 (≤ 50MB) ── 失败 → 400\n   │\n   ├─ 4. MD5 内容哈希去重 ─────── 重复 → 409\n   │\n   ├─ 5. 存储至 uploads/papers/{md5}.pdf\n   │\n   └─ 6. 写入 paper 表（status: pending_parsing）\n          │\n          └─ 返回 200 + 论文元数据\n```\n\n---\n\n#### 典型使用步骤（Apifox 测试流程）\n\n1. **获取 Token**：调用 `POST /api/user/login`，传入 `{\"email\": \"xxx@example.com\", \"password\": \"123456\"}`\n2. **设置 Token**：从响应中复制 `data.token`，填入环境变量 `{{token}}`\n3. **上传文件**：调用本接口，Body 选择 `file` 类型，选取一个 `.pdf` 文件\n4. **验证结果**：返回 `code: 0` 即上传成功，可查看返回的 `paper_id` 和 `status`",
+        "tags": [
+          "papers"
+        ],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PDF 文件（最大 50MB）",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "上传成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "上传成功"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paper_id": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "file_size": {
+                          "type": "integer"
+                        },
+                        "md5": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "example": "pending_parsing"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "文件格式错误或超出大小限制",
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "409": {
+            "description": "论文已存在（MD5 重复）",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/discover/search": {
+      "get": {
+        "summary": "Search Papers",
+        "deprecated": false,
+        "description": "调用 Semantic Scholar 检索论文，支持年份/来源类型筛选和排序。",
+        "operationId": "search_papers_api_discover_search_get",
+        "tags": [
+          "discover"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "检索关键词",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "检索关键词",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "分页偏移",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "分页偏移",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "每页数量，最大 50",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "每页数量，最大 50",
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "year_from",
+            "in": "query",
+            "description": "年份下限（含）",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份下限（含）",
+              "title": "Year From"
+            }
+          },
+          {
+            "name": "year_to",
+            "in": "query",
+            "description": "年份上限（含）",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份上限（含）",
+              "title": "Year To"
+            }
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "description": "来源类型：conference | journal | arXiv",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "来源类型：conference | journal | arXiv",
+              "title": "Source Type"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "排序：relevance | citations | date",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "排序：relevance | citations | date",
+              "default": "relevance",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/login": {
+      "post": {
+        "summary": "登录",
+        "deprecated": false,
+        "description": "用户使用邮箱和密码进行身份验证。验证通过后会返回 Token供后续接口鉴权使用。\n- 验证逻辑：先根据 email 查询用户，若用户存在，则使用 bcrypt.compare(password, hash) 将明文密码与数据库密文进行比对。\n- 安全提示：无论邮箱不存在还是密码错误，建议统一返回“邮箱或密码错误”，以防恶意枚举账号。",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              },
+              "example": {
+                "email": "1282312174@qq.com",
+                "password": "218218wcj"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "token": {
+                          "type": "string"
+                        },
+                        "userInfo": {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": "string"
+                            },
+                            "username": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "userId",
+                            "username"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "token",
+                        "userInfo"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "登录成功",
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "userInfo": {
+                      "userId": "65f2b1a...",
+                      "username": "张三"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/register": {
+      "post": {
+        "summary": "注册",
+        "deprecated": false,
+        "description": "用户通过邮箱、用户名和密码创建新账号。密码在存储前会经过 bcrypt 加密处理，确保数据库安全。\n用户名不作为区分用户的主键，仅仅是一个昵称",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "description": "符合格式且唯一"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "六位以上密码"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "仅作为昵称"
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "验证码"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password",
+                  "name",
+                  "code"
+                ]
+              },
+              "example": {
+                "email": "qyhzgz@126.com",
+                "password": "123456",
+                "name": "water",
+                "code": "202152"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "string",
+                          "description": "数据库生成的唯一用户ID"
+                        },
+                        "username": {
+                          "type": "string",
+                          "description": "用户注册的用户名"
+                        },
+                        "email": {
+                          "type": "string",
+                          "description": "用户注册的密码"
+                        }
+                      },
+                      "required": [
+                        "userId",
+                        "username",
+                        "email"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "注册成功",
+                  "data": {
+                    "userId": "65f2b1a...",
+                    "username": "张三",
+                    "email": "zhangsan@example.com"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/me": {
+      "get": {
+        "summary": "查询用户信息",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMzhmYjMwZWI3MWY0OWFjYjk5M2NlYWVjYjZhNzY5YiIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3NzczNDMwMjN9.yldPpDMTqbD3bPgnwYr0Dxd-H9FwQtsMHjBz-GXjF08",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "name"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "userId": "65f2b1a...",
+                    "username": "张三",
+                    "email": "zhangsan@example.com"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/user/send-code": {
+      "post": {
+        "summary": "获取验证码",
+        "deprecated": false,
+        "description": "根据邮箱，发送六位随机验证码,验证码供注册和重置密码使用，使用一次后即作废",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              },
+              "example": {
+                "email": "1282312174@qq.com"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "sent": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "sent"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "验证码已生成并存储",
+                  "data": {
+                    "email": "1282312174@qq.com",
+                    "sent": true
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/change-password": {
+      "post": {
+        "summary": "忘记密码",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "new_password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "code",
+                  "new_password"
+                ]
+              },
+              "example": {
+                "email": "1282312174@qq.com",
+                "code": "461216",
+                "new_password": "111string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "userId",
+                        "email"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "密码已更新",
+                  "data": {
+                    "userId": "706cd32cad954a949ffdd257c6ee8d88",
+                    "email": "1282312174@qq.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/tasks/ping": {
+      "post": {
+        "summary": "Submit Ping Task",
+        "deprecated": false,
+        "description": "",
+        "operationId": "submit_ping_task_api_tasks_ping_post",
+        "tags": [
+          "tasks"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Submit Ping Task Api Tasks Ping Post",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/tasks/{task_id}": {
+      "get": {
+        "summary": "Get Task Result",
+        "deprecated": false,
+        "description": "",
+        "operationId": "get_task_result_api_tasks__task_id__get",
+        "tags": [
+          "tasks"
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Task Result Api Tasks  Task Id  Get",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/import": {
+      "post": {
+        "summary": "Import Paper",
+        "deprecated": false,
+        "description": "单篇导入：创建 Paper 记录并触发异步解析任务。\n若同一用户已存在相同 DOI 的论文，返回 409。",
+        "operationId": "import_paper_api_discover_import_post",
+        "tags": [
+          "discover"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/import/bulk": {
+      "post": {
+        "summary": "Bulk Import Papers",
+        "deprecated": false,
+        "description": "批量导入，单次上限 20 篇。\n逐篇检查重复，跳过已存在的论文；其余逐篇创建记录并派发 Celery 任务。\n使用 flush() 在单个事务内获取 paper.id，最后统一 commit。",
+        "operationId": "bulk_import_papers_api_discover_import_bulk_post",
+        "tags": [
+          "discover"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/references/{semantic_id}": {
+      "get": {
+        "summary": "Get References",
+        "deprecated": false,
+        "description": "获取该论文的参考文献（上游），并标注哪些已在用户文库中。",
+        "operationId": "get_references_api_discover_references__semantic_id__get",
+        "tags": [
+          "discover"
+        ],
+        "parameters": [
+          {
+            "name": "semantic_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "title": "Semantic Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "当前用户 ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "当前用户 ID",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/citations/{semantic_id}": {
+      "get": {
+        "summary": "Get Citations",
+        "deprecated": false,
+        "description": "获取引用该论文的文献（下游），并标注哪些已在用户文库中。",
+        "operationId": "get_citations_api_discover_citations__semantic_id__get",
+        "tags": [
+          "discover"
+        ],
+        "parameters": [
+          {
+            "name": "semantic_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "title": "Semantic Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "当前用户 ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "当前用户 ID",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/folders/": {
+      "post": {
+        "summary": "创建文件夹",
+        "deprecated": false,
+        "description": "为当前用户创建一个新的论文分类文件夹。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "文件夹名称（不能为空）",
+                    "example": "我的论文"
+                  }
+                }
+              },
+              "example": {
+                "name": "我的论文"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FolderResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "文件夹名称为空",
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "获取文件夹列表",
+        "deprecated": false,
+        "description": "获取当前用户的所有文件夹，按创建时间倒序排列。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "description": "文件夹列表",
+                          "items": {
+                            "$ref": "#/components/schemas/FolderResponse"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/folders/{folder_id}": {
+      "get": {
+        "summary": "获取文件夹详情",
+        "deprecated": false,
+        "description": "根据 ID 获取单个文件夹的信息。只能访问自己创建的文件夹。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "文件夹 ID",
+            "required": true,
+            "example": "a1b2c3d4e5f6...",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FolderResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问",
+            "headers": {}
+          },
+          "404": {
+            "description": "文件夹不存在",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "重命名文件夹",
+        "deprecated": false,
+        "description": "修改文件夹的名称。只能修改自己创建的文件夹。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "文件夹 ID",
+            "required": true,
+            "example": "a1b2c3d4e5f6...",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "新的文件夹名称",
+                    "example": "重命名后的文件夹"
+                  }
+                }
+              },
+              "example": {
+                "name": "重命名后的文件夹"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FolderResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "文件夹名称为空",
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "403": {
+            "description": "无权修改",
+            "headers": {}
+          },
+          "404": {
+            "description": "文件夹不存在",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "删除文件夹",
+        "deprecated": false,
+        "description": "删除指定的文件夹。\n- 只能删除自己创建的文件夹\n- 删除后，文件夹中的论文会自动解绑（folder_id 置为 NULL），论文本身不会被删除\n",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "文件夹 ID",
+            "required": true,
+            "example": "a1b2c3d4e5f6...",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "null",
+                          "description": "删除成功后 data 为 null"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "403": {
+            "description": "无权删除",
+            "headers": {}
+          },
+          "404": {
+            "description": "文件夹不存在",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "deprecated": false,
+        "description": "",
+        "operationId": "health_check_health_get",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Check Health Get",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BulkImportRequest": {
+        "properties": {
+          "papers": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRequest"
+            },
+            "type": "array",
+            "title": "Papers"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "papers",
+          "user_id"
+        ],
+        "title": "BulkImportRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ImportRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "authors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authors"
+          },
+          "abstract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstract"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "user_id"
+        ],
+        "title": "ImportRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context",
+            "properties": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "FolderResponse": {
+        "type": "object",
+        "description": "文件夹对象",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "文件夹 ID（UUID hex）",
+            "example": "a1b2c3d4e5f6..."
+          },
+          "name": {
+            "type": "string",
+            "description": "文件夹名称",
+            "example": "我的论文"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "创建时间",
+            "example": "2026-04-30T10:00:00"
+          }
+        }
+      },
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0 成功，非 0 失败",
+            "example": 0
+          },
+          "msg": {
+            "type": "string",
+            "description": "提示消息",
+            "example": "创建成功"
+          },
+          "data": {
+            "description": "响应数据（可能为 null）"
+          }
+        }
+      }
+    },
+    "responses": {},
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "jwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "servers": [],
+  "security": []
+}

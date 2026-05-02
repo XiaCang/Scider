@@ -1,20 +1,31 @@
 import request from '../network/request'
-import type { AuthResponse, LoginPayload, RegisterPayload } from '../types/auth'
+import type {
+  ApiResponse,
+  LoginPayload,
+  RegisterPayload,
+  LoginResponseData,
+  RegisterResponseData,
+  ProfileResponseData,
+  SendCodeResponseData,
+  ChangePasswordResponseData,
+} from '../types/auth'
 
-export const loginApi = (payload: LoginPayload): Promise<AuthResponse> =>
-  request.post<AuthResponse>('/auth/login', payload)
+/** POST /api/user/login — 登录 */
+export const loginApi = (payload: LoginPayload) =>
+  request.post<ApiResponse<LoginResponseData>>('/api/user/login', payload)
 
-// 2. 注册
-export const registerApi = (payload: RegisterPayload) : Promise<AuthResponse> =>
-    request.post<AuthResponse>('/auth/register', payload)
+/** POST /api/user/register — 注册 */
+export const registerApi = (payload: RegisterPayload) =>
+  request.post<ApiResponse<RegisterResponseData>>('/api/user/register', payload)
 
-// 验证码
-export const sendCodeApi = (payload: { email: string }): Promise<{
-  code: number;
-  msg: string;
-  data: { email: string; sent: boolean };
-}> => request.post('/auth/send-code', payload);
+/** POST /api/user/send-code — 获取验证码 */
+export const sendCodeApi = (payload: { email: string }) =>
+  request.post<ApiResponse<SendCodeResponseData>>('/api/user/send-code', payload)
 
-// 3. 获取用户信息
-export const getProfileApi = (): Promise<any> => 
-  request.get('/auth/profile')
+/** GET /api/user/me — 查询用户信息 */
+export const getProfileApi = () =>
+  request.get<ApiResponse<ProfileResponseData>>('/api/user/me')
+
+/** POST /api/user/change-password — 忘记密码 */
+export const changePasswordApi = (payload: { email: string; code: string; new_password: string }) =>
+  request.post<ApiResponse<ChangePasswordResponseData>>('/api/user/change-password', payload)

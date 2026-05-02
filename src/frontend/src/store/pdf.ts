@@ -35,7 +35,7 @@ export const usePdfStore = defineStore('pdf', () => {
 
   // 创建笔记
   async function createNote(content: string, pageNumber: number, selectedText?: string) {
-    if (!currentPaperId.value) throw new Error('No current paper')
+    if (!currentPaperId.value) throw new Error('未选择论文')
     const data = await createNoteApi(currentPaperId.value, {
       content,
       pageNumber,
@@ -47,7 +47,7 @@ export const usePdfStore = defineStore('pdf', () => {
 
   // 更新笔记
   async function updateNote(noteId: string, content: string) {
-    if (!currentPaperId.value) throw new Error('No current paper')
+    if (!currentPaperId.value) throw new Error('未选择论文')
     const data = await updateNoteApi(currentPaperId.value, noteId, { content })
     const idx = notes.value.findIndex(n => n.id === noteId)
     if (idx !== -1) notes.value[idx] = data

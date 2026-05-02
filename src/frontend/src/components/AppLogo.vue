@@ -5,7 +5,7 @@
   >
     <img 
       src="../assets/logo.png" 
-      alt="Scider Logo" 
+      alt="Scider 标志" 
       class="app-logo__img"
     />
     
