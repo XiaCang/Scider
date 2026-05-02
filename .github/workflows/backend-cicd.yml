@@ -1,5 +1,9 @@
 name: Backend CI/CD
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches: [dev]
