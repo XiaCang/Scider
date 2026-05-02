@@ -70,88 +70,60 @@ class ImportRequest(BaseModel):
     doi: Optional[str] = None
     year: Optional[int] = None
     venue: Optional[str] = None
-    user_id: str
+    pdf_url: Optional[str] = None   # Semantic Scholar openAccessPdf.url
 
 
 @router.post("/import")
-async def import_paper(body: ImportRequest):
-    """
-    单篇导入：创建 Paper 记录并触发异步解析任务。
-    若同一用户已存在相同 DOI 的论文，返回 409。
-    """
-    logger.info("discover.import title=%r doi=%s user_id=%s", body.title, body.doi, body.user_id)
+async def import_paper(body: ImportRequest, request: Request):
+    """单篇导入：从 JWT 获取 user_id，尝试下载 PDF，创建 Paper 记录并触发异步解析。"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+    user_id = str(user.id)
+
     async with get_session() as session:
-        # 按 DOI 去重（仅当 DOI 存在时检查）
         if body.doi:
             existing = await session.scalar(
-                select(Paper).where(Paper.doi == body.doi, Paper.user_id == body.user_id)
+                select(Paper).where(Paper.doi == body.doi, Paper.user_id == user_id)
             )
             if existing:
-                logger.warning("discover.import duplicate doi=%s user_id=%s", body.doi, body.user_id)
+                logger.warning("discover.import duplicate doi=%s user_id=%s", body.doi, user_id)
                 return JSONResponse(status_code=409, content=err(409, "论文已在文库中"))
+
+        # 尝试下载 PDF
+        pdf_path, md5_hash, file_size = None, None, 0
+        if body.pdf_url:
+            try:
+                async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                    resp = await client.get(body.pdf_url)
+                    resp.raise_for_status()
+                content = resp.content
+                md5_hash = hashlib.md5(content).hexdigest()
+                os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+                pdf_path = os.path.join(settings.UPLOAD_DIR, f"{md5_hash}.pdf")
+                if not os.path.exists(pdf_path):
+                    with open(pdf_path, "wb") as f:
+                        f.write(content)
+                file_size = len(content)
+                logger.info("discover.import pdf downloaded md5=%s size=%d", md5_hash, file_size)
+            except Exception as e:
+                logger.warning("discover.import pdf download failed url=%s error=%s", body.pdf_url, e)
 
         paper = Paper(
             title=body.title, authors=body.authors, abstract=body.abstract,
-            doi=body.doi, year=body.year, user_id=body.user_id,
+            doi=body.doi, year=body.year, user_id=user_id,
+            pdf_path=pdf_path, md5_hash=md5_hash, file_size=file_size,
             status=PaperStatus.PENDING_PARSING,
         )
         session.add(paper)
         await session.commit()
         await session.refresh(paper)
-        logger.info("discover.import paper created paper_id=%s", paper.id)
+        logger.info("discover.import paper created paper_id=%s user_id=%s", paper.id, user_id)
 
-    task = parse_paper_task.delay(paper.id)
+    from app.tasks.parse_task import parse_pdf_task
+    task = parse_pdf_task.delay(paper.id, pdf_path or "")
     logger.info("discover.import task dispatched task_id=%s paper_id=%s", task.id, paper.id)
     return ok(data={"paper_id": paper.id, "task_id": task.id, "status": paper.status.value})
-
-
-class BulkImportRequest(BaseModel):
-    papers: list[ImportRequest]
-    user_id: str
-
-
-@router.post("/import/bulk")
-async def bulk_import_papers(body: BulkImportRequest):
-    """
-    批量导入，单次上限 20 篇。
-    逐篇检查重复，跳过已存在的论文；其余逐篇创建记录并派发 Celery 任务。
-    使用 flush() 在单个事务内获取 paper.id，最后统一 commit。
-    """
-    if len(body.papers) > 20:
-        logger.warning("discover.bulk_import count=%d exceeds limit", len(body.papers))
-        return JSONResponse(status_code=400, content=err(400, "单次批量导入上限为 20 篇"))
-
-    logger.info("discover.bulk_import count=%d user_id=%s", len(body.papers), body.user_id)
-    results = []
-    async with get_session() as session:
-        for item in body.papers:
-            item.user_id = body.user_id
-
-            if item.doi:
-                existing = await session.scalar(
-                    select(Paper).where(Paper.doi == item.doi, Paper.user_id == body.user_id)
-                )
-                if existing:
-                    logger.debug("bulk_import skip duplicate doi=%s", item.doi)
-                    results.append({"title": item.title, "skipped": True, "reason": "论文已在文库中"})
-                    continue
-
-            paper = Paper(
-                title=item.title, authors=item.authors, abstract=item.abstract,
-                doi=item.doi, year=item.year, user_id=body.user_id,
-                status=PaperStatus.PENDING_PARSING,
-            )
-            session.add(paper)
-            await session.flush()  # 获取 paper.id，不提交事务
-            task = parse_paper_task.delay(paper.id)
-            logger.debug("bulk_import queued paper_id=%s task_id=%s", paper.id, task.id)
-            results.append({"paper_id": paper.id, "task_id": task.id, "skipped": False})
-
-        await session.commit()
-
-    imported = sum(1 for r in results if not r.get("skipped"))
-    logger.info("discover.bulk_import done imported=%d skipped=%d", imported, len(results) - imported)
-    return ok(data={"results": results})
 
 
 # ---------------------------------------------------------------------------
@@ -159,30 +131,34 @@ async def bulk_import_papers(body: BulkImportRequest):
 # ---------------------------------------------------------------------------
 
 @router.get("/references/{semantic_id}")
-async def get_references(semantic_id: str, user_id: str = Query(..., description="当前用户 ID")):
+async def get_references(semantic_id: str, request: Request):
     """获取该论文的参考文献（上游），并标注哪些已在用户文库中。"""
-    logger.info("discover.references semantic_id=%s user_id=%s", semantic_id, user_id)
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+    logger.info("discover.references semantic_id=%s user_id=%s", semantic_id, user.id)
     try:
         refs = semantic_scholar.get_references(semantic_id)
     except RuntimeError as e:
         logger.error("discover.references failed: %s", e)
         return JSONResponse(status_code=502, content=err(502, str(e)))
-
-    refs = await _annotate_in_library(refs, user_id)
+    refs = await _annotate_in_library(refs, str(user.id))
     return ok(data={"data": refs})
 
 
 @router.get("/citations/{semantic_id}")
-async def get_citations(semantic_id: str, user_id: str = Query(..., description="当前用户 ID")):
+async def get_citations(semantic_id: str, request: Request):
     """获取引用该论文的文献（下游），并标注哪些已在用户文库中。"""
-    logger.info("discover.citations semantic_id=%s user_id=%s", semantic_id, user_id)
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+    logger.info("discover.citations semantic_id=%s user_id=%s", semantic_id, user.id)
     try:
         cites = semantic_scholar.get_citations(semantic_id)
     except RuntimeError as e:
         logger.error("discover.citations failed: %s", e)
         return JSONResponse(status_code=502, content=err(502, str(e)))
-
-    cites = await _annotate_in_library(cites, user_id)
+    cites = await _annotate_in_library(cites, str(user.id))
     return ok(data={"data": cites})
 
 
