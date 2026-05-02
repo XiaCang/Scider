@@ -54,7 +54,7 @@ export function useFolderOperations() {
           done()
         }
       })
-      await folderStore.createRootFolder(name.trim(), 'current-user')
+      await folderStore.createRootFolder(name.trim())
       ElMessage.success('根文件夹创建成功')
     } catch {
       // 取消

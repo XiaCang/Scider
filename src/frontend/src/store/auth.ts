@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { loginApi, registerApi } from '../api/auth'
 import type { AuthUser, LoginPayload, RegisterPayload } from '../types/auth'
 import { authStorage } from '../utils/auth_storage'
+import { hashPassword } from '../utils/crypto'
 
 export const useAuthStore = defineStore('auth', () => {
   // state
@@ -12,7 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // getters
   const isAuthenticated = computed(() => Boolean(token.value))
-  const displayName = computed(() => user.value?.username || 'Researcher')
+  const displayName = computed(() => user.value?.username || '研究者')
 
   // actions
   function hydrate() {
@@ -24,15 +25,41 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(payload: LoginPayload) {
-    const response = await loginApi(payload)
-    applySession(response.accessToken, response.user)
+    const hashedPwd = await hashPassword(payload.password)
+    const response = await loginApi({
+      email: payload.email,
+      password: hashedPwd,
+    })
+    // response: { code, msg, data: { token, userInfo: { userId, username } } }
+    applySession(
+      response.data.token,
+      {
+        userId: response.data.userInfo.userId,
+        username: response.data.userInfo.username,
+      },
+    )
     return response
   }
 
   async function register(payload: RegisterPayload) {
-    const response = await registerApi(payload)
-    applySession(response.accessToken, response.user)
-    return response
+    const hashedPwd = await hashPassword(payload.password)
+    await registerApi({
+      ...payload,
+      password: hashedPwd,
+    })
+    // 注册成功（无 token），自动登录
+    const loginResponse = await loginApi({
+      email: payload.email,
+      password: hashedPwd,
+    })
+    applySession(
+      loginResponse.data.token,
+      {
+        userId: loginResponse.data.userInfo.userId,
+        username: loginResponse.data.userInfo.username,
+      },
+    )
+    return loginResponse
   }
 
   function applySession(newToken: string, newUser: AuthUser) {

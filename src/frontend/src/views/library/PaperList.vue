@@ -26,7 +26,7 @@ const folderPapers = computed(() => {
   if (currentFolderId.value === 'all') return paperStore.papers
   const folder = folderStore.folders.find(f => f.id === currentFolderId.value)
   if (!folder) return []
-  return paperStore.getPapersByIds(folder.paperIds)
+  return paperStore.getPapersByIds(folder.paperIds ?? [])
 })
 
 const filteredPapers = computed(() => {
@@ -158,46 +158,51 @@ const onSearch = () => {
 
 <template>
   <div class="library-main">
-    <header class="library-header">
-      <!-- 左侧：动态显示全选或已选标签 -->
-      <div class="selection-area">
-        <template v-if="selectedPaperIds.size === 0">
-          <button class="select-all-btn" @click="handleSelectAll">Select all</button>
-        </template>
-        <template v-else>
-          <div class="selected-badge">
-            <span>{{ selectedPaperIds.size }} Selected</span>
-            <button class="clear-all-btn" @click="handleClearAll">
-              <el-icon><Close /></el-icon>
-              Clear all
-            </button>
-          </div>
-        </template>
-      </div>
+    <!-- 工具栏卡片 -->
+    <div class="toolbar-card">
+      <header class="library-header">
+        <div class="selection-area">
+          <template v-if="selectedPaperIds.size === 0">
+            <button class="select-all-btn" @click="handleSelectAll">全选</button>
+          </template>
+          <template v-else>
+            <div class="selected-badge">
+              <span>已选 {{ selectedPaperIds.size }} 篇</span>
+              <button class="clear-all-btn" @click="handleClearAll">
+                <el-icon><Close /></el-icon>
+                清除
+              </button>
+            </div>
+          </template>
+        </div>
 
-      <div class="header-actions">
-        <label class="library-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
-        </label>
-        <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
-          <el-icon><Delete /></el-icon>
-          Delete
-        </button>
-      </div>
-    </header>
-
-    <div class="folder-info-bar">
-      <span class="current-folder">{{ currentFolderName }}</span>
-      <span class="paper-count">({{ filteredPapers.length }})</span>
+        <div class="header-actions">
+          <label class="library-search">
+            <el-icon><Search /></el-icon>
+            <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
+          </label>
+          <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
+            <el-icon><Delete /></el-icon>
+            删除
+          </button>
+        </div>
+      </header>
     </div>
 
-    <PaperCardList
-      :papers="filteredPapers"
-      :selectedIds="selectedPaperIds"
-      @update:selectedIds="selectedPaperIds = $event"
-      @select-paper="handleSelectPaper"
-    />
+    <!-- 论文列表卡片 -->
+    <div class="list-card">
+      <div class="folder-info-bar">
+        <span class="current-folder">{{ currentFolderName }}</span>
+        <span class="paper-count">({{ filteredPapers.length }})</span>
+      </div>
+
+      <PaperCardList
+        :papers="filteredPapers"
+        :selectedIds="selectedPaperIds"
+        @update:selectedIds="selectedPaperIds = $event"
+        @select-paper="handleSelectPaper"
+      />
+    </div>
 
     <PaperDetail
       v-model="paperDetailVisible"
@@ -214,13 +219,29 @@ const onSearch = () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 16px 20px 16px;
+  padding: 16px 20px 20px;
   min-width: 0;
-  margin-left: 20px;
-  transition: margin-left 0.3s;
-  height: 100vh;
   overflow-y: auto;
-  background: #f8fafc;
+}
+
+/* ── 工具栏卡片 ── */
+.toolbar-card {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+/* ── 论文列表卡片 ── */
+.list-card {
+  flex: 1;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  padding: 12px 0 4px;
+  overflow: hidden;
 }
 
 .library-header {
@@ -228,8 +249,8 @@ const onSearch = () => {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0;
+  /* border removed */
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -242,26 +263,27 @@ const onSearch = () => {
   background: none;
   border: none;
   font-size: 0.8rem;
-  color: #3b82f6;
+  color: var(--text-secondary, #526071);
   cursor: pointer;
   padding: 0;
   font-weight: 500;
+  transition: color 0.2s;
 }
 
 .select-all-btn:hover {
-  text-decoration: underline;
+  color: var(--text-primary, #101828);
 }
 
 .selected-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background-color: #eef2ff;
+  background-color: #f1f5f9;
   border-radius: 20px;
   padding: 4px 12px;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #1e40af;
+  color: #475569;
 }
 
 .clear-all-btn {
@@ -294,14 +316,14 @@ const onSearch = () => {
   min-width: 220px;
   padding: 4px 12px;
   border-radius: 40px;
-  border: 1px solid #e2e8f0;
-  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: transparent;
   transition: 0.2s;
 }
 
 .library-search:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
+  border-color: var(--text-tertiary, #8a94a6);
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.12);
 }
 
 .library-search input {
@@ -316,23 +338,22 @@ const onSearch = () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #1f2937;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #526071);
   font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s;
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  color: #dc2626;
 }
 
 .delete-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -340,6 +361,8 @@ const onSearch = () => {
   display: flex;
   gap: 6px;
   align-items: baseline;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
   margin-bottom: 4px;
 }
 

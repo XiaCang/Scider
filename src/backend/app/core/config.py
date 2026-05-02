@@ -1,4 +1,11 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load `src/backend/.env` explicitly so config does not depend on current cwd.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_ENV_FILE)
 
 
 class Settings:
@@ -32,6 +39,21 @@ class Settings:
     LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "120"))   # seconds
     LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+
+    # ──────────────────────────────────────────────
+    # Embeddings (OpenAI-compatible API) → MySQL paper_embedding.embedding (JSON)
+    # ──────────────────────────────────────────────
+    EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+    EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
+    EMBEDDING_TIMEOUT = int(os.getenv("EMBEDDING_TIMEOUT", "120"))
+
+    # ──────────────────────────────────────────────
+    # PDF upload settings
+    # ──────────────────────────────────────────────
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
+    MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
 
 
 settings = Settings()

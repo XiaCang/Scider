@@ -1,118 +1,88 @@
-"""
-papers.py — 论文文件管理路由
+import hashlib
+import os
 
-端点：
-  POST /papers/{paper_id}/upload   上传 PDF 文件，保存到磁盘并触发解析任务
-"""
+import aiofiles
+from fastapi import APIRouter, Depends, File, Request, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
-import logging
-import shutil
-import uuid
-from pathlib import Path
-
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
-from sqlalchemy import select
-
-from app.api.response import ok, err
 from app.core.config import settings
-from app.tasks.paper_tasks import parse_paper_task
-from db.session import get_session
-from db.models import Paper, PaperStatus
+from db.crud_paper import create_paper, get_paper_by_md5
+from db.session import get_db
+from utils.response import success, error
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/papers", tags=["papers"])
 
-_ALLOWED_CONTENT_TYPES = {"application/pdf"}
-_MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+ALLOWED_EXTENSIONS = {".pdf"}
 
 
-@router.post("/{paper_id}/upload")
-async def upload_paper_pdf(paper_id: str, file: UploadFile = File(...)):
-    """
-    上传论文 PDF 文件。
+@router.post("/upload")
+async def upload_pdf(
+    request: Request,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_db),
+):
+    # ── 1. JWT 认证检查 ──
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
 
-    - 校验文件类型（必须为 application/pdf）
-    - 将文件保存到 UPLOAD_DIR/{paper_id}.pdf
-    - 更新 Paper.pdf_path 并将状态重置为 PENDING_PARSING
-    - 派发 parse_paper_task 异步任务
+    # ── 2. 文件类型校验 ──
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return error(msg="仅支持 PDF 文件", code=400, data=None, status_code=400)
 
-    Args:
-        paper_id: Paper 表主键，路径参数。
-        file:     multipart/form-data 上传的 PDF 文件。
-
-    Returns:
-        {"paper_id": ..., "task_id": ..., "pdf_path": ...}
-    """
-    # 1. 校验 Content-Type
-    if file.content_type not in _ALLOWED_CONTENT_TYPES:
-        logger.warning(
-            "upload_paper_pdf rejected content_type=%s paper_id=%s",
-            file.content_type, paper_id,
-        )
-        return JSONResponse(
-            status_code=415,
-            content=err(415, f"仅支持 PDF 文件，收到: {file.content_type}"),
+    # ── 3. 读取文件内容并校验大小 ──
+    content = await file.read()
+    max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(content) > max_size:
+        return error(
+            msg=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE_MB}MB",
+            code=400,
+            data=None,
+            status_code=400,
         )
 
-    # 2. 确认 Paper 记录存在
-    async with get_session() as session:
-        paper = await session.get(Paper, paper_id)
-        if paper is None:
-            logger.warning("upload_paper_pdf paper not found paper_id=%s", paper_id)
-            raise HTTPException(status_code=404, detail="论文记录不存在")
+    # ── 4. MD5 去重 ──
+    md5_hash = hashlib.md5(content).hexdigest()
+    existing = await get_paper_by_md5(session, md5_hash)
+    if existing:
+        return error(msg="该论文已存在，请勿重复上传", code=409, data=None, status_code=409)
 
-    # 3. 保存文件到磁盘
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = upload_dir / f"{paper_id}.pdf"
+    # ── 5. 确保存储目录存在 ──
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-    try:
-        with dest_path.open("wb") as out:
-            # 分块读取，避免大文件占满内存
-            total = 0
-            while chunk := await file.read(1024 * 256):  # 256 KB chunks
-                total += len(chunk)
-                if total > _MAX_FILE_SIZE:
-                    out.close()
-                    dest_path.unlink(missing_ok=True)
-                    logger.warning(
-                        "upload_paper_pdf file too large paper_id=%s size>%d",
-                        paper_id, _MAX_FILE_SIZE,
-                    )
-                    return JSONResponse(
-                        status_code=413,
-                        content=err(413, "文件超过 50 MB 限制"),
-                    )
-                out.write(chunk)
-    except OSError as e:
-        logger.exception("upload_paper_pdf write failed paper_id=%s", paper_id)
-        return JSONResponse(status_code=500, content=err(500, f"文件保存失败: {e}"))
+    # ── 6. 存储文件（以 MD5 命名） ──
+    storage_filename = f"{md5_hash}.pdf"
+    storage_path = os.path.join(settings.UPLOAD_DIR, storage_filename)
+    async with aiofiles.open(storage_path, "wb") as f:
+        await f.write(content)
 
-    logger.info(
-        "upload_paper_pdf saved paper_id=%s path=%s size=%d",
-        paper_id, dest_path, total,
+    # ── 7. 写入数据库 ──
+    title = file.filename.replace(".pdf", "") if file.filename else "untitled"
+    paper = await create_paper(
+        session=session,
+        user_id=user["id"],
+        title=title,
+        pdf_path=storage_path,
+        md5_hash=md5_hash,
+        file_size=len(content),
     )
 
-    # 4. 更新数据库：写入 pdf_path，重置状态为 PENDING_PARSING
-    async with get_session() as session:
-        paper = await session.get(Paper, paper_id)
-        paper.pdf_path = str(dest_path)
-        paper.status = PaperStatus.PENDING_PARSING
-        await session.commit()
-        logger.debug(
-            "upload_paper_pdf db updated paper_id=%s pdf_path=%s", paper_id, dest_path
-        )
+    # ── 8. 触发异步解析任务链 ──
+    from app.tasks.parse_task import parse_pdf_task
 
-    # 5. 派发解析任务
-    task = parse_paper_task.delay(paper_id)
-    logger.info(
-        "upload_paper_pdf task dispatched task_id=%s paper_id=%s",
-        task.id, paper_id,
+    task = parse_pdf_task.delay(paper.id, storage_path)
+
+    return success(
+        data={
+            "paper_id": paper.id,
+            "filename": file.filename,
+            "file_size": len(content),
+            "md5": md5_hash,
+            "status": paper.status.value,
+            "task_id": task.id,
+        },
+        msg="上传成功，后台解析中",
+        code=0,
+        status_code=200,
     )
-
-    return ok(data={
-        "paper_id": paper_id,
-        "task_id": task.id,
-        "pdf_path": str(dest_path),
-    })

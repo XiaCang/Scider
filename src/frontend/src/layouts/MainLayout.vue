@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import NavBar from '../components/NavBar.vue'
-
 </script>
 
 <template>
@@ -23,7 +22,7 @@ import NavBar from '../components/NavBar.vue'
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: #fbfcfe;
+  background: transparent;
 }
 
 /* 二级工具栏样式保留（即使注释，预留样式） */

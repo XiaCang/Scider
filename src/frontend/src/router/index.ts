@@ -4,7 +4,6 @@ import MainLayout from '../layouts/MainLayout.vue'
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
 import AuthView from '../views/auth/AuthView.vue'
-import DashboardView from '../views/dashboard/DashboardView.vue'
 import DiscoverView from '../views/discover/DiscoverView.vue'
 import DiscoverViewUpstream from '../views/discover/DiscoverViewUpstream.vue'
 import GraphView from '../views/graph/GraphView.vue'
@@ -17,14 +16,14 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/app/dashboard',
+      redirect: '/app/library',
     },
     {
       path: '/login',
       name: 'login',
       component: AuthView,
       meta: {
-        title: 'Scider | Login',
+        title: 'Scider | 登录',
         guestOnly: true,
       },
     },
@@ -37,22 +36,14 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/app/dashboard',
-        },
-        {
-          path: 'dashboard',
-          name: 'dashboard',
-          component: DashboardView,
-          meta: {
-            title: 'Scider | Dashboard',
-          },
+          redirect: '/app/library',
         },
         {
           path: 'library',
           name: 'library',
           component: LibraryView,
           meta: {
-            title: 'Scider | Library',
+            title: 'Scider | 文献库',
           },  
           children: [
             { path: '', redirect: { name: 'library-folder', params: { folderId: 'all' } } },
@@ -64,7 +55,7 @@ const router = createRouter({
           name: 'paper-pdf',
           component: PaperPDFView,
           meta: {
-            title: 'Scider | PDF Preview',
+            title: 'Scider | PDF 预览',
           },
         },
         {
@@ -72,7 +63,7 @@ const router = createRouter({
           name: 'graph',
           component: GraphView,
           meta: {
-            title: 'Scider | Knowledge Graph',
+            title: 'Scider | 知识图谱',
           },
         },
         {
@@ -80,7 +71,7 @@ const router = createRouter({
           name: 'discover',
           component: DiscoverView,
           meta: {
-            title: 'Scider | Discover',
+            title: 'Scider | 发现',
           },
         },
         {
@@ -88,7 +79,7 @@ const router = createRouter({
           name: 'discover-upstream',
           component: DiscoverViewUpstream,
           meta: {
-            title: 'Scider | Discover Upstream',
+            title: 'Scider | 上下游',
           },
         },
       ],
@@ -98,7 +89,7 @@ const router = createRouter({
       name: 'not-found',
       component: NotFoundView,
       meta: {
-        title: 'Scider | Not Found',
+        title: 'Scider | 页面未找到',
       },
     },
   ],
@@ -125,7 +116,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && authStore.isAuthenticated) {
-    return '/app/dashboard'
+    return '/app/library'
   }
 
   return true

@@ -29,3 +29,9 @@ Thumbs.db
 
 # Environment
 .env
+
+# Test
+test.http
+
+# Others
+*.pdf

@@ -1,8 +1,8 @@
 <template>
   <section class="not-found panel-surface">
-    <h1>Page not found</h1>
-    <p>The page you are looking for does not exist yet.</p>
-    <router-link to="/app/dashboard">Back to dashboard</router-link>
+    <h1>页面未找到</h1>
+    <p>你访问的页面不存在。</p>
+    <router-link to="/app/library">返回文献库</router-link>
   </section>
 </template>
 

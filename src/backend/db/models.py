@@ -87,6 +87,8 @@ class Paper(Base):
     doi = Column(String(255), unique=True, nullable=True)
     year = Column(Integer, nullable=True)
     pdf_path = Column(String(1024), nullable=True)
+    md5_hash = Column(String(64), unique=True, nullable=True)
+    file_size = Column(Integer, nullable=True)
     user_id = Column(String(64), ForeignKey("user.id"), nullable=False)
     folder_id = Column(String(64), ForeignKey("folder.id"), nullable=True)
     status = Column(SAEnum(PaperStatus), nullable=False, server_default=PaperStatus.PENDING_PARSING.value)
@@ -97,6 +99,20 @@ class Paper(Base):
     key_points = relationship("KeyPoints", uselist=False, back_populates="paper")
     folder = relationship("Folder", back_populates="papers")
     tags = relationship("Tag", secondary=paper_tag, back_populates="papers")
+    embedding_row = relationship("PaperEmbedding", uselist=False, back_populates="paper")
+
+
+class PaperEmbedding(Base):
+    """论文向量（Embedding API 结果），存 MySQL JSON，与 paper.id 一对一。"""
+
+    __tablename__ = "paper_embedding"
+
+    paper_id = Column(String(64), ForeignKey("paper.id"), primary_key=True)
+    embedding = Column(JSON, nullable=False)
+    model_name = Column(String(128), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    paper = relationship("Paper", back_populates="embedding_row")
 
 
 class KeyPoints(Base):

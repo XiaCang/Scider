@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../../store/folder'
 import { useFolderOperations } from '../../../hooks/useFolderOperations'
 import { useFolderTreeFilter } from '../../../hooks/useFolderTreeFilter'
@@ -29,8 +29,7 @@ const {
   filterAndSort
 } = useFolderTreeFilter()
 
-folderStore.loadTestData()
-
+const showSearch = ref(false)
 const disableTransition = ref(true)
 onMounted(() => requestAnimationFrame(() => requestAnimationFrame(() => (disableTransition.value = false))))
 
@@ -70,6 +69,14 @@ const handleAddRootFolder = () => {
       <div class="title-row">
         <h3 class="folder-panel__title">文库文件夹</h3>
         <div class="title-actions">
+          <el-icon
+            class="action-icon"
+            :class="{ 'is-active': showSearch }"
+            @click="showSearch = !showSearch"
+            title="搜索文件夹"
+          >
+            <Search />
+          </el-icon>
           <el-icon class="action-icon" @click="handleAddRootFolder" title="新建根文件夹">
             <Plus />
           </el-icon>
@@ -81,6 +88,8 @@ const handleAddRootFolder = () => {
           />
         </div>
       </div>
+      <!-- 搜索栏（筛选模式下展开） -->
+      <FolderSearchBar v-if="viewMode === 'all' && showSearch" v-model="searchQuery" />
       <div class="folder-tabs">
         <button
           class="tab-btn"
@@ -97,8 +106,6 @@ const handleAddRootFolder = () => {
           全部论文
         </button>
       </div>
-      <!-- 搜索栏（仅在全部论文视图显示） -->
-      <FolderSearchBar v-if="viewMode === 'all'" v-model="searchQuery" />
     </div>
 
     <div class="folder-manager">
@@ -174,6 +181,11 @@ const handleAddRootFolder = () => {
 .action-icon:hover {
   background: var(--bg-soft);
   color: var(--text-primary);
+}
+
+.action-icon.is-active {
+  color: var(--brand);
+  background: var(--brand-soft, rgba(79, 70, 229, 0.1));
 }
 
 .folder-tabs {

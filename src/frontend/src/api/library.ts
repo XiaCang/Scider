@@ -2,6 +2,7 @@ import request from '../network/request'
 
 import type {LibraryPaper, PaperKeyPoints, PaperNote, PaperPdfInfo } from '../types/library'
 import type { Folder } from '../types/folder'
+import type { ApiResponse } from '../types/auth'
 
 /**
  * 获取论文列表
@@ -16,15 +17,21 @@ export const saveKeyPointsApi = (paperId: string, keyPoints: PaperKeyPoints) =>
 
 
 /**
- * 获取用户的文件夹树
+ * 获取文件夹列表
  */
-export const fetchFoldersApi = () => request.get<Folder[]>('/folders')
+export const fetchFoldersApi = () => request.get<ApiResponse<Folder[]>>('/api/folders/')
 
 /**
- * 创建根文件夹
+ * 创建文件夹
  */
-export const createFolderApi = (data: { name: string; user_id: string }) =>
-  request.post<Folder>('/folders', data)
+export const createFolderApi = (data: { name: string }) =>
+  request.post<ApiResponse<Folder>>('/api/folders/', data)
+
+/**
+ * 获取文件夹详情
+ */
+export const fetchFolderDetailApi = (folderId: string) =>
+  request.get<ApiResponse<Folder>>(`/api/folders/${folderId}`)
 
 /**
  * 创建子文件夹
@@ -33,16 +40,16 @@ export const createSubFolderApi = (parentId: string, data: { name: string }) =>
   request.post<Folder>(`/folders/${parentId}/subfolders`, data)
 
 /**
- * 更新文件夹名称
+ * 重命名文件夹
  */
 export const updateFolderApi = (folderId: string, data: { name: string }) =>
-  request.patch<Folder>(`/folders/${folderId}`, data)
+  request.patch(`/api/folders/${folderId}`, data)
 
 /**
- * 删除文件夹（级联删除子文件夹）
+ * 删除文件夹（删除后文件夹中的论文自动解绑，论文本身不被删除）
  */
 export const deleteFolderApi = (folderId: string) =>
-  request.delete(`/folders/${folderId}`)
+  request.delete(`/api/folders/${folderId}`)
 
 /**
  * 移动文件夹到新的父文件夹

@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  ArrowDown,
-  Compass,
-  Grid,
-  Reading,
-  Share,
-  SwitchButton,
-} from '@element-plus/icons-vue'
-import type { Component } from 'vue'
+import { ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from './AppLogo.vue'
@@ -16,8 +8,6 @@ import { useAuthStore } from '../store/auth'
 interface NavItem {
   label: string
   path: string
-  icon: Component
-  description: string
 }
 
 const route = useRoute()
@@ -25,14 +15,14 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const navigationItems: NavItem[] = [
-  { label: 'Dashboard', path: '/app/dashboard', icon: Grid, description: 'Overview' },
-  { label: 'Library', path: '/app/library', icon: Reading, description: 'Paper collection' },
-  { label: 'Knowledge Graph', path: '/app/graph', icon: Share, description: 'Concept map' },
-  { label: 'Discover', path: '/app/discover', icon: Compass, description: 'Recommendations' },
+  { label: '文献库', path: '/app/library' },
+  { label: '知识图谱', path: '/app/graph' },
+  { label: '搜索', path: '/app/discover' },
+  { label: '上下游', path: '/app/discover-upstream' },
 ]
 
 const activePath = computed(() => {
-  if (route.path.startsWith('/app/discover')) return '/app/discover'
+  if (route.path.startsWith('/app/library')) return '/app/library'
   return route.path
 })
 
@@ -55,7 +45,7 @@ const handleLogout = async () => {
     <div class="header-container">
       <div class="header-left">
         <div class="header-brand">
-          <AppLogo size="36" />
+          <AppLogo size="28" />
         </div>
         <nav class="header-nav">
           <button
@@ -66,7 +56,6 @@ const handleLogout = async () => {
             type="button"
             @click="handleNavigate(item.path)"
           >
-            <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
           </button>
         </nav>
@@ -83,11 +72,11 @@ const handleLogout = async () => {
           <el-dropdown-menu class="user-dropdown-menu">
             <div class="user-dropdown-header">
               <strong>{{ displayName }}</strong>
-              <small>Personal Workspace</small>
+              <small>个人工作区</small>
             </div>
             <el-dropdown-item divided @click="handleLogout" class="logout-item">
               <el-icon><SwitchButton /></el-icon>
-              <span>Sign out</span>
+              <span>退出登录</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -98,7 +87,7 @@ const handleLogout = async () => {
 
 <style scoped>
 .workspace-header {
-  height: 64px;
+  height: 48px;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
@@ -114,14 +103,14 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
+  padding: 0 1.25rem;
   box-sizing: border-box;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 2.5rem;
+  gap: 2rem;
   height: 100%;
 }
 
@@ -131,38 +120,37 @@ const handleLogout = async () => {
 
 .header-nav {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   height: 100%;
   align-items: center;
 }
 
-/* 基础导航项：圆角矩形 */
+/* 基础导航项 */
 .header-nav__item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;          /* 上下增加内边距，形成矩形 */
+  padding: 0.35rem 0.85rem;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  border-radius: 0.5rem;         /* 圆角 */
+  border-radius: 0.9rem;
   transition: all 0.2s ease;
   line-height: 1;
 }
 
-/* hover 状态：半透明品牌色背景 */
+/* hover 状态 */
 .header-nav__item:hover {
   color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
 }
 
-/* 激活状态：圆角矩形高亮 */
+/* 激活状态 */
 .header-nav__item.is-active {
   color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 15%, transparent);
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
   font-weight: 600;
 }
 
