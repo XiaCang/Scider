@@ -78,6 +78,17 @@ def _segment(text: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# 任务链辅助
+# ---------------------------------------------------------------------------
+
+def _dispatch_llm_task(paper_id: str, paper_text: str) -> None:
+    """解析完成后立即派发 LLM 提取任务，实现任务链。"""
+    from app.tasks.llm_tasks import extract_key_points_task
+    task = extract_key_points_task.delay(paper_id, paper_text)
+    logger.info("_dispatch_llm_task queued llm_task_id=%s paper_id=%s", task.id, paper_id)
+
+
+# ---------------------------------------------------------------------------
 # Celery 任务
 # ---------------------------------------------------------------------------
 
@@ -131,7 +142,7 @@ async def _run(task_id: str, paper_id: str) -> dict:
 
     pdf_path = paper.pdf_path
 
-    # 2. 无 PDF 文件时跳过解析，直接进入提取阶段
+    # 2. 无 PDF 文件时跳过解析，用摘要文本触发 LLM 提取
     if not pdf_path or not Path(pdf_path).exists():
         logger.warning(
             "[task:%s] no PDF found paper_id=%s pdf_path=%s, skipping parse",
@@ -141,6 +152,9 @@ async def _run(task_id: str, paper_id: str) -> dict:
             p = await session.get(Paper, paper_id)
             p.status = PaperStatus.PENDING_EXTRACTION
             await session.commit()
+        # 用摘要作为 LLM 输入（可能为空字符串，LLM 任务会处理）
+        abstract_text = paper.abstract or ""
+        _dispatch_llm_task(paper_id, abstract_text)
         return {"paper_id": paper_id, "status": "no_pdf", "sections": []}
 
     # 3. 提取 → 清洗 → 分段
@@ -156,6 +170,12 @@ async def _run(task_id: str, paper_id: str) -> dict:
         p.status = PaperStatus.PENDING_EXTRACTION
         await session.commit()
         logger.debug("[task:%s] status → PENDING_EXTRACTION paper_id=%s", task_id, paper_id)
+
+    # 5. 链式触发 LLM 提取任务，拼接各段正文作为输入
+    paper_text = "\n\n".join(
+        f"{s['heading']}\n{s['content']}" for s in sections if s.get("content")
+    )
+    _dispatch_llm_task(paper_id, paper_text)
 
     return {"paper_id": paper_id, "status": "parsed", "sections": sections}
 
