@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 _BASE = "https://api.semanticscholar.org/graph/v1"
 # 检索接口需要的字段（含 publicationTypes 用于来源类型判断）
-_SEARCH_FIELDS = "paperId,title,authors,year,venue,abstract,externalIds,citationCount,publicationTypes"
+_SEARCH_FIELDS = "paperId,title,authors,year,venue,abstract,externalIds,citationCount,publicationTypes,openAccessPdf"
 # 参考文献/引用接口字段（不需要 publicationTypes）
 _REF_FIELDS = "paperId,title,authors,year,venue,abstract,externalIds,citationCount"
 
@@ -62,7 +62,7 @@ def _request(method: str, url: str, **kwargs) -> dict:
     for attempt in range(_MAX_RETRIES):
         time.sleep(_MIN_INTERVAL)  # 主动限速，防止匿名 429
         try:
-            with httpx.Client(timeout=15, headers=_headers()) as client:
+            with httpx.Client(timeout=2000, headers=_headers()) as client:
                 r = getattr(client, method)(url, **kwargs)
 
                 if r.status_code == 429:
@@ -127,6 +127,7 @@ def _fmt(p: dict) -> dict:
         "abstract": p.get("abstract"),
         "doi": (p.get("externalIds") or {}).get("DOI"),
         "citation_count": p.get("citationCount"),
+        "pdf_url": (p.get("openAccessPdf") or {}).get("url"),
     }
 
 

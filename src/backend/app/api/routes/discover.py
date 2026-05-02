@@ -3,22 +3,24 @@ discover.py — 论文发现模块路由
 
 端点：
   GET  /discover/search              关键词检索（Semantic Scholar）
-  POST /discover/import              单篇导入
-  POST /discover/import/bulk         批量导入（上限 20 篇）
+  POST /discover/import              单篇导入（JWT 鉴权，尝试下载 PDF）
   GET  /discover/references/{id}     上游参考文献（含文库标注）
   GET  /discover/citations/{id}      下游引用文献（含文库标注）
 """
 
+import hashlib
 import logging
+import os
 from typing import Optional
 
-from fastapi import APIRouter, Query
+import httpx
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.services import semantic_scholar
-from app.tasks.paper_tasks import parse_paper_task
 from app.api.response import ok, err
 from db.session import get_session
 from db.models import Paper, PaperStatus
