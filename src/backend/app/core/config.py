@@ -39,6 +39,15 @@ class Settings:
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
     # ──────────────────────────────────────────────
+    # Embeddings (OpenAI-compatible API) → MySQL paper_embedding.embedding (JSON)
+    # ──────────────────────────────────────────────
+    EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+    EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
+    EMBEDDING_TIMEOUT = int(os.getenv("EMBEDDING_TIMEOUT", "120"))
+
+    # ──────────────────────────────────────────────
     # PDF upload settings
     # ──────────────────────────────────────────────
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
