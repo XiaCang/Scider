@@ -25,21 +25,41 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(payload: LoginPayload) {
+    const hashedPwd = await hashPassword(payload.password)
     const response = await loginApi({
-      ...payload,
-      password: await hashPassword(payload.password),
+      email: payload.email,
+      password: hashedPwd,
     })
-    applySession(response.accessToken, response.user)
+    // response: { code, msg, data: { token, userInfo: { userId, username } } }
+    applySession(
+      response.data.token,
+      {
+        userId: response.data.userInfo.userId,
+        username: response.data.userInfo.username,
+      },
+    )
     return response
   }
 
   async function register(payload: RegisterPayload) {
-    const response = await registerApi({
+    const hashedPwd = await hashPassword(payload.password)
+    await registerApi({
       ...payload,
-      password: await hashPassword(payload.password),
+      password: hashedPwd,
     })
-    applySession(response.accessToken, response.user)
-    return response
+    // 注册成功（无 token），自动登录
+    const loginResponse = await loginApi({
+      email: payload.email,
+      password: hashedPwd,
+    })
+    applySession(
+      loginResponse.data.token,
+      {
+        userId: loginResponse.data.userInfo.userId,
+        username: loginResponse.data.userInfo.username,
+      },
+    )
+    return loginResponse
   }
 
   function applySession(newToken: string, newUser: AuthUser) {

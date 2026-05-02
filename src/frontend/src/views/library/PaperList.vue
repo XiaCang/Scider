@@ -26,7 +26,7 @@ const folderPapers = computed(() => {
   if (currentFolderId.value === 'all') return paperStore.papers
   const folder = folderStore.folders.find(f => f.id === currentFolderId.value)
   if (!folder) return []
-  return paperStore.getPapersByIds(folder.paperIds)
+  return paperStore.getPapersByIds(folder.paperIds ?? [])
 })
 
 const filteredPapers = computed(() => {

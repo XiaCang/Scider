@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { searchPapersApi, fetchRecommendationsApi } from '../../api/discover'
-import type { SearchQuery, SearchResult } from '../types'
+import type { SearchResult } from '../types'
 
 export function useSearch() {
   const keyword = ref('')
@@ -10,13 +10,6 @@ export function useSearch() {
   const results = ref<SearchResult[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
-
-  const query = computed<SearchQuery>(() => ({
-    keyword: keyword.value,
-    year: selectedYear.value,
-    venue: selectedVenue.value,
-    sortBy: sortBy.value,
-  }))
 
   /** 经过关键词、年份、来源、排序过滤后的结果 */
   const filteredResults = computed(() => {
@@ -69,18 +62,19 @@ export function useSearch() {
     }
   }
 
-  /** 主动搜索论文 */
+  /** 主动搜索论文（对齐 /api/discover/search） */
   async function doSearch() {
     loading.value = true
     error.value = null
     try {
-      const data = await searchPapersApi({
-        keyword: keyword.value || undefined,
-        year: selectedYear.value || undefined,
-        venue: selectedVenue.value || undefined,
-        sort_by: sortBy.value,
+      const res = await searchPapersApi({
+        q: keyword.value,
+        year_from: selectedYear.value ? parseInt(selectedYear.value) : null,
+        year_to: selectedYear.value ? parseInt(selectedYear.value) : null,
+        source_type: selectedVenue.value || null,
+        sort: sortBy.value === 'relevance' ? 'relevance' : undefined,
       })
-      results.value = data as SearchResult[]
+      results.value = res.data as SearchResult[]
     } catch (e) {
       error.value = e instanceof Error ? e.message : '搜索服务不可用'
     } finally {
@@ -106,7 +100,6 @@ export function useSearch() {
     loading,
     error,
     filteredResults,
-    query,
     search,
     doSearch,
     clearFilters,

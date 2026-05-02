@@ -62,6 +62,7 @@ function removeFolderFromTree(tree: Folder[], id: string): boolean {
 // 辅助函数：从所有文件夹中移除指定论文ID
 function removePaperFromAllFolders(tree: Folder[], paperId: string) {
   for (const node of tree) {
+    if (!node.paperIds) continue
     const idx = node.paperIds.indexOf(paperId)
     if (idx !== -1) node.paperIds.splice(idx, 1)
     if (node.children) removePaperFromAllFolders(node.children, paperId)
@@ -82,23 +83,23 @@ export const useFolderStore = defineStore('folder', () => {
   const currentFolderPapers = computed(() => {
     if (!currentFolder.value) return []
     const paperStore = usePaperStore()
-    return paperStore.getPapersByIds(currentFolder.value.paperIds)
+    return paperStore.getPapersByIds(currentFolder.value.paperIds ?? [])
   })
 
   // 加载文件夹树
   async function loadFolders() {
     loading.value = true
     try {
-      const data = await fetchFoldersApi()
-      folders.value = data
+      const res = await fetchFoldersApi()
+      folders.value = res.data
     } finally {
       loading.value = false
     }
   }
 
-  async function createRootFolder(name: string, userId: string) {
-    const data = await createFolderApi({ name, user_id: userId })
-    folders.value.push(data)
+  async function createRootFolder(name: string) {
+    const res = await createFolderApi({ name })
+    folders.value.push(res.data)
   }
 
   async function createSubFolder(parentId: string, name: string) {
@@ -152,15 +153,18 @@ export const useFolderStore = defineStore('folder', () => {
   async function addPaperToFolder(folderId: string, paperId: string) {
     await addPaperToFolderApi(folderId, paperId)
     const folder = findFolderById(folders.value, folderId)
-    if (folder && !folder.paperIds.includes(paperId)) {
-      folder.paperIds.push(paperId)
+    if (folder) {
+      if (!folder.paperIds) folder.paperIds = []
+      if (!folder.paperIds.includes(paperId)) {
+        folder.paperIds.push(paperId)
+      }
     }
   }
 
   async function removePaperFromFolder(folderId: string, paperId: string) {
     await removePaperFromFolderApi(folderId, paperId)
     const folder = findFolderById(folders.value, folderId)
-    if (folder) {
+    if (folder && folder.paperIds) {
       const idx = folder.paperIds.indexOf(paperId)
       if (idx !== -1) folder.paperIds.splice(idx, 1)
     }
@@ -170,7 +174,7 @@ export const useFolderStore = defineStore('folder', () => {
     await batchAddPapersToFolderApi(folderId, paperIds)
     const folder = findFolderById(folders.value, folderId)
     if (folder) {
-      const set = new Set(folder.paperIds)
+      const set = new Set(folder.paperIds ?? [])
       paperIds.forEach(id => set.add(id))
       folder.paperIds = Array.from(set)
     }
