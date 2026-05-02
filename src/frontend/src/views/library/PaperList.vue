@@ -158,46 +158,51 @@ const onSearch = () => {
 
 <template>
   <div class="library-main">
-    <header class="library-header">
-      <!-- 左侧：动态显示全选或已选标签 -->
-      <div class="selection-area">
-        <template v-if="selectedPaperIds.size === 0">
-          <button class="select-all-btn" @click="handleSelectAll">全选</button>
-        </template>
-        <template v-else>
-          <div class="selected-badge">
-            <span>已选 {{ selectedPaperIds.size }} 篇</span>
-            <button class="clear-all-btn" @click="handleClearAll">
-              <el-icon><Close /></el-icon>
-              清除
-            </button>
-          </div>
-        </template>
-      </div>
+    <!-- 工具栏卡片 -->
+    <div class="toolbar-card">
+      <header class="library-header">
+        <div class="selection-area">
+          <template v-if="selectedPaperIds.size === 0">
+            <button class="select-all-btn" @click="handleSelectAll">全选</button>
+          </template>
+          <template v-else>
+            <div class="selected-badge">
+              <span>已选 {{ selectedPaperIds.size }} 篇</span>
+              <button class="clear-all-btn" @click="handleClearAll">
+                <el-icon><Close /></el-icon>
+                清除
+              </button>
+            </div>
+          </template>
+        </div>
 
-      <div class="header-actions">
-        <label class="library-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
-        </label>
-        <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
-          <el-icon><Delete /></el-icon>
-          删除
-        </button>
-      </div>
-    </header>
-
-    <div class="folder-info-bar">
-      <span class="current-folder">{{ currentFolderName }}</span>
-      <span class="paper-count">({{ filteredPapers.length }})</span>
+        <div class="header-actions">
+          <label class="library-search">
+            <el-icon><Search /></el-icon>
+            <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
+          </label>
+          <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
+            <el-icon><Delete /></el-icon>
+            删除
+          </button>
+        </div>
+      </header>
     </div>
 
-    <PaperCardList
-      :papers="filteredPapers"
-      :selectedIds="selectedPaperIds"
-      @update:selectedIds="selectedPaperIds = $event"
-      @select-paper="handleSelectPaper"
-    />
+    <!-- 论文列表卡片 -->
+    <div class="list-card">
+      <div class="folder-info-bar">
+        <span class="current-folder">{{ currentFolderName }}</span>
+        <span class="paper-count">({{ filteredPapers.length }})</span>
+      </div>
+
+      <PaperCardList
+        :papers="filteredPapers"
+        :selectedIds="selectedPaperIds"
+        @update:selectedIds="selectedPaperIds = $event"
+        @select-paper="handleSelectPaper"
+      />
+    </div>
 
     <PaperDetail
       v-model="paperDetailVisible"
@@ -214,13 +219,29 @@ const onSearch = () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 16px 20px 16px;
+  padding: 16px 20px 20px;
   min-width: 0;
-  margin-left: 20px;
-  transition: margin-left 0.3s;
-  height: 100vh;
   overflow-y: auto;
-  background: #f8fafc;
+}
+
+/* ── 工具栏卡片 ── */
+.toolbar-card {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+/* ── 论文列表卡片 ── */
+.list-card {
+  flex: 1;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  padding: 12px 0 4px;
+  overflow: hidden;
 }
 
 .library-header {
@@ -228,8 +249,8 @@ const onSearch = () => {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0;
+  /* border removed */
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -295,8 +316,8 @@ const onSearch = () => {
   min-width: 220px;
   padding: 4px 12px;
   border-radius: 40px;
-  border: 1px solid #e2e8f0;
-  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: transparent;
   transition: 0.2s;
 }
 
@@ -340,6 +361,8 @@ const onSearch = () => {
   display: flex;
   gap: 6px;
   align-items: baseline;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
   margin-bottom: 4px;
 }
 
