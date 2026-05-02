@@ -34,33 +34,36 @@ let cachedLinks: GraphLink[] = []
 // ---- 根据当前文件夹计算应显示的论文ID集合 ----
 const selectedFolderPaperIds = computed(() => {
   const folderId = folderStore.currentFolderId
-  if (!folderId) {
-    // 全部论文
-    return new Set(cachedNodes.filter(n => n.type === 'paper').map(n => n.id))
-  }
-
-  // 递归收集目标文件夹及其所有子文件夹中的论文ID
-  const paperIds: string[] = []
-  const collectFromFolder = (folder: Folder) => {
-    paperIds.push(...(folder.paperIds || []))
-    if (folder.children) {
-      folder.children.forEach(collectFromFolder)
-    }
-  }
-  const findAndCollect = (tree: Folder[], targetId: string): boolean => {
-    for (const node of tree) {
-      if (node.id === targetId) {
-        collectFromFolder(node)
-        return true
-      }
-      if (node.children && findAndCollect(node.children, targetId)) {
-        return true
+  
+  // 如果选择了具体文件夹
+  if (folderId) {
+    // 递归收集目标文件夹及其所有子文件夹中的论文ID
+    const paperIds: string[] = []
+    const collectFromFolder = (folder: Folder) => {
+      paperIds.push(...(folder.paperIds || []))
+      if (folder.children) {
+        folder.children.forEach(collectFromFolder)
       }
     }
-    return false
+    const findAndCollect = (tree: Folder[], targetId: string): boolean => {
+      for (const node of tree) {
+        if (node.id === targetId) {
+          collectFromFolder(node)
+          return true
+        }
+        if (node.children && findAndCollect(node.children, targetId)) {
+          return true
+        }
+      }
+      return false
+    }
+    findAndCollect(folderStore.folders, folderId)
+    return new Set(paperIds)
   }
-  findAndCollect(folderStore.folders, folderId)
-  return new Set(paperIds)
+  
+  // 如果是"全部论文"模式（folderId 为 null）
+  // 返回一个特殊的标记，表示应该显示所有论文
+  return new Set(['__ALL__'])
 })
 
 
@@ -80,7 +83,13 @@ const fetchGraphData = async (/*seedPaperId?: string, expandDirection?: 'upstrea
   isLoading.value = true
   try {
     const { mockNodes, mockLinks } = buildMockGraphData()
-    renderChart(mockNodes, mockLinks)
+    
+    // 缓存全量数据供筛选使用
+    cachedNodes = mockNodes
+    cachedLinks = mockLinks
+    
+    // 应用筛选条件并渲染
+    applyFilterAndRender()
   } catch (error) {
     ElMessage.error('加载图谱数据失败')
   } finally {
@@ -227,8 +236,18 @@ const applyFilterAndRender = () => {
   if (filters.conclusion) visibleTypes.push('conclusion')
 
   const paperIds = selectedFolderPaperIds.value
+  const isAllPapersMode = paperIds.has('__ALL__')
+  
   const filteredNodes = cachedNodes.filter(n => {
+    // 首先检查节点类型是否符合筛选条件
     if (!visibleTypes.includes(n.type)) return false
+    
+    // 如果是"全部论文"模式，显示所有符合类型的节点
+    if (isAllPapersMode) {
+      return true
+    }
+    
+    // 否则根据文件夹关联的论文ID进行过滤
     if (n.type === 'paper') return paperIds.has(n.id)
     if (n.paperId) return paperIds.has(n.paperId)
     return false
