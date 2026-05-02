@@ -68,6 +68,11 @@ async def upload_pdf(
         file_size=len(content),
     )
 
+    # ── 8. 触发异步解析任务链 ──
+    from app.tasks.parse_task import parse_pdf_task
+
+    task = parse_pdf_task.delay(paper.id, storage_path)
+
     return success(
         data={
             "paper_id": paper.id,
@@ -75,8 +80,9 @@ async def upload_pdf(
             "file_size": len(content),
             "md5": md5_hash,
             "status": paper.status.value,
+            "task_id": task.id,
         },
-        msg="上传成功",
+        msg="上传成功，后台解析中",
         code=0,
         status_code=200,
     )

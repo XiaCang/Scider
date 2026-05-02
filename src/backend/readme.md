@@ -189,7 +189,22 @@ POST /api/papers/upload
 
 ### 上传流程
 
-1. JWT 鉴权 → 2. 文件类型/大小校验 → 3. MD5 计算 → 4. 查重 → 5. 存储（以 `{md5}.pdf` 命名） → 6. 入库
+1. JWT 鉴权 → 2. 文件类型/大小校验 → 3. MD5 计算 → 4. 查重 → 5. 存储（以 `{md5}.pdf` 命名） → 6. 入库 → **7. 触发异步解析任务链**
+
+### 异步任务链
+
+上传成功后自动触发后台任务链：
+
+```
+parse_pdf_task (PDF 文本提取) → extract_key_points_task (LLM 四要素提取)
+```
+
+| 任务 | 说明 | Paper 状态流转 |
+|------|------|---------------|
+| `parse_pdf_task` | 用 PyMuPDF 提取 PDF 纯文本 | `PENDING_PARSING → PARSING → PENDING_EXTRACTION` |
+| `extract_key_points_task` | 调用大模型提取四要素并写入 KeyPoints 表 | `PENDING_EXTRACTION → EXTRACTING → PENDING_CONFIRMATION` |
+
+可通过返回的 `task_id` 调用 `GET /api/tasks/{task_id}` 查询任务进度。
 
 ### curl 示例
 
@@ -210,40 +225,23 @@ curl -X POST http://127.0.0.1:8000/api/papers/upload \
 ```json
 {
   "code": 0,
-  "msg": "上传成功",
+  "msg": "上传成功，后台解析中",
   "data": {
     "paper_id": "xxx",
     "filename": "paper.pdf",
     "file_size": 123456,
     "md5": "d41d8cd98f00b204e9800998ecf8427e",
-    "status": "pending_parsing"
+    "status": "pending_parsing",
+    "task_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   }
 }
 ```
 
-### 预期返回
+### 实现文件
 
-提交任务后返回：
-
-```json
-{
-  "task_id": "<task-id>",
-  "status": "PENDING"
-}
-```
-
-查询任务完成后返回：
-
-```json
-{
-  "task_id": "<task-id>",
-  "status": "SUCCESS",
-  "result": {
-    "message": "pong",
-    "timestamp": "2026-04-25T01:00:00"
-  }
-}
-```
+- `app/core/pdf_parser.py` — PyMuPDF 文本提取
+- `app/tasks/parse_task.py` — PDF 解析 Celery 任务
+- `app/tasks/llm_tasks.py` — LLM 四要素提取 Celery 任务
 
 ## 9. 文件夹管理（CRUD）
 

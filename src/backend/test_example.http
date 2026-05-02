@@ -64,6 +64,8 @@ Content-Type: application/json
 ### ──── 论文上传接口（需先登录获取 token）────
 
 ### 上传 PDF 论文（将 <token> 替换为实际 token，将路径替换为实际 PDF 文件路径）
+# 上传成功后会自动触发后台解析任务链（PDF 提取 → LLM 四要素提取）
+# 返回的 task_id 可用于查询解析进度
 POST http://127.0.0.1:8000/api/papers/upload
 Authorization: Bearer <token>
 Content-Type: multipart/form-data; boundary=----boundary
@@ -74,6 +76,9 @@ Content-Type: application/pdf
 
 < ./1.pdf
 ------boundary--
+
+### 查询任务状态（替换为实际 task_id，公开接口）
+GET http://127.0.0.1:8000/api/tasks/<task_id>
 
 ### ──── 文件夹接口（需先登录获取 token）────
 
