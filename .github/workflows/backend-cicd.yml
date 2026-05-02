@@ -1,9 +1,5 @@
 name: Backend CI/CD
 
-permissions:
-  contents: read
-  packages: write
-
 on:
   push:
     branches: [dev]
@@ -48,6 +44,9 @@ jobs:
     needs: lint-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
