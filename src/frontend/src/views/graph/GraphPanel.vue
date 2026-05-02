@@ -350,11 +350,6 @@ onUnmounted(() => {
           </el-checkbox>
         </div>
       </div>
-      <div class="graph-tags">
-        <span class="status-pill is-brand">
-          <span class="pill-icon">🔬</span> 语义单元
-        </span>
-      </div>
     </header>
 
     <div class="graph-canvas-wrapper">
@@ -386,7 +381,7 @@ onUnmounted(() => {
 .graph-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--line-soft);
   background: linear-gradient(to bottom, rgba(255,255,255,0.9), transparent);
@@ -426,24 +421,6 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   margin-right: 6px;
-}
-
-.graph-tags {
-  display: flex;
-  align-items: center;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(99,102,241,0.08));
-  border: 1px solid rgba(59,130,246,0.15);
-  border-radius: 24px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #3b82f6;
 }
 
 .graph-canvas-wrapper {
