@@ -108,7 +108,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
     v-model="drawerVisible"
     title="论文详情"
     direction="rtl"
-    size="750px"
+    size="620px"
     :before-close="handleBeforeClose"
     @open="handleDrawerOpen"
   >
@@ -162,7 +162,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
             <el-input
               v-model="draftKeyPoints.background"
               type="textarea"
-              :rows="4"
+              :rows="3"
               placeholder="请输入研究背景..."
               class="keypoint-textarea"
             />
@@ -178,7 +178,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
             <el-input
               v-model="draftKeyPoints.method"
               type="textarea"
-              :rows="4"
+              :rows="3"
               placeholder="请输入研究方法..."
               class="keypoint-textarea"
             />
@@ -194,7 +194,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
             <el-input
               v-model="draftKeyPoints.innovation"
               type="textarea"
-              :rows="4"
+              :rows="3"
               placeholder="请输入创新点..."
               class="keypoint-textarea"
             />
@@ -210,7 +210,7 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
             <el-input
               v-model="draftKeyPoints.conclusion"
               type="textarea"
-              :rows="4"
+              :rows="3"
               placeholder="请输入结论..."
               class="keypoint-textarea"
             />
@@ -220,17 +220,15 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
 
       <!-- 操作按钮区 -->
       <section class="action-section">
-        <el-button 
-          type="primary" 
-          size="large"
+        <el-button
+          type="primary"
           @click="handleSaveKeyPoints"
         >
           <el-icon><Check /></el-icon>
           确认关键点
         </el-button>
-        
-        <el-button 
-          size="large"
+
+        <el-button
           @click="handlePreviewPdf"
         >
           <el-icon><Document /></el-icon>
@@ -249,44 +247,48 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
 .paper-detail {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 0 0.5rem;
+  gap: 1rem;
+  padding: 0 0.25rem;
 }
 
 /* 论文基本信息 */
 .paper-info {
-  padding-bottom: 1rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--line-soft);
 }
 
 .paper-title {
-  font-size: 1.4rem;
+  font-size: 1.15rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 1rem 0;
-  line-height: 1.4;
+  margin: 0 0 0.7rem 0;
+  line-height: 1.45;
 }
 
 .paper-meta {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.8rem;
+  gap: 0.35rem;
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+  gap: 0.35rem;
+  font-size: 0.8rem;
 }
 
 .meta-label {
   color: var(--text-secondary);
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .meta-value {
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 关键点编辑区 */
@@ -297,47 +299,47 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 1.1rem;
+  gap: 0.4rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.3rem 0;
 }
 
 .section-description {
-  font-size: 0.85rem;
+  font-size: 0.76rem;
   color: var(--text-secondary);
-  margin: 0 0 1.2rem 0;
+  margin: 0 0 0.85rem 0;
 }
 
 /* 四维度网格布局 */
 .keypoints-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.2rem;
+  gap: 0.85rem;
 }
 
 .keypoint-item {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .keypoint-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
+  gap: 0.4rem;
+  font-size: 0.83rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .label-icon {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
 }
 
 .keypoint-hint {
-  font-size: 0.8rem;
+  font-size: 0.73rem;
   color: var(--text-secondary);
   margin: 0;
   font-style: italic;
@@ -346,17 +348,18 @@ const statusClassMap: Record<LibraryPaper['status'], string> = {
 .keypoint-textarea {
   :deep(.el-textarea__inner) {
     font-family: inherit;
-    font-size: 0.9rem;
-    line-height: 1.6;
+    font-size: 0.8rem;
+    line-height: 1.5;
     resize: vertical;
+    padding: 6px 10px;
   }
 }
 
 /* 操作按钮区 */
 .action-section {
   display: flex;
-  gap: 1rem;
-  padding-top: 1rem;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--line-soft);
 }
 

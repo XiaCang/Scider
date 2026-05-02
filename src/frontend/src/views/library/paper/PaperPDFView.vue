@@ -208,7 +208,7 @@ const formatTime = (isoString: string) => {
         <el-input
           v-model="noteContent"
           type="textarea"
-          :rows="15"
+          :rows="12"
           placeholder="记录你对这篇论文的想法...（内容会自动保存）"
         />
         
@@ -242,17 +242,17 @@ const formatTime = (isoString: string) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.8rem 1.5rem;
+  padding: 0.4rem 1rem;
   background-color: white;
   border-bottom: 1px solid var(--line-soft);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .toolbar-left,
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .toolbar-center {
@@ -261,14 +261,14 @@ const formatTime = (isoString: string) => {
 }
 
 .page-info {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
 .zoom-level {
-  min-width: 60px;
+  min-width: 48px;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -276,14 +276,14 @@ const formatTime = (isoString: string) => {
 .pdf-content {
   flex: 1;
   overflow: auto;
-  padding: 2rem;
+  padding: 1.25rem;
   display: flex;
   justify-content: center;
   align-items: flex-start;
 }
 
 .pdf-viewer {
-  max-width: 900px;
+  max-width: 800px;
   width: 100%;
   transition: transform 0.2s ease;
   transform-origin: top center;
@@ -294,27 +294,27 @@ const formatTime = (isoString: string) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 600px;
+  min-height: 400px;
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 3rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 2rem;
   color: var(--text-secondary);
 }
 
 .pdf-placeholder p {
-  margin: 1rem 0 0 0;
-  font-size: 1.1rem;
+  margin: 0.75rem 0 0 0;
+  font-size: 0.95rem;
 }
 
 .placeholder-hint {
-  font-size: 0.9rem !important;
+  font-size: 0.8rem !important;
   color: var(--text-tertiary);
 }
 
 /* 右侧笔记栏 */
 .note-sidebar {
-  width: 320px;
+  width: 270px;
   background-color: var(--bg-secondary);
   border-left: 1px solid var(--line-soft);
   display: flex;
@@ -323,7 +323,7 @@ const formatTime = (isoString: string) => {
 }
 
 .note-header {
-  padding: 1rem;
+  padding: 0.55rem 0.8rem;
   border-bottom: 1px solid var(--line-soft);
   display: flex;
   justify-content: space-between;
@@ -331,33 +331,33 @@ const formatTime = (isoString: string) => {
 }
 
 .note-section-title {
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .save-status {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--brand);
   opacity: 0.8;
 }
 
 .note-input-area {
   flex: 1;
-  padding: 1rem;
+  padding: 0.55rem 0.8rem;
   display: flex;
   flex-direction: column;
 }
 
 .note-info {
-  padding-top: 0.5rem;
+  padding-top: 0.35rem;
   border-top: 1px solid var(--line-soft);
   margin-top: auto;
 }
 
 .info-text {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-tertiary);
 }
 
@@ -379,7 +379,7 @@ const formatTime = (isoString: string) => {
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .note-sidebar {
-    width: 280px;
+    width: 240px;
   }
 }
 
