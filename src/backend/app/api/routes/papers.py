@@ -343,6 +343,7 @@ async def update_paper_key_points(
     
     # ── 4. 创建或更新关键点 ──
     from db.crud_paper import upsert_key_points
+    from db.models import PaperStatus
     
     updated_key_points = await upsert_key_points(
         session=session,
@@ -353,7 +354,11 @@ async def update_paper_key_points(
         conclusion=conclusion,
     )
     
-    # ── 5. 返回更新后的关键点数据 ──
+    # ── 5. 将论文状态更新为已确认 ──
+    paper.status = PaperStatus.CONFIRMED
+    await session.commit()
+    
+    # ── 6. 返回更新后的关键点数据 ──
     data = {
         "background": updated_key_points.background or "",
         "method": updated_key_points.methodology or "",  # 转换为前端字段名

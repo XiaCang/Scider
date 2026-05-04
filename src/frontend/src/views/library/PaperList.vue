@@ -220,8 +220,9 @@ const removePapersFromCurrentFolder = async () => {
 const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) => {
   try {
     await paperStore.saveKeyPoints(paperId, keyPoints)
-    ElMessage.success('关键点已保存')
-  } catch {
+    ElMessage.success('关键点已确认')
+  } catch (error) {
+    console.error('[handleSaveKeyPoints] 保存失败:', error)
     ElMessage.error('保存失败')
   }
 }

@@ -79,7 +79,6 @@ const handleSaveKeyPoints = () => {
   }
 
   emit('save', props.paper.id, { ...draftKeyPoints.value })
-  ElMessage.success('关键点已保存')
   drawerVisible.value = false
 }
 
