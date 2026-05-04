@@ -13,8 +13,6 @@ parse_task.py — Celery 任务：解析 PDF 后启动 LLM 四要素提取。
 import asyncio
 import logging
 
-from celery import chain
-
 from app.celery_app import celery_app
 from app.core.pdf_parser import extract_text_from_pdf
 
@@ -91,12 +89,14 @@ def parse_pdf_task(self, paper_id: str, pdf_path: str) -> dict:
     # Step 1: 标记为解析中
     try:
         asyncio.run(_set_paper_parsing(paper_id))
+        logger.info("[Parse Task] 状态更新为 PARSING paper_id=%s", paper_id)
     except Exception as exc:
         logger.warning("更新 PARSING 状态失败（非致命）: %s", exc)
 
     # Step 2: 提取 PDF 文本
     try:
         paper_text = extract_text_from_pdf(pdf_path, max_chars=0)
+        logger.info("[Parse Task] PDF 提取成功 paper_id=%s, chars=%d", paper_id, len(paper_text))
     except Exception as exc:
         logger.exception("[Parse Task] PDF 提取失败 paper_id=%s", paper_id)
         try:
@@ -119,12 +119,10 @@ def parse_pdf_task(self, paper_id: str, pdf_path: str) -> dict:
     except Exception as exc:
         logger.warning("更新 PENDING_EXTRACTION 状态失败（非致命）: %s", exc)
 
-    # Step 4: Chain 到 LLM 提取任务
+    # Step 4: 派发 LLM 提取任务
     from app.tasks.llm_tasks import extract_key_points_task
 
-    chain(
-        extract_key_points_task.si(paper_id, paper_text),
-    )()
+    extract_key_points_task.delay(paper_id, paper_text)
 
     logger.info(
         "[Parse Task] 解析完成并触发 LLM 提取 paper_id=%s, chars=%d",
