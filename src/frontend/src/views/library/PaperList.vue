@@ -8,6 +8,7 @@ import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
 import { uploadPaperApi } from '../../api/library'  
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
+import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
 import { usePaperStore } from '../../store/paper'
 import { useFolderStore } from '../../store/folder'
 
@@ -18,6 +19,7 @@ const folderStore = useFolderStore()
 
 const searchQuery = ref('')
 const paperDetailVisible = ref(false)
+const showUploadDialog = ref(false)
 const selectedPaper = ref<LibraryPaper | null>(null)
 const selectedPaperIds = ref<Set<string>>(new Set())  // 选中的论文ID
 
@@ -190,6 +192,12 @@ const handleFileUpload = async (event: Event) => {
 const onSearch = () => {
   selectedPaperIds.value.clear()
 }
+
+// PDF上传成功回调
+const handleUploadSuccess = () => {
+  // 可以在这里刷新论文列表或其他操作
+  console.log('PDF上传成功')
+}
 </script>
 
 <template>
@@ -213,6 +221,14 @@ const onSearch = () => {
         </div>
 
         <div class="header-actions">
+          <button 
+            class="upload-btn" 
+            @click="showUploadDialog = true"
+            title="上传PDF论文"
+          >
+            <el-icon><Upload /></el-icon>
+            上传PDF
+          </button>
           <label class="library-search">
             <el-icon><Search /></el-icon>
             <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
@@ -256,6 +272,12 @@ const onSearch = () => {
       :paper="selectedPaper"
       @save="handleSaveKeyPoints"
       @preview-pdf="handlePreviewPdf"
+    />
+
+    <!-- PDF上传对话框 -->
+    <PdfUploadDialog
+      v-model="showUploadDialog"
+      @success="handleUploadSuccess"
     />
   </div>
 </template>
@@ -354,6 +376,27 @@ const onSearch = () => {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--brand, #4f46e5);
+  border-radius: 8px;
+  background: var(--brand, #4f46e5);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-btn:hover {
+  background: var(--brand-dark, #4338ca);
+  border-color: var(--brand-dark, #4338ca);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
 .library-search {

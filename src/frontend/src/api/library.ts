@@ -152,3 +152,32 @@ export const createNoteApi = (paperId: string, data: {
  */
 export const updateNoteApi = (paperId: string, noteId: string, data: { content: string }) =>
   request.patch<PaperNote>(`/papers/${paperId}/notes/${noteId}`, data)
+
+// ==================== PDF上传相关接口 ====================
+
+/**
+ * 上传PDF论文
+ */
+export interface UploadPaperResponse {
+  paper_id: string
+  filename: string
+  file_size: number
+  md5: string
+  status: string
+  task_id: string
+}
+
+export const uploadPaperApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  return request.post<ApiResponse<UploadPaperResponse>>(
+    '/papers/upload',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    }
+  )
+}
