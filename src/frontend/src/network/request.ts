@@ -12,6 +12,9 @@ instance.interceptors.request.use((config) => {
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+    console.log('[Request Interceptor] Token已添加:', token.substring(0, 20) + '...')
+  } else {
+    console.warn('[Request Interceptor] 警告: 未找到Token，请求将不包含Authorization头')
   }
 
   return config

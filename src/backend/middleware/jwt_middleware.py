@@ -15,6 +15,7 @@ EXEMPT_PATHS = (
     "/api/user/send-code",
     "/api/user/change-password",
     "/api/tasks/",
+    "/uploads",  # 静态文件服务（PDF预览）
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -55,15 +56,23 @@ class JWTAuthMiddleware:
 
         headers = dict((k.decode().lower(), v.decode()) for k, v in scope.get("headers", []))
         auth = headers.get("authorization")
+        
+        # 调试日志
+        import sys
+        print(f"[JWT Middleware] Path: {path}, Method: {method}", file=sys.stderr)
+        print(f"[JWT Middleware] Authorization header present: {auth is not None}", file=sys.stderr)
+        if auth:
+            print(f"[JWT Middleware] Authorization: {auth[:30]}...", file=sys.stderr)
+        
         if not auth:
-            res = JSONResponse({"detail": "Not authenticated"}, status_code=401)
+            res = JSONResponse({"code": 401, "msg": "未认证", "data": None}, status_code=401)
             await res(scope, receive, send)
             return
 
         # support case-insensitive 'Bearer' scheme and robust splitting
         parts = auth.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            res = JSONResponse({"detail": "Not authenticated"}, status_code=401)
+            res = JSONResponse({"code": 401, "msg": "未认证", "data": None}, status_code=401)
             await res(scope, receive, send)
             return
 
@@ -72,23 +81,23 @@ class JWTAuthMiddleware:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             user_id = payload.get("sub")
             if not user_id:
-                res = JSONResponse({"detail": "Invalid token"}, status_code=401)
+                res = JSONResponse({"code": 401, "msg": "无效的Token", "data": None}, status_code=401)
                 await res(scope, receive, send)
                 return
             # fetch user and attach to scope state
             user = await get_user_by_id(user_id)
             if not user:
-                res = JSONResponse({"detail": "User not found"}, status_code=404)
+                res = JSONResponse({"code": 404, "msg": "用户不存在", "data": None}, status_code=404)
                 await res(scope, receive, send)
                 return
             scope.setdefault("state", {})
             scope["state"]["user"] = user
         except jwt.ExpiredSignatureError:
-            res = JSONResponse({"detail": "Token expired"}, status_code=401)
+            res = JSONResponse({"code": 401, "msg": "Token已过期", "data": None}, status_code=401)
             await res(scope, receive, send)
             return
         except jwt.InvalidTokenError:
-            res = JSONResponse({"detail": "Invalid token"}, status_code=401)
+            res = JSONResponse({"code": 401, "msg": "无效的Token", "data": None}, status_code=401)
             await res(scope, receive, send)
             return
 

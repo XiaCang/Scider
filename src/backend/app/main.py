@@ -6,6 +6,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.papers import router as papers_router
@@ -28,6 +29,10 @@ app.add_middleware(
 
 # ── JWT authentication middleware (ASGI middleware, not BaseHTTPMiddleware) ──
 app.add_middleware(JWTAuthMiddleware)
+
+# ── 静态文件服务（用于PDF预览） ──
+UPLOAD_DIR_ABSOLUTE = str(Path(settings.UPLOAD_DIR).resolve())
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR_ABSOLUTE), name="uploads")
 
 
 @app.on_event("startup")
