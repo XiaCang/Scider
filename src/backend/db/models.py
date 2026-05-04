@@ -86,6 +86,7 @@ class Paper(Base):
     abstract = Column(Text, nullable=True)
     doi = Column(String(255), unique=True, nullable=True)
     year = Column(Integer, nullable=True)
+    source = Column(String(512), nullable=True)  # 论文出处（期刊/会议名称）
     pdf_path = Column(String(1024), nullable=True)
     md5_hash = Column(String(64), unique=True, nullable=True)
     file_size = Column(Integer, nullable=True)
@@ -153,3 +154,18 @@ class Task(Base):
     error = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class PaperNote(Base):
+    """论文笔记表"""
+    __tablename__ = "paper_note"
+
+    id = Column(String(64), primary_key=True, default=gen_id)
+    paper_id = Column(String(64), ForeignKey("paper.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    page_number = Column(Integer, nullable=True)  # 笔记关联的页码
+    selected_text = Column(Text, nullable=True)  # 选中的文本片段
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    paper = relationship("Paper", backref="notes")

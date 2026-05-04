@@ -34,9 +34,23 @@ export const usePaperStore = defineStore('paper', () => {
   // 保存一篇论文的关键点（同时更新本地）
   async function saveKeyPoints(paperId: string, keyPoints: PaperKeyPoints) {
     await saveKeyPointsApi(paperId, keyPoints)
-    const paper = paperMap.value.get(paperId)
-    if (paper) {
-      paper.keyPoints = { ...keyPoints }
+    
+    // 直接在papers数组中查找并更新，确保响应式
+    const paperIndex = papers.value.findIndex(p => p.id === paperId)
+    if (paperIndex !== -1) {
+      console.log('[saveKeyPoints] 更新前状态:', papers.value[paperIndex].status)
+      
+      // 使用展开运算符创建新对象，确保Vue能检测到变化
+      papers.value[paperIndex] = {
+        ...papers.value[paperIndex],
+        keyPoints: { ...keyPoints },
+        status: 'CONFIRMED'
+      }
+      
+      console.log('[saveKeyPoints] 更新后状态:', papers.value[paperIndex].status)
+      console.log('[saveKeyPoints] papers数组长度:', papers.value.length)
+    } else {
+      console.warn('[saveKeyPoints] 未找到论文ID:', paperId)
     }
   }
 

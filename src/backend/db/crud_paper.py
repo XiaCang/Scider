@@ -102,3 +102,83 @@ async def update_paper_metadata(
     await session.execute(q)
     await session.commit()
     return await get_paper_by_id(session, paper_id)
+
+
+async def upsert_key_points(
+    session: AsyncSession,
+    paper_id: str,
+    background: Optional[str] = None,
+    methodology: Optional[str] = None,
+    innovation: Optional[str] = None,
+    conclusion: Optional[str] = None,
+):
+    """创建或更新论文关键点（四要素）"""
+    from .models import KeyPoints
+    
+    # 查询是否已存在关键点记录
+    result = await session.execute(
+        select(KeyPoints).where(KeyPoints.paper_id == paper_id)
+    )
+    existing = result.scalar_one_or_none()
+    
+    if existing:
+        # 更新现有记录
+        if background is not None:
+            existing.background = background
+        if methodology is not None:
+            existing.methodology = methodology
+        if innovation is not None:
+            existing.innovation = innovation
+        if conclusion is not None:
+            existing.conclusion = conclusion
+        
+        await session.commit()
+        await session.refresh(existing)
+        return existing
+    else:
+        # 创建新记录
+        key_points = KeyPoints(
+            paper_id=paper_id,
+            background=background,
+            methodology=methodology,
+            innovation=innovation,
+            conclusion=conclusion,
+        )
+        session.add(key_points)
+        await session.commit()
+        await session.refresh(key_points)
+        return key_points
+
+
+async def delete_paper(session: AsyncSession, paper_id: str, user_id: str) -> bool:
+    """删除论文及其关联数据（级联删除key_points、notes、embeddings等）"""
+    from sqlalchemy import delete
+    from .models import Paper, KeyPoints, PaperNote, PaperEmbedding
+    
+    # 验证论文是否存在且属于该用户
+    paper = await get_paper_by_id(session, paper_id)
+    if not paper or paper.user_id != user_id:
+        return False
+    
+    # 删除关联的关键点
+    await session.execute(
+        delete(KeyPoints).where(KeyPoints.paper_id == paper_id)
+    )
+    
+    # 删除关联的笔记
+    await session.execute(
+        delete(PaperNote).where(PaperNote.paper_id == paper_id)
+    )
+    
+    # 删除关联的嵌入向量
+    await session.execute(
+        delete(PaperEmbedding).where(PaperEmbedding.paper_id == paper_id)
+    )
+    
+    # 删除论文本身
+    await session.execute(
+        delete(Paper).where(Paper.id == paper_id)
+    )
+    
+    await session.commit()
+    return True

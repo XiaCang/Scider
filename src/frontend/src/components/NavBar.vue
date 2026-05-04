@@ -15,9 +15,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const navigationItems: NavItem[] = [
-  { label: '文献库', path: '/app/library' },
+  { label: '我的文库', path: '/app/library' },
   { label: '知识图谱', path: '/app/graph' },
-  { label: '搜索', path: '/app/discover' },
+  { label: '发现论文', path: '/app/discover' },
   { label: '上下游', path: '/app/discover-upstream' },
 ]
 

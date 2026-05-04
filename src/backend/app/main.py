@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.discover import router as discover_router
@@ -26,8 +28,21 @@ app = FastAPI(
     openapi_url="/openapi.json",  # OpenAPI schema 路径
 )
 
+# ── CORS 跨域配置 ──
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 开发环境允许所有来源,生产环境应指定具体域名
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有HTTP方法(GET, POST, PUT, DELETE, OPTIONS等)
+    allow_headers=["*"],  # 允许所有请求头
+)
+
 # ── JWT authentication middleware (ASGI middleware, not BaseHTTPMiddleware) ──
 app.add_middleware(JWTAuthMiddleware)
+
+# ── 静态文件服务（用于PDF预览） ──
+UPLOAD_DIR_ABSOLUTE = str(Path(settings.UPLOAD_DIR).resolve())
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR_ABSOLUTE), name="uploads")
 
 
 @app.on_event("startup")

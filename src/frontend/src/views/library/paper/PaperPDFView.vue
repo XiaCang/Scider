@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import VuePdfEmbed from 'vue-pdf-embed'
-import { useVuePdfEmbed } from 'vue-pdf-embed'
 
 import type { PaperNote, PaperPdfInfo } from '../../../types/library'
 import {
@@ -35,17 +34,8 @@ const currentPage = ref(1)
 const isMobile = ref(window.innerWidth < 900)
 const showNoteDrawer = ref(true)
 const pdfLoading = ref(true)
-
-// 使用 vue-pdf-embed composable 获取文档对象
-const { doc } = useVuePdfEmbed({ source: pdfUrl })
-
-// 当文档加载完成后，获取页数
-watch(doc, (pdfDoc) => {
-  if (pdfDoc) {
-    pageCount.value = pdfDoc.numPages
-    pdfLoading.value = false
-  }
-})
+const pdfError = ref('')
+const pdfViewerRef = ref<HTMLElement | null>(null)
 
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -57,30 +47,107 @@ const handleResize = () => {
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   loadPaperData()
+  
+  // 添加键盘事件监听
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeyDown)
+  
+  // 清理事件监听器
+  if (pdfViewerRef.value) {
+    pdfViewerRef.value.removeEventListener('wheel', handleWheelZoom)
+  }
 })
 
 // 加载论文数据
 const loadPaperData = async () => {
+  pdfLoading.value = true
+  pdfError.value = ''
   try {
     const response = await fetchPaperPdfInfoApi(paperId.value)
-    const pdfInfo = response as unknown as PaperPdfInfo
+    
+    // 调试：查看实际返回的数据结构
+    console.log('[loadPaperData] API原始响应:', response)
+    console.log('[loadPaperData] 响应类型:', typeof response)
+    console.log('[loadPaperData] 响应键名:', Object.keys(response || {}))
+    
+    // 响应拦截器已解包，response 应该是 data 字段的内容
+    // 但如果响应拦截器未生效，response 可能是 {code, msg, data} 结构
+    let pdfInfo: PaperPdfInfo
+    
+    if ('code' in response && 'data' in response) {
+      // 响应拦截器未解包，手动提取 data
+      console.log('[loadPaperData] 检测到完整响应结构，手动提取 data')
+      const fullResponse = response as any
+      if (fullResponse.code !== 0) {
+        throw new Error(fullResponse.msg || '请求失败')
+      }
+      pdfInfo = fullResponse.data as PaperPdfInfo
+    } else {
+      // 响应拦截器已解包，直接使用
+      console.log('[loadPaperData] 响应已解包，直接使用')
+      pdfInfo = response as unknown as PaperPdfInfo
+    }
+    
+    console.log('[loadPaperData] pdfInfo:', pdfInfo)
+    console.log('[loadPaperData] pdfInfo.pdfUrl:', pdfInfo?.pdfUrl)
 
-    paperTitle.value = pdfInfo.title
-    pdfUrl.value = pdfInfo.pdfUrl
-    pageCount.value = pdfInfo.pageCount
+    if (!pdfInfo || !pdfInfo.pdfUrl) {
+      throw new Error('PDF信息不完整')
+    }
+
+    paperTitle.value = pdfInfo.title || '未命名论文'
+    
+    // 构建完整的PDF URL（相对路径转绝对路径）
+    // 注意：PDF文件在 /uploads 路径下，不在 /api 路径下
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    // 从API基础URL中提取服务器地址（去掉 /api 后缀）
+    const serverBaseUrl = apiBaseUrl.replace(/\/api$/, '')
+    
+    pdfUrl.value = pdfInfo.pdfUrl.startsWith('http') 
+      ? pdfInfo.pdfUrl 
+      : `${serverBaseUrl}${pdfInfo.pdfUrl}`
+    
+    pageCount.value = pdfInfo.pageCount || 0
+    
+    console.log('[loadPaperData] API Base URL:', apiBaseUrl)
+    console.log('[loadPaperData] Server Base URL:', serverBaseUrl)
+    console.log('[loadPaperData] 最终PDF URL:', pdfUrl.value)
+    console.log('[loadPaperData] 论文标题:', paperTitle.value)
 
     // 获取笔记
     const notesResponse = await fetchPaperNotesApi(paperId.value)
-    const notesList = notesResponse as unknown as PaperNote[]
+    
+    // 同样处理笔记响应
+    let notesList: PaperNote[]
+    if ('code' in notesResponse && 'data' in notesResponse) {
+      const fullResponse = notesResponse as any
+      notesList = fullResponse.code === 0 ? fullResponse.data : []
+    } else {
+      notesList = notesResponse as unknown as PaperNote[]
+    }
+    
     note.value = notesList.length > 0 ? notesList[0] : null
 
     if (note.value) {
       noteContent.value = note.value.content
-      notePage.value = note.value.pageNumber
+      notePage.value = note.value.pageNumber || 1
     }
+    
+    console.log('PDF信息加载成功:', {
+      title: paperTitle.value,
+      pdfUrl: pdfUrl.value,
+      pageCount: pageCount.value
+    })
   } catch (error) {
-    ElMessage.error('加载论文失败')
+    pdfError.value = error instanceof Error ? error.message : '加载失败'
+    ElMessage.error('加载论文失败: ' + pdfError.value)
     console.error('加载论文数据失败:', error)
+  } finally {
+    pdfLoading.value = false
   }
 }
 
@@ -89,16 +156,101 @@ const handleBack = () => {
   router.back()
 }
 
+// PDF加载成功回调
+const handlePdfLoaded = (pdfDoc: any) => {
+  console.log('[PDF] 加载成功，总页数:', pdfDoc.numPages)
+  pageCount.value = pdfDoc.numPages
+  pdfLoading.value = false
+  
+  // 在PDF加载完成后添加滚轮缩放监听
+  setTimeout(() => {
+    if (pdfViewerRef.value) {
+      pdfViewerRef.value.addEventListener('wheel', handleWheelZoom, { passive: false })
+    }
+  }, 500)
+}
+
+// PDF加载失败回调
+const handlePdfError = (error: any) => {
+  console.error('[PDF] 加载失败:', error)
+  pdfError.value = 'PDF文件加载失败，请检查文件是否存在'
+  pdfLoading.value = false
+  ElMessage.error('PDF加载失败')
+}
+
 // 缩放控制
 const handleZoomIn = () => {
-  if (zoomLevel.value < 200) {
+  if (zoomLevel.value < 300) {
     zoomLevel.value += 10
   }
 }
 
 const handleZoomOut = () => {
-  if (zoomLevel.value > 50) {
+  if (zoomLevel.value > 25) {
     zoomLevel.value -= 10
+  }
+}
+
+// 重置缩放
+const handleResetZoom = () => {
+  zoomLevel.value = 100
+}
+
+// 适应宽度
+const handleFitWidth = () => {
+  if (pdfViewerRef.value) {
+    const containerWidth = pdfViewerRef.value.clientWidth - 40 // 减去padding
+    // 假设PDF标准宽度为595pt (A4)
+    const standardPdfWidth = 595
+    const calculatedZoom = Math.floor((containerWidth / standardPdfWidth) * 100)
+    zoomLevel.value = Math.max(25, Math.min(300, calculatedZoom))
+  }
+}
+
+// 适应高度
+const handleFitHeight = () => {
+  if (pdfViewerRef.value) {
+    const containerHeight = window.innerHeight - 200 // 减去工具栏等
+    // 假设PDF标准高度为842pt (A4)
+    const standardPdfHeight = 842
+    const calculatedZoom = Math.floor((containerHeight / standardPdfHeight) * 100)
+    zoomLevel.value = Math.max(25, Math.min(300, calculatedZoom))
+  }
+}
+
+// 鼠标滚轮缩放（按住Ctrl键）
+const handleWheelZoom = (event: WheelEvent) => {
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault()
+    
+    if (event.deltaY < 0) {
+      // 向上滚动，放大
+      handleZoomIn()
+    } else {
+      // 向下滚动，缩小
+      handleZoomOut()
+    }
+  }
+}
+
+// 键盘快捷键
+const handleKeyDown = (event: KeyboardEvent) => {
+  // Ctrl/Cmd + '+' 放大
+  if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
+    event.preventDefault()
+    handleZoomIn()
+  }
+  
+  // Ctrl/Cmd + '-' 缩小
+  if ((event.ctrlKey || event.metaKey) && event.key === '-') {
+    event.preventDefault()
+    handleZoomOut()
+  }
+  
+  // Ctrl/Cmd + '0' 重置缩放
+  if ((event.ctrlKey || event.metaKey) && event.key === '0') {
+    event.preventDefault()
+    handleResetZoom()
   }
 }
 
@@ -175,38 +327,90 @@ const formatTime = (isoString: string) => {
 
         <div class="toolbar-center">
           <el-button-group>
-            <el-button size="small" @click="handleZoomOut">-</el-button>
-            <span class="zoom-level">{{ zoomLevel }}%</span>
-            <el-button size="small" @click="handleZoomIn">+</el-button>
+            <el-tooltip content="缩小 (Ctrl + -)" placement="bottom">
+              <el-button size="small" @click="handleZoomOut">
+                <el-icon><ZoomOut /></el-icon>
+              </el-button>
+            </el-tooltip>
+            
+            <el-tooltip content="重置缩放 (Ctrl + 0)" placement="bottom">
+              <el-button size="small" @click="handleResetZoom">
+                {{ zoomLevel }}%
+              </el-button>
+            </el-tooltip>
+            
+            <el-tooltip content="放大 (Ctrl + +)" placement="bottom">
+              <el-button size="small" @click="handleZoomIn">
+                <el-icon><ZoomIn /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </el-button-group>
+          
+          <el-button-group style="margin-left: 12px;">
+            <el-tooltip content="适应宽度" placement="bottom">
+              <el-button size="small" @click="handleFitWidth">
+                <el-icon><FullScreen /></el-icon>
+                适应宽度
+              </el-button>
+            </el-tooltip>
+            
+            <el-tooltip content="适应高度" placement="bottom">
+              <el-button size="small" @click="handleFitHeight">
+                <el-icon><FullScreen /></el-icon>
+                适应高度
+              </el-button>
+            </el-tooltip>
           </el-button-group>
         </div>
 
         <div class="toolbar-right">
-          <el-button
-            v-if="isMobile"
-            text
-            @click="showNoteDrawer = !showNoteDrawer"
-          >
-            <el-icon><Edit /></el-icon>
-          </el-button>
-          <el-button text @click="showNoteDrawer = !showNoteDrawer">
-            {{ showNoteDrawer ? '隐藏笔记' : '显示笔记' }}
-          </el-button>
+          <el-tooltip content="提示：按住 Ctrl + 滚轮可快速缩放" placement="bottom">
+            <el-button size="small" text>
+              <el-icon><Edit /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
       </header>
 
-      <!-- PDF 显示区域 -->
-      <div class="pdf-content">
-        <div v-if="pdfLoading" class="pdf-loading">
-          <el-icon :size="48" class="is-loading"><Document /></el-icon>
-          <p>正在加载 PDF...</p>
+      <!-- PDF显示区域 -->
+      <div class="pdf-content" ref="pdfViewerRef">
+        <div 
+          v-if="pdfLoading" 
+          class="pdf-loading"
+        >
+          <el-icon class="is-loading" :size="48"><Document /></el-icon>
+          <p>正在加载PDF...</p>
         </div>
-        <div v-else class="pdf-viewer" :style="{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }">
+        
+        <div 
+          v-else-if="pdfError" 
+          class="pdf-error"
+        >
+          <el-icon :size="48"><Document /></el-icon>
+          <p>{{ pdfError }}</p>
+          <el-button type="primary" @click="loadPaperData">重试</el-button>
+        </div>
+        
+        <div 
+          v-else-if="!pdfUrl" 
+          class="pdf-empty"
+        >
+          <el-icon :size="48"><Document /></el-icon>
+          <p>暂无PDF文件</p>
+        </div>
+        
+        <div 
+          v-else 
+          class="pdf-viewer" 
+          :style="{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }"
+        >
           <VuePdfEmbed
             :source="pdfUrl"
             :page="currentPage"
             :scale="zoomLevel / 100"
             text-layer
+            @loaded="handlePdfLoaded"
+            @error="handlePdfError"
           />
         </div>
       </div>
@@ -303,9 +507,12 @@ const formatTime = (isoString: string) => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  background-color: #f5f5f5;
 }
 
-.pdf-loading {
+.pdf-loading,
+.pdf-error,
+.pdf-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -315,9 +522,29 @@ const formatTime = (isoString: string) => {
   gap: 1rem;
 }
 
+.error-detail {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  max-width: 500px;
+  text-align: center;
+  word-break: break-word;
+}
+
 .pdf-viewer {
-  max-width: 800px;
+  max-width: 900px;
   width: 100%;
+  transition: transform 0.15s ease-out;
+  transform-origin: top center;
+}
+
+.pdf-viewer-wrapper :deep(.vue-pdf-embed) {
+  width: 100%;
+}
+
+.pdf-viewer-wrapper :deep(canvas) {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
 }
 
 .note-sidebar {

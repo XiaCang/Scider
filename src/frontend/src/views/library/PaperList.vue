@@ -1,14 +1,15 @@
 <!-- PaperList.vue（原 LibraryMain 视图，顶栏控件重构） -->
 <script setup lang="ts">
-import { computed, ref, h } from 'vue'
+import { computed, ref, h, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, Delete, Close, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
-import { uploadPaperApi } from '../../api/library'  
+import { deletePaperApi } from '../../api/library'  
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
 import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
+import ParsingProgressPopover from '../../components/ParsingProgressPopover.vue'
 import { usePaperStore } from '../../store/paper'
 import { useFolderStore } from '../../store/folder'
 
@@ -23,6 +24,13 @@ const showUploadDialog = ref(false)
 const selectedPaper = ref<LibraryPaper | null>(null)
 const selectedPaperIds = ref<Set<string>>(new Set())  // 选中的论文ID
 
+// 解析进度弹窗引用
+const parsingProgressRef = ref<InstanceType<typeof ParsingProgressPopover> | null>(null)
+
+// 自动刷新定时器
+let refreshTimer: number | null = null
+const REFRESH_INTERVAL = 5000 // 5秒刷新一次
+
 const currentFolderId = computed(() => route.params.folderId as string || 'all')
 
 const folderPapers = computed(() => {
@@ -36,6 +44,75 @@ const filteredPapers = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
   if (!keyword) return folderPapers.value
   return folderPapers.value.filter(p => p.title.toLowerCase().includes(keyword))
+})
+
+// 检查是否有待处理的论文
+const hasPendingTasks = computed(() => {
+  const pendingStatuses = ['PENDING_PARSING', 'PARSING', 'PENDING_EXTRACTION', 'EXTRACTING']
+  return paperStore.papers.some(p => pendingStatuses.includes(p.status))
+})
+
+// 启动自动刷新
+const startAutoRefresh = () => {
+  stopAutoRefresh() // 先清除旧的定时器
+  refreshTimer = window.setInterval(async () => {
+    if (hasPendingTasks.value) {
+      console.log('[Auto Refresh] 检测到待处理任务，刷新论文列表...')
+      await paperStore.loadPapers()
+      await folderStore.loadFolders()
+    } else {
+      console.log('[Auto Refresh] 无待处理任务，停止刷新')
+      stopAutoRefresh()
+    }
+  }, REFRESH_INTERVAL)
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+// 监听任务完成事件，立即刷新
+const handleTaskCompleted = async (event: Event) => {
+  const customEvent = event as CustomEvent
+  const { paperId, status } = customEvent.detail
+  
+  console.log(`[Task Completed] 论文 ${paperId.substring(0, 8)}... 状态: ${status}`)
+  
+  // 立即刷新论文列表和文件夹
+  await paperStore.loadPapers()
+  await folderStore.loadFolders()
+  
+  // 显示提示消息
+  if (status === 'SUCCESS') {
+    ElMessage.success('论文解析完成！')
+  } else if (status === 'FAILURE') {
+    ElMessage.warning('论文解析失败，请重试')
+  }
+}
+
+// 组件挂载时启动自动刷新并监听任务完成事件
+onMounted(async () => {
+  // 初始加载数据
+  console.log('[PaperList] 组件挂载，开始加载数据...')
+  await Promise.all([
+    paperStore.loadPapers(),
+    folderStore.loadFolders()
+  ])
+  console.log(`[PaperList] 数据加载完成，论文数量: ${paperStore.papers.length}`)
+  
+  // 启动自动刷新
+  startAutoRefresh()
+  window.addEventListener('task-completed', handleTaskCompleted as EventListener)
+})
+
+// 组件卸载时清除定时器和事件监听
+onUnmounted(() => {
+  stopAutoRefresh()
+  window.removeEventListener('task-completed', handleTaskCompleted as EventListener)
 })
 
 const currentFolderName = computed(() => {
@@ -119,13 +196,26 @@ const handleBatchDelete = async () => {
 // 彻底删除选中的论文（全局）
 const performGlobalBatchDelete = async () => {
   const idsToDelete = Array.from(selectedPaperIds.value)
-  for (const paperId of idsToDelete) {
-    folderStore.removePaperGlobally(paperId)
-    const idx = paperStore.papers.findIndex(p => p.id === paperId)
-    if (idx !== -1) paperStore.papers.splice(idx, 1)
+  
+  try {
+    // 调用后端API逐个删除论文
+    for (const paperId of idsToDelete) {
+      await deletePaperApi(paperId)
+    }
+    
+    // 删除成功后，更新本地状态
+    for (const paperId of idsToDelete) {
+      folderStore.removePaperGlobally(paperId)
+      const idx = paperStore.papers.findIndex(p => p.id === paperId)
+      if (idx !== -1) paperStore.papers.splice(idx, 1)
+    }
+    
+    selectedPaperIds.value.clear()
+    ElMessage.success(`已彻底删除 ${idsToDelete.length} 篇论文`)
+  } catch (error) {
+    console.error('[performGlobalBatchDelete] 删除失败:', error)
+    ElMessage.error('删除失败，请重试')
   }
-  selectedPaperIds.value.clear()
-  ElMessage.success(`已彻底删除 ${idsToDelete.length} 篇论文`)
 }
 
 // 仅从当前文件夹移除（不删除论文本体）
@@ -143,8 +233,9 @@ const removePapersFromCurrentFolder = async () => {
 const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) => {
   try {
     await paperStore.saveKeyPoints(paperId, keyPoints)
-    ElMessage.success('关键点已保存')
-  } catch {
+    ElMessage.success('关键点已确认')
+  } catch (error) {
+    console.error('[handleSaveKeyPoints] 保存失败:', error)
     ElMessage.error('保存失败')
   }
 }
@@ -153,51 +244,21 @@ const handlePreviewPdf = (paperId: string) => {
   router.push({ name: 'paper-pdf', params: { paperId } })
 }
 
-// 上传 PDF
-const fileInput = ref<HTMLInputElement | null>(null)
-const uploadLoading = ref(false)
-
-const triggerUpload = () => {
-  fileInput.value?.click()
-}
-
-const handleFileUpload = async (event: Event) => {
-  const files = (event.target as HTMLInputElement).files
-  if (!files || files.length === 0) return
-
-  const file = files[0]
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    ElMessage.warning('仅支持 PDF 文件')
-    return
-  }
-
-  uploadLoading.value = true
-  try {
-    const res = await uploadPaperApi(file)
-    const data = res.data as { paper_id: string; task_id: string; status: string }
-    ElMessage.success(`上传成功，论文正在后台解析 (task: ${data.task_id.substring(0, 8)}…)`)
-    // 刷新论文列表
-    await paperStore.loadPapers()
-    await folderStore.loadFolders()
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '上传失败')
-  } finally {
-    uploadLoading.value = false
-    // 重置 input 以支持重复上传同一文件
-    if (fileInput.value) fileInput.value.value = ''
-  }
-}
-
 // 监听搜索时清空选中
 const onSearch = () => {
   selectedPaperIds.value.clear()
 }
 
 // PDF上传成功回调
-const handleUploadSuccess = () => {
-  // 可以在这里刷新论文列表或其他操作
-  console.log('PDF上传成功')
+const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename: string }) => {
+  console.log('PDF上传成功:', data)
+  
+  // 添加解析任务到进度弹窗
+  if (parsingProgressRef.value) {
+    parsingProgressRef.value.addTask(data.paper_id, data.task_id, data.filename)
+  }
 }
+
 </script>
 
 <template>
@@ -221,6 +282,10 @@ const handleUploadSuccess = () => {
         </div>
 
         <div class="header-actions">
+          <label class="library-search">
+            <el-icon><Search /></el-icon>
+            <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
+          </label>
           <button 
             class="upload-btn" 
             @click="showUploadDialog = true"
@@ -229,20 +294,9 @@ const handleUploadSuccess = () => {
             <el-icon><Upload /></el-icon>
             上传PDF
           </button>
-          <label class="library-search">
-            <el-icon><Search /></el-icon>
-            <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
-          </label>
-          <button class="upload-btn" :disabled="uploadLoading" @click="triggerUpload">
-            <el-icon><Upload /></el-icon>
-            {{ uploadLoading ? '上传中…' : '上传 PDF' }}
-          </button>
-          <input
-            ref="fileInput"
-            type="file"
-            accept=".pdf"
-            style="display: none"
-            @change="handleFileUpload"
+          <ParsingProgressPopover 
+            ref="parsingProgressRef"
+            :papers="filteredPapers"
           />
           <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
             <el-icon><Delete /></el-icon>
