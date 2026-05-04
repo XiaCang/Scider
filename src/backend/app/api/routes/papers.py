@@ -61,7 +61,7 @@ async def upload_pdf(
     title = file.filename.replace(".pdf", "") if file.filename else "untitled"
     paper = await create_paper(
         session=session,
-        user_id=user["id"],
+        user_id=str(user.id),
         title=title,
         pdf_path=storage_path,
         md5_hash=md5_hash,

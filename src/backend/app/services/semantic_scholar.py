@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 _BASE = "https://api.semanticscholar.org/graph/v1"
 # 检索接口需要的字段（含 publicationTypes 用于来源类型判断）
 _SEARCH_FIELDS = "paperId,title,authors,year,venue,abstract,externalIds,citationCount,publicationTypes,openAccessPdf"
-# 参考文献/引用接口字段（不需要 publicationTypes）
-_REF_FIELDS = "paperId,title,authors,year,venue,abstract,externalIds,citationCount"
+# 参考文献/引用接口字段（包含 openAccessPdf 用于 PDF 下载）
+_REF_FIELDS = "paperId,title,authors,year,venue,abstract,externalIds,citationCount,openAccessPdf"
 
 _MAX_RETRIES = 5
 _RETRY_DELAY = 5   # 首次重试等待秒数，指数退避（无 Key 时 SS 限额严格）

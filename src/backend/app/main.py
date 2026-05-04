@@ -16,7 +16,14 @@ from middleware.jwt_middleware import JWTAuthMiddleware
 from module.user.controller.auth_router import router as auth_router
 from module.user.controller.user_router import router as user_router
 
-app = FastAPI(title=settings.APP_NAME)
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="Scider 学术论文管理系统 API 文档",
+    version="1.0.0",
+    docs_url="/docs",  # Swagger UI 路径
+    redoc_url="/redoc",  # ReDoc 路径
+    openapi_url="/openapi.json",  # OpenAPI schema 路径
+)
 
 # ── JWT authentication middleware (ASGI middleware, not BaseHTTPMiddleware) ──
 app.add_middleware(JWTAuthMiddleware)
