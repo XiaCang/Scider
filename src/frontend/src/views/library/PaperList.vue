@@ -9,6 +9,7 @@ import { uploadPaperApi } from '../../api/library'
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
 import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
+import ParsingProgressPopover from '../../components/ParsingProgressPopover.vue'
 import { usePaperStore } from '../../store/paper'
 import { useFolderStore } from '../../store/folder'
 
@@ -22,6 +23,9 @@ const paperDetailVisible = ref(false)
 const showUploadDialog = ref(false)
 const selectedPaper = ref<LibraryPaper | null>(null)
 const selectedPaperIds = ref<Set<string>>(new Set())  // 选中的论文ID
+
+// 解析进度弹窗引用
+const parsingProgressRef = ref<InstanceType<typeof ParsingProgressPopover> | null>(null)
 
 const currentFolderId = computed(() => route.params.folderId as string || 'all')
 
@@ -176,6 +180,12 @@ const handleFileUpload = async (event: Event) => {
     const res = await uploadPaperApi(file)
     const data = res.data as { paper_id: string; task_id: string; status: string }
     ElMessage.success(`上传成功，论文正在后台解析 (task: ${data.task_id.substring(0, 8)}…)`)
+    
+    // 添加解析任务到进度弹窗
+    if (parsingProgressRef.value) {
+      parsingProgressRef.value.addTask(data.paper_id, data.task_id, file.name)
+    }
+    
     // 刷新论文列表
     await paperStore.loadPapers()
     await folderStore.loadFolders()
@@ -194,10 +204,15 @@ const onSearch = () => {
 }
 
 // PDF上传成功回调
-const handleUploadSuccess = () => {
-  // 可以在这里刷新论文列表或其他操作
-  console.log('PDF上传成功')
+const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename: string }) => {
+  console.log('PDF上传成功:', data)
+  
+  // 添加解析任务到进度弹窗
+  if (parsingProgressRef.value) {
+    parsingProgressRef.value.addTask(data.paper_id, data.task_id, data.filename)
+  }
 }
+
 </script>
 
 <template>
@@ -233,6 +248,10 @@ const handleUploadSuccess = () => {
             <el-icon><Upload /></el-icon>
             上传PDF
           </button>
+          <ParsingProgressPopover 
+            ref="parsingProgressRef"
+            :papers="filteredPapers"
+          />
           <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
             <el-icon><Delete /></el-icon>
             删除

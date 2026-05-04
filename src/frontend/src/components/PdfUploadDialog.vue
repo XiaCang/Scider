@@ -13,7 +13,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'success': []
+  'success': [data: { paper_id: string; task_id: string; filename: string }]
 }>()
 
 const authStore = useAuthStore()
@@ -118,7 +118,14 @@ const handleUpload = async () => {
     // 响应拦截器返回的是response.data，即ApiResponse对象
     if (response.code === 0 && response.data) {
       ElMessage.success(response.msg || '上传成功，后台解析中')
-      emit('success')
+      
+      // 触发success事件，传递任务数据
+      emit('success', {
+        paper_id: response.data.paper_id,
+        task_id: response.data.task_id,
+        filename: selectedFile.value.name
+      })
+      
       // 先重置状态，再关闭对话框
       selectedFile.value = null
       uploadProgress.value = 0
