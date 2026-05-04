@@ -221,6 +221,10 @@ const handleUploadSuccess = () => {
         </div>
 
         <div class="header-actions">
+          <label class="library-search">
+            <el-icon><Search /></el-icon>
+            <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
+          </label>
           <button 
             class="upload-btn" 
             @click="showUploadDialog = true"
@@ -229,21 +233,6 @@ const handleUploadSuccess = () => {
             <el-icon><Upload /></el-icon>
             上传PDF
           </button>
-          <label class="library-search">
-            <el-icon><Search /></el-icon>
-            <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
-          </label>
-          <button class="upload-btn" :disabled="uploadLoading" @click="triggerUpload">
-            <el-icon><Upload /></el-icon>
-            {{ uploadLoading ? '上传中…' : '上传 PDF' }}
-          </button>
-          <input
-            ref="fileInput"
-            type="file"
-            accept=".pdf"
-            style="display: none"
-            @change="handleFileUpload"
-          />
           <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
             <el-icon><Delete /></el-icon>
             删除

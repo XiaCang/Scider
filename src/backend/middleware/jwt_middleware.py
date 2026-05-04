@@ -30,6 +30,12 @@ class JWTAuthMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # Allow OPTIONS preflight requests to pass through for CORS
+        method = scope.get("method", "")
+        if method == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
         path = scope.get("path", "")
         # Allow non-API paths (SPA frontend routes) to be served without JWT
         # This lets client-side routes like /register or /me load index.html first
