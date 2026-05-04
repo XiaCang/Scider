@@ -79,18 +79,6 @@ export interface UploadPaperResponse {
   task_id: string
 }
 
-/**
- * 上传 PDF 论文（multipart/form-data）
- * 上传完成后后端自动触发 Celery 解析任务链，返回的 task_id 可用于查询进度
- */
-export const uploadPaperApi = (file: File) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request.post<ApiResponse<UploadPaperResponse>>('/papers/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-}
-
 // ==================== 论文与文件夹关联接口 ====================
 
 /**
