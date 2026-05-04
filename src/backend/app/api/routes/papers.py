@@ -3,15 +3,31 @@ import os
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Request, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from db.crud_paper import create_paper, get_paper_by_md5, get_papers_by_user
 from db.crud_note import get_notes_by_paper, create_note, update_note
+from db.crud_keypoints import save_confirmed_key_points
 from db.session import get_db
 from utils.response import success, error
 
 router = APIRouter(prefix="/papers", tags=["papers"])
+
+
+class KeyPointsIn(BaseModel):
+    background: str = ""
+    method: str = ""
+    innovation: str = ""
+    conclusion: str = ""
+
+
+class PatchKeyPointsBody(BaseModel):
+    """与前端 `saveKeyPointsApi` 一致：{ keyPoints: { background, method, ... } }"""
+
+    model_config = ConfigDict(populate_by_name=True)
+    key_points: KeyPointsIn = Field(alias="keyPoints")
 
 ALLOWED_EXTENSIONS = {".pdf"}
 
@@ -415,7 +431,7 @@ async def upload_pdf(
     title = file.filename.replace(".pdf", "") if file.filename else "untitled"
     paper = await create_paper(
         session=session,
-        user_id=user["id"],
+        user_id=str(user.id),
         title=title,
         pdf_path=storage_path,
         md5_hash=md5_hash,
@@ -452,8 +468,8 @@ async def delete_paper_endpoint(
     # ── 1. JWT 认证检查 ──
     user = getattr(request.state, "user", None)
     if not user:
-        return error(msg="未认证", code=401, data=None, status_code=401)
-
+        return error(msg="未认证", code=401, data=None, status_code=401)    
+      
     # ── 2. 删除论文 ──
     from db.crud_paper import delete_paper
     
@@ -462,4 +478,56 @@ async def delete_paper_endpoint(
     if not ok:
         return error(msg="论文不存在或无权删除", code=404, data=None, status_code=404)
 
-    return success(data=None, msg="删除成功", code=0, status_code=200)
+    return success(data=None, msg="删除成功", code=0, status_code=200)    
+    
+@router.patch("/{paper_id}/key-points")
+async def patch_key_points(
+    paper_id: str,
+    request: Request,
+    body: PatchKeyPointsBody,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    保存四要素并视为「确认」：更新 KeyPoints、Paper.status=CONFIRMED，
+    并异步投递向量化任务 ``embed_paper``。
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+    kp = body.key_points
+    if not (
+        kp.background.strip()
+        and kp.method.strip()
+        and kp.innovation.strip()
+        and kp.conclusion.strip()
+    ):
+        return error(msg="四要素均需填写非空内容", code=400, data=None, status_code=200)
+
+    paper, err = await save_confirmed_key_points(
+        session,
+        paper_id,
+        user["id"],
+        background=kp.background,
+        method=kp.method,
+        innovation=kp.innovation,
+        conclusion=kp.conclusion,
+    )
+    if err:
+        return error(msg=err, code=400, data=None, status_code=200)
+    if paper is None:
+        return error(msg="更新失败", code=500, data=None, status_code=200)
+
+    from app.tasks.embedding_tasks import embed_paper_task
+
+    embed_task = embed_paper_task.delay(paper_id)
+
+    return success(
+        data={
+            "paper_id": paper.id,
+            "status": paper.status.value,
+            "embed_task_id": embed_task.id,
+        },
+        msg="已确认并提交向量化任务",
+        code=0,
+        status_code=200,
+    )
