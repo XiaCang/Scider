@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Search, Delete, Close, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
-import { uploadPaperApi, deletePaperApi } from '../../api/library'  
+import { deletePaperApi } from '../../api/library'  
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
 import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
@@ -242,51 +242,6 @@ const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) =
 
 const handlePreviewPdf = (paperId: string) => {
   router.push({ name: 'paper-pdf', params: { paperId } })
-}
-
-// 上传 PDF
-const fileInput = ref<HTMLInputElement | null>(null)
-const uploadLoading = ref(false)
-
-const triggerUpload = () => {
-  fileInput.value?.click()
-}
-
-const handleFileUpload = async (event: Event) => {
-  const files = (event.target as HTMLInputElement).files
-  if (!files || files.length === 0) return
-
-  const file = files[0]
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    ElMessage.warning('仅支持 PDF 文件')
-    return
-  }
-
-  uploadLoading.value = true
-  try {
-    const res = await uploadPaperApi(file)
-    const data = res.data as { paper_id: string; task_id: string; status: string }
-    ElMessage.success(`上传成功，论文正在后台解析 (task: ${data.task_id.substring(0, 8)}…)`)
-    
-    // 添加解析任务到进度弹窗
-    if (parsingProgressRef.value) {
-      parsingProgressRef.value.addTask(data.paper_id, data.task_id, file.name)
-    }
-    
-    // 立即刷新论文列表，确保新上传的论文出现在列表中
-    await Promise.all([
-      paperStore.loadPapers(),
-      folderStore.loadFolders()
-    ])
-    
-    console.log('[Upload] 论文列表已刷新，新论文应已显示')
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '上传失败')
-  } finally {
-    uploadLoading.value = false
-    // 重置 input 以支持重复上传同一文件
-    if (fileInput.value) fileInput.value.value = ''
-  }
 }
 
 // 监听搜索时清空选中

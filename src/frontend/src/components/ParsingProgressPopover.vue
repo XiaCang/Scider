@@ -246,10 +246,10 @@ const getStatusText = (status: string) => {
   }
 }
 
-// 监听论文列表变化，检测新上传的论文
-watch(() => props.papers, (newPapers) => {
-  // 这里可以通过某种方式检测新任务，比如从 localStorage 或其他状态管理
-  // 目前暂时手动添加，后续可以改进
+// 监听论文列表变化,检测新上传的论文
+watch(() => props.papers, (_newPapers) => {
+  // 这里可以通过某种方式检测新任务,比如从 localStorage 或其他状态管理
+  // 目前暂时手动添加,后续可以改进
 }, { deep: true })
 
 // 组件卸载时清理
