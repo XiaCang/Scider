@@ -64,11 +64,15 @@ const toggleSelect = (paperId: string, event: Event) => {
       </div>
       <!-- 卡片主体内容（点击预览详情） -->
       <div class="card-content" @click="emit('select-paper', paper)">
-        <div class="paper-title">{{ paper.title }}</div>
-        <div class="paper-authors">{{ paper.authors || '未知作者' }}</div>
-        <div class="paper-venue">{{ '未知出处' }}</div>
-        <div class="paper-meta">
-          <span class="year">{{ paper.year || '未知年份' }}</span>
+        <!-- 左侧信息区 -->
+        <div class="paper-info-left">
+          <div class="paper-title">{{ paper.title }}</div>
+          <div class="paper-authors">{{ paper.authors || '未知作者' }}</div>
+          <div class="paper-venue">{{ '未知出处' }}</div>
+          <div class="paper-year">{{ paper.year || '未知年份' }}</div>
+        </div>
+        <!-- 右侧状态区 -->
+        <div class="paper-status-right">
           <span class="tag status-tag" :class="statusClassMap[paper.status]">
             {{ statusTextMap[paper.status] || paper.status }}
           </span>
@@ -111,7 +115,7 @@ const toggleSelect = (paperId: string, event: Event) => {
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 1;
+  z-index: 2;
 }
 
 .card-checkbox input[type="checkbox"] {
@@ -149,9 +153,19 @@ const toggleSelect = (paperId: string, event: Event) => {
 .card-content {
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   padding-right: 28px; /* 为右上角复选框预留空间 */
+}
+
+/* 左侧信息区 */
+.paper-info-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0; /* 允许文本截断 */
 }
 
 .paper-title {
@@ -162,30 +176,26 @@ const toggleSelect = (paperId: string, event: Event) => {
 }
 
 .paper-authors,
-.paper-venue {
+.paper-venue, 
+.paper-year{
   font-size: 0.8rem;
   color: #5b6e8c;
 }
 
-.paper-meta {
+/* 右侧状态区 */
+.paper-status-right {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
   align-items: center;
-  margin-top: 2px;
-}
-
-.year {
-  font-size: 0.75rem;
-  color: #6c7a91;
+  flex-shrink: 0;
 }
 
 .tag {
-  font-size: 0.7rem;
-  padding: 2px 8px;
+  font-size: 0.75rem;
+  padding: 4px 12px;
   border-radius: 20px;
   background-color: #f0f2f5;
   color: #4b5563;
+  white-space: nowrap;
 }
 
 .status-processing {
