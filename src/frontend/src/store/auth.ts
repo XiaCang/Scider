@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import { loginApi, registerApi } from '../api/auth'
 import type { AuthUser, LoginPayload, RegisterPayload } from '../types/auth'
 import { authStorage } from '../utils/auth_storage'
-import { hashPassword } from '../utils/crypto'
 
 export const useAuthStore = defineStore('auth', () => {
   // state
@@ -25,10 +24,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(payload: LoginPayload) {
-    const hashedPwd = await hashPassword(payload.password)
     const response = await loginApi({
       email: payload.email,
-      password: hashedPwd,
+      password: payload.password,
     })
     // response: { code, msg, data: { token, userInfo: { userId, username } } }
     applySession(
@@ -42,15 +40,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function register(payload: RegisterPayload) {
-    const hashedPwd = await hashPassword(payload.password)
     await registerApi({
       ...payload,
-      password: hashedPwd,
+      password: payload.password,
     })
     // 注册成功（无 token），自动登录
     const loginResponse = await loginApi({
       email: payload.email,
-      password: hashedPwd,
+      password: payload.password,
     })
     applySession(
       loginResponse.data.token,

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.papers import router as papers_router
@@ -15,6 +16,15 @@ from module.user.controller.auth_router import router as auth_router
 from module.user.controller.user_router import router as user_router
 
 app = FastAPI(title=settings.APP_NAME)
+
+# ── CORS 跨域配置 ──
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 开发环境允许所有来源,生产环境应指定具体域名
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有HTTP方法(GET, POST, PUT, DELETE, OPTIONS等)
+    allow_headers=["*"],  # 允许所有请求头
+)
 
 # ── JWT authentication middleware (ASGI middleware, not BaseHTTPMiddleware) ──
 app.add_middleware(JWTAuthMiddleware)
