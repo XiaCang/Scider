@@ -45,7 +45,7 @@ const handleLogout = async () => {
     <div class="header-container">
       <div class="header-left">
         <div class="header-brand">
-          <AppLogo size="28" />
+          <AppLogo size="36" />
         </div>
         <nav class="header-nav">
           <button
@@ -87,7 +87,7 @@ const handleLogout = async () => {
 
 <style scoped>
 .workspace-header {
-  height: 48px;
+  height: 64px;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
@@ -103,14 +103,14 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.25rem;
+  padding: 0 1.5rem;
   box-sizing: border-box;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 2.5rem;
   height: 100%;
 }
 
@@ -129,11 +129,11 @@ const handleLogout = async () => {
 .header-nav__item {
   display: flex;
   align-items: center;
-  padding: 0.35rem 0.85rem;
+  padding: 0.5rem 1rem;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   border-radius: 0.9rem;
@@ -162,14 +162,14 @@ const handleLogout = async () => {
   background: transparent;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   outline: none;
 }
 
 .workspace-user__avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--brand);
   color: white;
@@ -177,10 +177,11 @@ const handleLogout = async () => {
   align-items: center;
   justify-content: center;
   font-weight: bold;
+  font-size: 0.9rem;
 }
 
 .user-dropdown-header {
-  padding: 10px 16px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   border-bottom: 1px solid rgba(15, 23, 42, 0.05);
@@ -188,12 +189,12 @@ const handleLogout = async () => {
 }
 
 .user-dropdown-header strong {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-primary);
 }
 
 .user-dropdown-header small {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-tertiary);
 }
 
