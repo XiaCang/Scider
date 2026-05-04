@@ -9,14 +9,17 @@ export interface PaperKeyPoints {
 }
 
 /** 后端论文状态流转：
- *  pending_parsing → PARSING → pending_extraction → EXTRACTING → pending_confirmation
+ *  PENDING_PARSING → PARSING → PENDING_EXTRACTION → EXTRACTING → PENDING_CONFIRMATION → CONFIRMED
+ *  任何阶段失败 → FAILED
  */
 export type PaperStatus =
-  | 'pending_parsing'
+  | 'PENDING_PARSING'
   | 'PARSING'
-  | 'pending_extraction'
+  | 'PENDING_EXTRACTION'
   | 'EXTRACTING'
-  | 'pending_confirmation'
+  | 'PENDING_CONFIRMATION'
+  | 'CONFIRMED'
+  | 'FAILED'
 
 export interface LibraryPaper {
   id: string

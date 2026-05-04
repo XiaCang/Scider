@@ -15,18 +15,22 @@ const emit = defineEmits<{
 
 // 状态映射（用于展示标签样式）
 const statusTextMap: Record<string, string> = {
-  pending_parsing: '解析中',
+  PENDING_PARSING: '解析中',
   PARSING: '解析中',
-  pending_extraction: '提取中',
+  PENDING_EXTRACTION: '提取中',
   EXTRACTING: '提取中',
-  pending_confirmation: '待确认',
+  PENDING_CONFIRMATION: '待确认',
+  CONFIRMED: '已确认',
+  FAILED: '失败',
 }
 const statusClassMap: Record<string, string> = {
-  pending_parsing: 'status-processing',
+  PENDING_PARSING: 'status-processing',
   PARSING: 'status-processing',
-  pending_extraction: 'status-pending',
+  PENDING_EXTRACTION: 'status-pending',
   EXTRACTING: 'status-pending',
-  pending_confirmation: 'status-confirmed',
+  PENDING_CONFIRMATION: 'status-confirmed',
+  CONFIRMED: 'status-success',
+  FAILED: 'status-failed',
 }
 
 // 处理复选框变化
@@ -195,5 +199,13 @@ const toggleSelect = (paperId: string, event: Event) => {
 .status-confirmed {
   background: #e6f9ed;
   color: #059669;
+}
+.status-success {
+  background: #e6f9ed;
+  color: #059669;
+}
+.status-failed {
+  background: #fde0e0;
+  color: #b91c1c;
 }
 </style>
