@@ -1,6 +1,6 @@
 <!-- PaperList.vue（原 LibraryMain 视图，顶栏控件重构） -->
 <script setup lang="ts">
-import { computed, ref, h } from 'vue'
+import { computed, ref, h, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, Delete, Close, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -27,6 +27,10 @@ const selectedPaperIds = ref<Set<string>>(new Set())  // 选中的论文ID
 // 解析进度弹窗引用
 const parsingProgressRef = ref<InstanceType<typeof ParsingProgressPopover> | null>(null)
 
+// 自动刷新定时器
+let refreshTimer: number | null = null
+const REFRESH_INTERVAL = 5000 // 5秒刷新一次
+
 const currentFolderId = computed(() => route.params.folderId as string || 'all')
 
 const folderPapers = computed(() => {
@@ -40,6 +44,66 @@ const filteredPapers = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
   if (!keyword) return folderPapers.value
   return folderPapers.value.filter(p => p.title.toLowerCase().includes(keyword))
+})
+
+// 检查是否有待处理的论文
+const hasPendingTasks = computed(() => {
+  const pendingStatuses = ['PENDING_PARSING', 'PARSING', 'PENDING_EXTRACTION', 'EXTRACTING']
+  return paperStore.papers.some(p => pendingStatuses.includes(p.status))
+})
+
+// 启动自动刷新
+const startAutoRefresh = () => {
+  stopAutoRefresh() // 先清除旧的定时器
+  refreshTimer = window.setInterval(async () => {
+    if (hasPendingTasks.value) {
+      console.log('[Auto Refresh] 检测到待处理任务，刷新论文列表...')
+      await paperStore.loadPapers()
+      await folderStore.loadFolders()
+    } else {
+      console.log('[Auto Refresh] 无待处理任务，停止刷新')
+      stopAutoRefresh()
+    }
+  }, REFRESH_INTERVAL)
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+// 监听任务完成事件，立即刷新
+const handleTaskCompleted = async (event: Event) => {
+  const customEvent = event as CustomEvent
+  const { paperId, status } = customEvent.detail
+  
+  console.log(`[Task Completed] 论文 ${paperId.substring(0, 8)}... 状态: ${status}`)
+  
+  // 立即刷新论文列表和文件夹
+  await paperStore.loadPapers()
+  await folderStore.loadFolders()
+  
+  // 显示提示消息
+  if (status === 'SUCCESS') {
+    ElMessage.success('论文解析完成！')
+  } else if (status === 'FAILURE') {
+    ElMessage.warning('论文解析失败，请重试')
+  }
+}
+
+// 组件挂载时启动自动刷新并监听任务完成事件
+onMounted(() => {
+  startAutoRefresh()
+  window.addEventListener('task-completed', handleTaskCompleted as EventListener)
+})
+
+// 组件卸载时清除定时器和事件监听
+onUnmounted(() => {
+  stopAutoRefresh()
+  window.removeEventListener('task-completed', handleTaskCompleted as EventListener)
 })
 
 const currentFolderName = computed(() => {
@@ -186,9 +250,13 @@ const handleFileUpload = async (event: Event) => {
       parsingProgressRef.value.addTask(data.paper_id, data.task_id, file.name)
     }
     
-    // 刷新论文列表
-    await paperStore.loadPapers()
-    await folderStore.loadFolders()
+    // 立即刷新论文列表，确保新上传的论文出现在列表中
+    await Promise.all([
+      paperStore.loadPapers(),
+      folderStore.loadFolders()
+    ])
+    
+    console.log('[Upload] 论文列表已刷新，新论文应已显示')
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : '上传失败')
   } finally {

@@ -6,13 +6,43 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from db.crud_paper import create_paper, get_paper_by_md5
+from db.crud_paper import create_paper, get_paper_by_md5, get_papers_by_user
 from db.session import get_db
 from utils.response import success, error
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
 ALLOWED_EXTENSIONS = {".pdf"}
+
+
+@router.get("/")
+async def list_papers(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """获取当前用户的论文列表"""
+    # ── 1. JWT 认证检查 ──
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    # ── 2. 获取论文列表 ──
+    papers = await get_papers_by_user(session=session, user_id=user["id"], skip=0, limit=1000)
+    
+    # ── 3. 格式化返回数据 ──
+    data = [
+        {
+            "id": paper.id,
+            "title": paper.title,
+            "authors": paper.authors,
+            "year": paper.year,
+            "status": paper.status.value,
+            "created_at": paper.created_at.isoformat() if paper.created_at else None,
+        }
+        for paper in papers
+    ]
+    
+    return success(data=data, msg="查询成功", code=0, status_code=200)
 
 
 @router.post("/upload")

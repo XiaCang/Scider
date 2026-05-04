@@ -19,7 +19,7 @@ instance.interceptors.request.use((config) => {
 
 instance.interceptors.response.use(
   (response) => response.data,
-  (error: AxiosError<{ message?: string }>) => {
+  (error: AxiosError<{ message?: string; msg?: string }>) => {
     if (error.response?.status === 401) {
       authStorage.clearToken()
       if (!window.location.pathname.startsWith('/login')) {
@@ -27,7 +27,9 @@ instance.interceptors.response.use(
       }
     }
 
+    // 兼容后端的 msg 字段和前端的 message 字段
     const message =
+      error.response?.data?.msg || 
       error.response?.data?.message || 
       error.message || 
       'Request failed, please try again later.';

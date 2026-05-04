@@ -120,31 +120,53 @@ const updateTaskStatuses = async () => {
   )
   
   if (tasksToUpdate.length === 0) {
+    console.log('[Polling] 没有待更新的任务，停止轮询')
     stopPolling()
     return
   }
 
+  console.log(`[Polling] 正在更新 ${tasksToUpdate.length} 个任务的状态...`)
+
   for (const task of tasksToUpdate) {
     try {
       const response = await fetchTaskResultApi(task.taskId)
-      const data = response.data as any
+      // 注意：request拦截器已经返回了response.data，所以直接使用response
+      const data = response as any
+      
+      console.log(`[Polling] Task ${task.taskId.substring(0, 8)}... 原始响应:`, response)
+      console.log(`[Polling] Task ${task.taskId.substring(0, 8)}... 状态: ${data?.status}`)
+      
+      if (!data || !data.status) {
+        console.error(`[Polling] ❌ Task ${task.taskId.substring(0, 8)}... 返回数据格式错误:`, response)
+        continue
+      }
       
       task.status = data.status
       
       if (data.status === 'SUCCESS') {
         task.progress = 100
+        console.log(`[Polling] ✅ Task ${task.taskId.substring(0, 8)}... 完成，立即移除并通知刷新`)
       } else if (data.status === 'FAILURE') {
         task.error = data.error || '未知错误'
+        console.log(`[Polling] ❌ Task ${task.taskId.substring(0, 8)}... 失败:`, task.error)
       }
       
-      // 如果任务已完成或失败，3秒后从列表中移除
+      // 如果任务已完成或失败，立即从列表中移除（不再延迟）
       if (data.status === 'SUCCESS' || data.status === 'FAILURE') {
-        setTimeout(() => {
-          removeTask(task.taskId)
-        }, 3000)
+        // 立即移除任务
+        removeTask(task.taskId)
+        
+        // 通知父组件刷新论文列表
+        window.dispatchEvent(new CustomEvent('task-completed', { 
+          detail: { 
+            paperId: task.paperId, 
+            status: data.status 
+          } 
+        }))
+        console.log(`[Polling] 📢 已发送 task-completed 事件`)
       }
     } catch (error) {
-      console.error(`Failed to fetch task ${task.taskId}:`, error)
+      console.error(`[Polling] Failed to fetch task ${task.taskId}:`, error)
     }
   }
 }
