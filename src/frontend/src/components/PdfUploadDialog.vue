@@ -119,7 +119,10 @@ const handleUpload = async () => {
     if (response.code === 0 && response.data) {
       ElMessage.success(response.msg || '上传成功，后台解析中')
       emit('success')
-      handleClose()
+      // 先重置状态，再关闭对话框
+      selectedFile.value = null
+      uploadProgress.value = 0
+      isVisible.value = false
     } else {
       // 处理业务错误
       if (response.code === 401) {
