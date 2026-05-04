@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { useFolderStore } from '../../store/folder'
+import { usePaperStore } from '../../store/paper'
 import type { Folder } from '../../types/folder'
+import type { PaperKeyPoints } from '../../types/library'
 import type { GraphLink, GraphNode, NodeType } from '../../types/graph'
-import { categories, buildMockGraphData } from '../../mock/graphData'
 import GraphNodeDetail from './GraphNodeDetail.vue'
+
+const categories = [
+  { name: '论文', itemStyle: { color: '#173668' } },
+  { name: '研究背景', itemStyle: { color: '#a78bfa' } },
+  { name: '研究方法', itemStyle: { color: '#3b82f6' } },
+  { name: '创新点', itemStyle: { color: '#eab308' } },
+  { name: '结论', itemStyle: { color: '#22c55e' } },
+]
 
 const router = useRouter()
 const folderStore = useFolderStore()
+const paperStore = usePaperStore()
 const chartRef = ref<HTMLDivElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
 const isLoading = ref(false)
@@ -27,44 +37,9 @@ const filters = reactive({
   conclusion: false,
 })
 
-// 缓存全部节点与边（模拟数据加载后）
+// 缓存全量节点与边（由论文数据构建）
 let cachedNodes: GraphNode[] = []
 let cachedLinks: GraphLink[] = []
-
-// ---- 根据当前文件夹计算应显示的论文ID集合 ----
-const selectedFolderPaperIds = computed(() => {
-  const folderId = folderStore.currentFolderId
-  
-  // 如果选择了具体文件夹
-  if (folderId) {
-    // 递归收集目标文件夹及其所有子文件夹中的论文ID
-    const paperIds: string[] = []
-    const collectFromFolder = (folder: Folder) => {
-      paperIds.push(...(folder.paperIds || []))
-      if (folder.children) {
-        folder.children.forEach(collectFromFolder)
-      }
-    }
-    const findAndCollect = (tree: Folder[], targetId: string): boolean => {
-      for (const node of tree) {
-        if (node.id === targetId) {
-          collectFromFolder(node)
-          return true
-        }
-        if (node.children && findAndCollect(node.children, targetId)) {
-          return true
-        }
-      }
-      return false
-    }
-    findAndCollect(folderStore.folders, folderId)
-    return new Set(paperIds)
-  }
-  
-  // 如果是"全部论文"模式（folderId 为 null）
-  // 返回一个特殊的标记，表示应该显示所有论文
-  return new Set(['__ALL__'])
-})
 
 
 const getSymbolByType = (type: NodeType) => {
@@ -77,24 +52,91 @@ const getSymbolByType = (type: NodeType) => {
   }
 }
 
-// ---- 数据加载（模拟） ----
-// --- 核心逻辑：按需加载与图谱渲染 ---
-const fetchGraphData = async (/*seedPaperId?: string, expandDirection?: 'upstream' | 'downstream'*/) => {
+// ---- 从论文数据构建图谱 ----
+const dimensionConfig: { type: keyof PaperKeyPoints; nodeType: NodeType; label: string; category: number }[] = [
+  { type: 'background', nodeType: 'background', label: '研究背景', category: 1 },
+  { type: 'method',     nodeType: 'method',     label: '研究方法',  category: 2 },
+  { type: 'innovation', nodeType: 'innovation', label: '创新点',    category: 3 },
+  { type: 'conclusion', nodeType: 'conclusion', label: '结论',      category: 4 },
+]
+
+function buildGraphFromPapers() {
   isLoading.value = true
-  try {
-    const { mockNodes, mockLinks } = buildMockGraphData()
-    
-    // 缓存全量数据供筛选使用
-    cachedNodes = mockNodes
-    cachedLinks = mockLinks
-    
-    // 应用筛选条件并渲染
-    applyFilterAndRender()
-  } catch (error) {
-    ElMessage.error('加载图谱数据失败')
-  } finally {
-    isLoading.value = false
+  const nodes: GraphNode[] = []
+  const links: GraphLink[] = []
+
+  // 确定当前文件夹范围内的论文ID
+  let paperIdsInScope: Set<string> | null = null
+  const folderId = folderStore.currentFolderId
+  if (folderId) {
+    const folder = findFolder(folderStore.folders, folderId)
+    if (folder) {
+      paperIdsInScope = new Set(folder.paperIds ?? [])
+    }
   }
+
+  for (const paper of paperStore.papers) {
+    if (paperIdsInScope && !paperIdsInScope.has(paper.id)) continue
+
+    // 论文节点
+    nodes.push({
+      id: paper.id,
+      name: paper.title.length > 20 ? paper.title.substring(0, 20) + '…' : paper.title,
+      type: 'paper',
+      category: 0,
+      paperInfo: paper,
+    })
+
+    // 四要素节点
+    for (const dim of dimensionConfig) {
+      const content = paper.keyPoints?.[dim.type]
+      if (!content || !content.trim()) continue
+
+      const elemId = `${paper.id}_${dim.type}`
+      nodes.push({
+        id: elemId,
+        name: content.length > 15 ? content.substring(0, 15) + '…' : content,
+        type: dim.nodeType,
+        category: dim.category,
+        paperId: paper.id,
+        paperTitle: paper.title,
+        content,
+        paperInfo: paper,
+      })
+      links.push({ source: paper.id, target: elemId, relationType: 'ownership' })
+    }
+  }
+
+  // 跨论文语义关联：同类型要素之间建立关联
+  for (const dim of dimensionConfig) {
+    const elemNodes = nodes.filter(n => n.type === dim.nodeType)
+    for (let i = 0; i < elemNodes.length; i++) {
+      for (let j = i + 1; j < elemNodes.length; j++) {
+        links.push({
+          source: elemNodes[i].id,
+          target: elemNodes[j].id,
+          relationType: 'semantic',
+          label: `同属「${dim.label}」维度`,
+        })
+      }
+    }
+  }
+
+  cachedNodes = nodes
+  cachedLinks = links
+  applyFilterAndRender()
+  isLoading.value = false
+}
+
+function findFolder(tree: Folder[], id: string): Folder | undefined {
+  for (const node of tree) {
+    if (node.id === id) return node
+    if (node.children) {
+      const found = findFolder(node.children, id)
+      if (found) return found
+    }
+  }
+  return undefined
 }
 
 // ---- 图表渲染 ----
@@ -235,24 +277,7 @@ const applyFilterAndRender = () => {
   if (filters.innovation) visibleTypes.push('innovation')
   if (filters.conclusion) visibleTypes.push('conclusion')
 
-  const paperIds = selectedFolderPaperIds.value
-  const isAllPapersMode = paperIds.has('__ALL__')
-  
-  const filteredNodes = cachedNodes.filter(n => {
-    // 首先检查节点类型是否符合筛选条件
-    if (!visibleTypes.includes(n.type)) return false
-    
-    // 如果是"全部论文"模式，显示所有符合类型的节点
-    if (isAllPapersMode) {
-      return true
-    }
-    
-    // 否则根据文件夹关联的论文ID进行过滤
-    if (n.type === 'paper') return paperIds.has(n.id)
-    if (n.paperId) return paperIds.has(n.paperId)
-    return false
-  })
-
+  const filteredNodes = cachedNodes.filter(n => visibleTypes.includes(n.type))
   const nodeIds = new Set(filteredNodes.map(n => n.id))
   const filteredLinks = cachedLinks.filter(l => nodeIds.has(l.source) && nodeIds.has(l.target))
 
@@ -265,8 +290,14 @@ watch(
   applyFilterAndRender,
   { deep: true }
 )
-// 监听文件夹变化
-watch(selectedFolderPaperIds, applyFilterAndRender)
+// 监听文件夹变化 → 重新构建图谱
+watch(() => folderStore.currentFolderId, () => {
+  buildGraphFromPapers()
+})
+// 监听论文列表变化 → 重新构建图谱
+watch(() => paperStore.papers.length, () => {
+  buildGraphFromPapers()
+})
 
 // ---- 点击节点 ----
 const handleChartClick = (params: any) => {
@@ -321,8 +352,12 @@ const stopResize = () => {
 }
 
 // ---- 生命周期 ----
-onMounted(() => {
-  fetchGraphData()
+onMounted(async () => {
+  // 确保论文数据已加载
+  if (paperStore.papers.length === 0) {
+    await paperStore.loadPapers()
+  }
+  buildGraphFromPapers()
   window.addEventListener('resize', () => chartInstance?.resize())
 })
 onUnmounted(() => {

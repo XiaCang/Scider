@@ -15,14 +15,18 @@ const emit = defineEmits<{
 
 // 状态映射（用于展示标签样式）
 const statusTextMap: Record<string, string> = {
-  Processing: '处理中',
-  PendingConfirmation: '未确认',
-  Confirmed: '已确认',
+  pending_parsing: '解析中',
+  PARSING: '解析中',
+  pending_extraction: '提取中',
+  EXTRACTING: '提取中',
+  pending_confirmation: '待确认',
 }
 const statusClassMap: Record<string, string> = {
-  Processing: 'status-processing',
-  PendingConfirmation: 'status-pending',
-  Confirmed: 'status-confirmed',
+  pending_parsing: 'status-processing',
+  PARSING: 'status-processing',
+  pending_extraction: 'status-pending',
+  EXTRACTING: 'status-pending',
+  pending_confirmation: 'status-confirmed',
 }
 
 // 处理复选框变化

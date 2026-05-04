@@ -19,19 +19,19 @@ export const saveKeyPointsApi = (paperId: string, keyPoints: PaperKeyPoints) =>
 /**
  * 获取文件夹列表
  */
-export const fetchFoldersApi = () => request.get<ApiResponse<Folder[]>>('/api/folders/')
+export const fetchFoldersApi = () => request.get<ApiResponse<Folder[]>>('/folders/')
 
 /**
  * 创建文件夹
  */
 export const createFolderApi = (data: { name: string }) =>
-  request.post<ApiResponse<Folder>>('/api/folders/', data)
+  request.post<ApiResponse<Folder>>('/folders/', data)
 
 /**
  * 获取文件夹详情
  */
 export const fetchFolderDetailApi = (folderId: string) =>
-  request.get<ApiResponse<Folder>>(`/api/folders/${folderId}`)
+  request.get<ApiResponse<Folder>>(`/folders/${folderId}`)
 
 /**
  * 创建子文件夹
@@ -43,13 +43,13 @@ export const createSubFolderApi = (parentId: string, data: { name: string }) =>
  * 重命名文件夹
  */
 export const updateFolderApi = (folderId: string, data: { name: string }) =>
-  request.patch(`/api/folders/${folderId}`, data)
+  request.patch(`/folders/${folderId}`, data)
 
 /**
  * 删除文件夹（删除后文件夹中的论文自动解绑，论文本身不被删除）
  */
 export const deleteFolderApi = (folderId: string) =>
-  request.delete(`/api/folders/${folderId}`)
+  request.delete(`/folders/${folderId}`)
 
 /**
  * 移动文件夹到新的父文件夹
@@ -66,6 +66,30 @@ export const moveFolderApi = (folderId: string, newParentId: string | null) =>
  */
 export const copyFolderApi = (folderId: string, targetParentId: string | null) =>
   request.post<Folder>(`/folders/${folderId}/copy`, { target_parent_id: targetParentId })
+
+// ==================== 论文上传 ====================
+
+/** 上传响应中的 data 字段 */
+export interface UploadPaperResponse {
+  paper_id: string
+  filename: string
+  file_size: number
+  md5: string
+  status: string
+  task_id: string
+}
+
+/**
+ * 上传 PDF 论文（multipart/form-data）
+ * 上传完成后后端自动触发 Celery 解析任务链，返回的 task_id 可用于查询进度
+ */
+export const uploadPaperApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ApiResponse<UploadPaperResponse>>('/papers/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
 
 // ==================== 论文与文件夹关联接口 ====================
 

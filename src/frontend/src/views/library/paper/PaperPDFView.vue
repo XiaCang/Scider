@@ -3,9 +3,11 @@ import { ArrowLeft, Edit, Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import VuePdfEmbed from 'vue-pdf-embed'
+import { useVuePdfEmbed } from 'vue-pdf-embed'
 
 import type { PaperNote, PaperPdfInfo } from '../../../types/library'
-import { 
+import {
   fetchPaperPdfInfoApi,
   fetchPaperNotesApi,
   createNoteApi,
@@ -17,26 +19,37 @@ const router = useRouter()
 
 const paperId = computed(() => route.params.paperId as string)
 
-// PDF信息
+// PDF 信息
 const paperTitle = ref('')
 const pdfUrl = ref('')
 const pageCount = ref(0)
 
-// 笔记相关 - 每篇论文仅支持一篇笔记
+// 笔记相关
 const note = ref<PaperNote | null>(null)
 const noteContent = ref('')
 const notePage = ref(1)
 
-// UI状态
+// UI 状态
 const zoomLevel = ref(100)
 const currentPage = ref(1)
 const isMobile = ref(window.innerWidth < 900)
-const showNoteDrawer = ref(false)
+const showNoteDrawer = ref(true)
+const pdfLoading = ref(true)
+
+// 使用 vue-pdf-embed composable 获取文档对象
+const { doc } = useVuePdfEmbed({ source: pdfUrl })
+
+// 当文档加载完成后，获取页数
+watch(doc, (pdfDoc) => {
+  if (pdfDoc) {
+    pageCount.value = pdfDoc.numPages
+    pdfLoading.value = false
+  }
+})
 
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-// 监听窗口大小变化
 const handleResize = () => {
   isMobile.value = window.innerWidth < 900
 }
@@ -49,26 +62,22 @@ onMounted(() => {
 // 加载论文数据
 const loadPaperData = async () => {
   try {
-    // 获取PDF信息
     const response = await fetchPaperPdfInfoApi(paperId.value)
     const pdfInfo = response as unknown as PaperPdfInfo
-    
+
     paperTitle.value = pdfInfo.title
     pdfUrl.value = pdfInfo.pdfUrl
     pageCount.value = pdfInfo.pageCount
-    
-    // 获取笔记（每篇论文仅一篇）
+
+    // 获取笔记
     const notesResponse = await fetchPaperNotesApi(paperId.value)
     const notesList = notesResponse as unknown as PaperNote[]
-    // 只取第一篇笔记（如果存在）
     note.value = notesList.length > 0 ? notesList[0] : null
-    
+
     if (note.value) {
       noteContent.value = note.value.content
       notePage.value = note.value.pageNumber
     }
-    
-    ElMessage.success('论文加载成功')
   } catch (error) {
     ElMessage.error('加载论文失败')
     console.error('加载论文数据失败:', error)
@@ -93,38 +102,36 @@ const handleZoomOut = () => {
   }
 }
 
+// 翻页控制
+const goToPrevPage = () => {
+  if (currentPage.value > 1) currentPage.value--
+}
+
+const goToNextPage = () => {
+  if (currentPage.value < pageCount.value) currentPage.value++
+}
+
 // 自动保存笔记（防抖）
 const autoSaveNote = async () => {
-  // 清除之前的定时器
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-  }
-  
-  // 设置新的定时器，延迟500ms执行保存
+  if (saveTimer) clearTimeout(saveTimer)
+
   saveTimer = setTimeout(async () => {
-    if (!noteContent.value.trim()) {
-      return
-    }
-    
+    if (!noteContent.value.trim()) return
+
     try {
       if (note.value) {
-        // 更新现有笔记
-        await updateNoteApi(paperId.value, note.value.id, { 
-          content: noteContent.value 
+        await updateNoteApi(paperId.value, note.value.id, {
+          content: noteContent.value
         })
-        
         note.value.content = noteContent.value
         note.value.updatedAt = new Date().toISOString()
       } else {
-        // 创建新笔记
         const response = await createNoteApi(paperId.value, {
           content: noteContent.value,
           pageNumber: notePage.value,
         })
         note.value = response as unknown as PaperNote
       }
-      
-      // 不显示成功提示，避免频繁打扰用户
     } catch (error) {
       ElMessage.error('自动保存失败')
       console.error('自动保存失败:', error)
@@ -132,12 +139,8 @@ const autoSaveNote = async () => {
   }, 500)
 }
 
-// 监听笔记内容变化，触发自动保存
-watch(noteContent, () => {
-  autoSaveNote()
-})
+watch(noteContent, () => { autoSaveNote() })
 
-// 格式化时间
 const formatTime = (isoString: string) => {
   const date = new Date(isoString)
   return date.toLocaleString('zh-CN', {
@@ -152,7 +155,7 @@ const formatTime = (isoString: string) => {
 
 <template>
   <div class="pdf-viewer-container">
-    <!-- 中间PDF查看区 -->
+    <!-- 中间 PDF 查看区 -->
     <main class="pdf-main">
       <!-- 工具栏 -->
       <header class="pdf-toolbar">
@@ -161,9 +164,15 @@ const formatTime = (isoString: string) => {
             <el-icon><ArrowLeft /></el-icon>
             返回
           </el-button>
-          <span class="page-info">第 {{ currentPage }} / {{ pageCount }} 页</span>
+          <span class="page-info" v-if="pageCount > 0">
+            第 {{ currentPage }} / {{ pageCount }} 页
+          </span>
+          <div class="nav-buttons" v-if="pageCount > 0">
+            <el-button size="small" :disabled="currentPage <= 1" @click="goToPrevPage">上一页</el-button>
+            <el-button size="small" :disabled="currentPage >= pageCount" @click="goToNextPage">下一页</el-button>
+          </div>
         </div>
-        
+
         <div class="toolbar-center">
           <el-button-group>
             <el-button size="small" @click="handleZoomOut">-</el-button>
@@ -171,27 +180,34 @@ const formatTime = (isoString: string) => {
             <el-button size="small" @click="handleZoomIn">+</el-button>
           </el-button-group>
         </div>
-        
+
         <div class="toolbar-right">
-          <el-button 
-            v-if="isMobile" 
-            text 
+          <el-button
+            v-if="isMobile"
+            text
             @click="showNoteDrawer = !showNoteDrawer"
           >
             <el-icon><Edit /></el-icon>
           </el-button>
+          <el-button text @click="showNoteDrawer = !showNoteDrawer">
+            {{ showNoteDrawer ? '隐藏笔记' : '显示笔记' }}
+          </el-button>
         </div>
       </header>
 
-      <!-- PDF显示区域 -->
+      <!-- PDF 显示区域 -->
       <div class="pdf-content">
-        <div class="pdf-viewer" :style="{ transform: `scale(${zoomLevel / 100})` }">
-          <!-- TODO: 集成PDF查看器组件 -->
-          <div class="pdf-placeholder">
-            <el-icon :size="64"><Document /></el-icon>
-            <p>PDF预览区域</p>
-            <p class="placeholder-hint">此处将集成PDF查看器（如 vue-pdf-embed 或 pdf.js）</p>
-          </div>
+        <div v-if="pdfLoading" class="pdf-loading">
+          <el-icon :size="48" class="is-loading"><Document /></el-icon>
+          <p>正在加载 PDF...</p>
+        </div>
+        <div v-else class="pdf-viewer" :style="{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }">
+          <VuePdfEmbed
+            :source="pdfUrl"
+            :page="currentPage"
+            :scale="zoomLevel / 100"
+            text-layer
+          />
         </div>
       </div>
     </main>
@@ -203,7 +219,6 @@ const formatTime = (isoString: string) => {
         <span v-if="note" class="save-status">已自动保存</span>
       </div>
 
-      <!-- 笔记输入区域（始终显示） -->
       <div class="note-input-area">
         <el-input
           v-model="noteContent"
@@ -211,8 +226,7 @@ const formatTime = (isoString: string) => {
           :rows="12"
           placeholder="记录你对这篇论文的想法...（内容会自动保存）"
         />
-        
-        <!-- 笔记信息提示 -->
+
         <div v-if="note" class="note-info">
           <span class="info-text">最后更新：{{ formatTime(note.updatedAt) }}</span>
         </div>
@@ -229,7 +243,6 @@ const formatTime = (isoString: string) => {
   overflow: hidden;
 }
 
-/* 中间PDF查看区 */
 .pdf-main {
   flex: 1;
   display: flex;
@@ -248,7 +261,12 @@ const formatTime = (isoString: string) => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
-.toolbar-left,
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .toolbar-right {
   display: flex;
   align-items: center;
@@ -265,6 +283,11 @@ const formatTime = (isoString: string) => {
   color: var(--text-secondary);
 }
 
+.nav-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
 .zoom-level {
   min-width: 48px;
   text-align: center;
@@ -278,41 +301,25 @@ const formatTime = (isoString: string) => {
   overflow: auto;
   padding: 1.25rem;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
 }
 
-.pdf-viewer {
-  max-width: 800px;
-  width: 100%;
-  transition: transform 0.2s ease;
-  transform-origin: top center;
-}
-
-.pdf-placeholder {
+.pdf-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 2rem;
   color: var(--text-secondary);
+  gap: 1rem;
 }
 
-.pdf-placeholder p {
-  margin: 0.75rem 0 0 0;
-  font-size: 0.95rem;
+.pdf-viewer {
+  max-width: 800px;
+  width: 100%;
 }
 
-.placeholder-hint {
-  font-size: 0.8rem !important;
-  color: var(--text-tertiary);
-}
-
-/* 右侧笔记栏 */
 .note-sidebar {
   width: 270px;
   background-color: var(--bg-secondary);
@@ -361,7 +368,6 @@ const formatTime = (isoString: string) => {
   color: var(--text-tertiary);
 }
 
-/* 移动端适配 */
 .note-sidebar.mobile {
   position: fixed;
   top: 60px;
@@ -376,7 +382,6 @@ const formatTime = (isoString: string) => {
   transform: translateX(0);
 }
 
-/* 响应式设计 */
 @media (max-width: 1200px) {
   .note-sidebar {
     width: 240px;
