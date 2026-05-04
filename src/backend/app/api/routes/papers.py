@@ -308,6 +308,62 @@ async def update_paper_note(
     return success(data=data, msg="更新成功", code=0, status_code=200)
 
 
+@router.patch("/{paper_id}/key-points")
+async def update_paper_key_points(
+    paper_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """更新论文关键点（四要素）"""
+    # ── 1. JWT 认证检查 ──
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    # ── 2. 验证用户是否有权访问该论文 ──
+    from sqlalchemy import select
+    from db.models import Paper
+    
+    result = await session.execute(
+        select(Paper).where(Paper.id == paper_id, Paper.user_id == user["id"])
+    )
+    paper = result.scalar_one_or_none()
+    
+    if not paper:
+        return error(msg="论文不存在或无权访问", code=404, data=None, status_code=404)
+    
+    # ── 3. 解析请求体 ──
+    body = await request.json()
+    key_points_data = body.get("keyPoints", {})
+    
+    background = key_points_data.get("background")
+    methodology = key_points_data.get("method")  # 前端使用method，后端使用methodology
+    innovation = key_points_data.get("innovation")
+    conclusion = key_points_data.get("conclusion")
+    
+    # ── 4. 创建或更新关键点 ──
+    from db.crud_paper import upsert_key_points
+    
+    updated_key_points = await upsert_key_points(
+        session=session,
+        paper_id=paper_id,
+        background=background,
+        methodology=methodology,
+        innovation=innovation,
+        conclusion=conclusion,
+    )
+    
+    # ── 5. 返回更新后的关键点数据 ──
+    data = {
+        "background": updated_key_points.background or "",
+        "method": updated_key_points.methodology or "",  # 转换为前端字段名
+        "innovation": updated_key_points.innovation or "",
+        "conclusion": updated_key_points.conclusion or "",
+    }
+    
+    return success(data=data, msg="保存成功", code=0, status_code=200)
+
+
 @router.post("/upload")
 async def upload_pdf(
     request: Request,

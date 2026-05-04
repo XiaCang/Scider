@@ -102,3 +102,49 @@ async def update_paper_metadata(
     await session.execute(q)
     await session.commit()
     return await get_paper_by_id(session, paper_id)
+
+
+async def upsert_key_points(
+    session: AsyncSession,
+    paper_id: str,
+    background: Optional[str] = None,
+    methodology: Optional[str] = None,
+    innovation: Optional[str] = None,
+    conclusion: Optional[str] = None,
+):
+    """创建或更新论文关键点（四要素）"""
+    from .models import KeyPoints
+    
+    # 查询是否已存在关键点记录
+    result = await session.execute(
+        select(KeyPoints).where(KeyPoints.paper_id == paper_id)
+    )
+    existing = result.scalar_one_or_none()
+    
+    if existing:
+        # 更新现有记录
+        if background is not None:
+            existing.background = background
+        if methodology is not None:
+            existing.methodology = methodology
+        if innovation is not None:
+            existing.innovation = innovation
+        if conclusion is not None:
+            existing.conclusion = conclusion
+        
+        await session.commit()
+        await session.refresh(existing)
+        return existing
+    else:
+        # 创建新记录
+        key_points = KeyPoints(
+            paper_id=paper_id,
+            background=background,
+            methodology=methodology,
+            innovation=innovation,
+            conclusion=conclusion,
+        )
+        session.add(key_points)
+        await session.commit()
+        await session.refresh(key_points)
+        return key_points
