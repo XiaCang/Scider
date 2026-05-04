@@ -8,14 +8,24 @@ export interface PaperKeyPoints {
   conclusion: string      // 结论：研究得出了何种关键发现？
 }
 
+/** 后端论文状态流转：
+ *  pending_parsing → PARSING → pending_extraction → EXTRACTING → pending_confirmation
+ */
+export type PaperStatus =
+  | 'pending_parsing'
+  | 'PARSING'
+  | 'pending_extraction'
+  | 'EXTRACTING'
+  | 'pending_confirmation'
+
 export interface LibraryPaper {
   id: string
   title: string
   authors: string
   year: number
-  status: 'Processing' | 'PendingConfirmation' | 'Confirmed'
+  status: PaperStatus
   source: string
-  keyPoints: PaperKeyPoints  // 改为结构化对象
+  keyPoints: PaperKeyPoints
 }
 
 /**

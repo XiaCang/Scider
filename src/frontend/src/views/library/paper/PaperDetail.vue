@@ -90,16 +90,20 @@ const handlePreviewPdf = () => {
 }
 
 // 状态映射（中文显示）
-const statusTextMap: Record<LibraryPaper['status'], string> = {
-  Processing: '处理中',
-  PendingConfirmation: '未确认',
-  Confirmed: '已确认',
+const statusTextMap: Record<string, string> = {
+  pending_parsing: '解析中',
+  PARSING: '解析中',
+  pending_extraction: '提取中',
+  EXTRACTING: '提取中',
+  pending_confirmation: '待确认',
 }
 
-const statusClassMap: Record<LibraryPaper['status'], string> = {
-  Processing: 'is-warning',
-  PendingConfirmation: 'is-brand',
-  Confirmed: 'is-success',
+const statusClassMap: Record<string, string> = {
+  pending_parsing: 'is-warning',
+  PARSING: 'is-warning',
+  pending_extraction: 'is-brand',
+  EXTRACTING: 'is-brand',
+  pending_confirmation: 'is-success',
 }
 </script>
 

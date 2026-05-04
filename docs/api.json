@@ -24,22 +24,11 @@
       "post": {
         "summary": "上传 PDF 论文",
         "deprecated": false,
-        "description": "#### 功能说明\n\n用户上传 PDF 格式的学术论文。服务端会依次执行 **文件类型校验 → 大小校验 → MD5 内容去重 → 文件存储 → 数据库记录创建**，最终返回论文的元数据。\n\n#### 前置条件\n\n1. 用户已注册并登录（获取 JWT Token）\n2. 调用前需先调用 `POST /api/user/login` 获取 token，放入请求头 `Authorization: Bearer <token>`\n\n---\n\n#### 请求说明\n\n| 项目 | 说明 |\n|------|------|\n| **请求方式** | `POST` |\n| **接口路径** | `/api/papers/upload` |\n| **认证方式** | Bearer Token（JWT） |\n| **Content-Type** | `multipart/form-data` |\n\n**请求参数：**\n\n| 参数名 | 位置 | 类型 | 必填 | 说明 |\n|--------|------|------|------|------|\n| `Authorization` | Header | string | ✅ | `Bearer <token>`，登录后获取 |\n| `file` | Body | file | ✅ | 仅支持 `.pdf` 格式，最大 50MB |\n\n---\n\n#### 响应说明\n\n**✅ 上传成功（200）：**\n\n```json\n{\n  \"code\": 0,\n  \"msg\": \"上传成功\",\n  \"data\": {\n    \"paper_id\": \"a1b2c3d4e5f6...\",\n    \"filename\": \"example.pdf\",\n    \"file_size\": 1048576,\n    \"md5\": \"d41d8cd98f00b204e9800998ecf8427e\",\n    \"status\": \"pending_parsing\"\n  }\n}\n```\n\n| 字段 | 类型 | 说明 |\n|------|------|------|\n| `paper_id` | string | 论文记录 ID（UUID hex） |\n| `filename` | string | 原始文件名 |\n| `file_size` | int | 文件大小（字节） |\n| `md5` | string | 文件内容 MD5 哈希值 |\n| `status` | string | 论文状态，初始为 `pending_parsing` |\n\n---\n\n#### 后端处理流程\n\n```\n请求到达\n   │\n   ├─ 1. JWT 鉴权 ─────────────── 失败 → 401\n   │\n   ├─ 2. 文件扩展名校验 (.pdf) ─── 失败 → 400\n   │\n   ├─ 3. 文件大小校验 (≤ 50MB) ── 失败 → 400\n   │\n   ├─ 4. MD5 内容哈希去重 ─────── 重复 → 409\n   │\n   ├─ 5. 存储至 uploads/papers/{md5}.pdf\n   │\n   └─ 6. 写入 paper 表（status: pending_parsing）\n          │\n          └─ 返回 200 + 论文元数据\n```\n\n---\n\n#### 典型使用步骤（Apifox 测试流程）\n\n1. **获取 Token**：调用 `POST /api/user/login`，传入 `{\"email\": \"xxx@example.com\", \"password\": \"123456\"}`\n2. **设置 Token**：从响应中复制 `data.token`，填入环境变量 `{{token}}`\n3. **上传文件**：调用本接口，Body 选择 `file` 类型，选取一个 `.pdf` 文件\n4. **验证结果**：返回 `code: 0` 即上传成功，可查看返回的 `paper_id` 和 `status`",
+        "description": "上传 PDF 格式的学术论文。服务端会依次执行：\n\n**同步阶段（请求内完成）：**\n1. JWT 鉴权\n2. 文件扩展名校验（仅 .pdf）\n3. 文件大小校验（上限 50MB）\n4. MD5 内容哈希去重（重复返回 409）\n5. 存储文件至 `uploads/papers/{md5}.pdf`\n6. 写入 paper 表（status: pending_parsing）\n\n**异步阶段（后台 Celery 任务链）：**\n7. `parse_pdf_task` — 用 PyMuPDF 提取纯文本\n   (PENDING_PARSING → PARSING → PENDING_EXTRACTION)\n8. `extract_key_points_task` — 调用大模型提取四要素并写入 KeyPoints 表\n   (PENDING_EXTRACTION → EXTRACTING → PENDING_CONFIRMATION)\n\n返回的 `task_id` 可用于 `GET /api/tasks/{task_id}` 查询解析进度。\n",
         "tags": [
           "papers"
         ],
-        "parameters": [
-          {
-            "name": "Authorization",
-            "in": "header",
-            "description": "",
-            "required": false,
-            "example": "Bearer <token>",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -49,22 +38,21 @@
                   "file": {
                     "type": "string",
                     "format": "binary",
-                    "description": "PDF 文件（最大 50MB）",
+                    "description": "PDF 文件（仅支持 .pdf，最大 50MB）",
                     "example": ""
                   }
                 },
                 "required": [
                   "file"
                 ]
-              },
-              "examples": {}
+              }
             }
           },
           "required": true
         },
         "responses": {
           "200": {
-            "description": "上传成功",
+            "description": "上传成功，后台解析中",
             "content": {
               "application/json": {
                 "schema": {
@@ -76,26 +64,40 @@
                     },
                     "msg": {
                       "type": "string",
-                      "example": "上传成功"
+                      "example": "上传成功，后台解析中"
                     },
                     "data": {
                       "type": "object",
                       "properties": {
                         "paper_id": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "论文记录 ID",
+                          "example": "a1b2c3d4e5f6..."
                         },
                         "filename": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "原始文件名",
+                          "example": "paper.pdf"
                         },
                         "file_size": {
-                          "type": "integer"
+                          "type": "integer",
+                          "description": "文件大小（字节）",
+                          "example": 1048576
                         },
                         "md5": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "文件内容 MD5 哈希",
+                          "example": "d41d8cd98f00b204e9800998ecf8427e"
                         },
                         "status": {
                           "type": "string",
+                          "description": "论文状态，初始为 pending_parsing",
                           "example": "pending_parsing"
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "description": "后台解析任务的 ID，可用于查询进度",
+                          "example": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                         }
                       }
                     }
@@ -107,20 +109,73 @@
           },
           "400": {
             "description": "文件格式错误或超出大小限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "仅支持 PDF 文件"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {}
           },
           "401": {
             "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string",
+                      "example": "Not authenticated"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {}
           },
           "409": {
             "description": "论文已存在（MD5 重复）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "该论文已存在，请勿重复上传"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {}
           }
         },
         "security": [
           {
-            "jwt": []
+            "bearerAuth": []
           }
         ]
       }

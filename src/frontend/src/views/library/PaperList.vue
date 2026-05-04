@@ -2,9 +2,10 @@
 <script setup lang="ts">
 import { computed, ref, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search, Delete, Close } from '@element-plus/icons-vue'
+import { Search, Delete, Close, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { LibraryPaper, PaperKeyPoints } from '../../types/library'  
+import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
+import { uploadPaperApi } from '../../api/library'  
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
 import { usePaperStore } from '../../store/paper'
@@ -150,6 +151,41 @@ const handlePreviewPdf = (paperId: string) => {
   router.push({ name: 'paper-pdf', params: { paperId } })
 }
 
+// 上传 PDF
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploadLoading = ref(false)
+
+const triggerUpload = () => {
+  fileInput.value?.click()
+}
+
+const handleFileUpload = async (event: Event) => {
+  const files = (event.target as HTMLInputElement).files
+  if (!files || files.length === 0) return
+
+  const file = files[0]
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    ElMessage.warning('仅支持 PDF 文件')
+    return
+  }
+
+  uploadLoading.value = true
+  try {
+    const res = await uploadPaperApi(file)
+    const data = res.data as { paper_id: string; task_id: string; status: string }
+    ElMessage.success(`上传成功，论文正在后台解析 (task: ${data.task_id.substring(0, 8)}…)`)
+    // 刷新论文列表
+    await paperStore.loadPapers()
+    await folderStore.loadFolders()
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '上传失败')
+  } finally {
+    uploadLoading.value = false
+    // 重置 input 以支持重复上传同一文件
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
+
 // 监听搜索时清空选中
 const onSearch = () => {
   selectedPaperIds.value.clear()
@@ -181,6 +217,17 @@ const onSearch = () => {
             <el-icon><Search /></el-icon>
             <input v-model="searchQuery" type="text" placeholder="按标题搜索..." @input="onSearch" />
           </label>
+          <button class="upload-btn" :disabled="uploadLoading" @click="triggerUpload">
+            <el-icon><Upload /></el-icon>
+            {{ uploadLoading ? '上传中…' : '上传 PDF' }}
+          </button>
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".pdf"
+            style="display: none"
+            @change="handleFileUpload"
+          />
           <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
             <el-icon><Delete /></el-icon>
             删除
@@ -332,6 +379,30 @@ const onSearch = () => {
   background: transparent;
   outline: none;
   font-size: 0.8rem;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--brand);
+  border-radius: 8px;
+  background: var(--brand);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .delete-btn {
