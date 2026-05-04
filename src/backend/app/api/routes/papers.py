@@ -26,21 +26,50 @@ async def list_papers(
     if not user:
         return error(msg="未认证", code=401, data=None, status_code=401)
 
-    # ── 2. 获取论文列表 ──
-    papers = await get_papers_by_user(session=session, user_id=user["id"], skip=0, limit=1000)
+    # ── 2. 获取论文列表（预加载key_points） ──
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import select
+    from db.models import Paper
+    
+    result = await session.execute(
+        select(Paper)
+        .where(Paper.user_id == user["id"])
+        .options(selectinload(Paper.key_points))
+        .order_by(Paper.created_at.desc())
+        .limit(1000)
+    )
+    papers = result.scalars().all()
     
     # ── 3. 格式化返回数据 ──
-    data = [
-        {
+    data = []
+    for paper in papers:
+        paper_data = {
             "id": paper.id,
             "title": paper.title,
-            "authors": paper.authors,
-            "year": paper.year,
+            "authors": paper.authors or "",
+            "year": paper.year or 0,
+            "source": paper.source or "",
             "status": paper.status.value,
             "created_at": paper.created_at.isoformat() if paper.created_at else None,
         }
-        for paper in papers
-    ]
+        
+        # 添加四要素（如果存在）
+        if paper.key_points:
+            paper_data["keyPoints"] = {
+                "background": paper.key_points.background or "",
+                "method": paper.key_points.methodology or "",  # 前端使用method，后端使用methodology
+                "innovation": paper.key_points.innovation or "",
+                "conclusion": paper.key_points.conclusion or "",
+            }
+        else:
+            paper_data["keyPoints"] = {
+                "background": "",
+                "method": "",
+                "innovation": "",
+                "conclusion": "",
+            }
+        
+        data.append(paper_data)
     
     return success(data=data, msg="查询成功", code=0, status_code=200)
 

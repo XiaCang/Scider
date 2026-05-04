@@ -38,7 +38,7 @@ def _ensure_backend_root_in_path() -> None:
 
 def _parse_json_response(raw: str) -> dict:
     """
-    从模型原始回复中提取四要素 JSON。
+    从模型原始回复中提取元数据和四要素 JSON。
 
     - 兼容模型将 JSON 包在 ```json … ``` 代码块内的情况。
     - 对每个字段截断至 200 字符，确保符合数据库约束。
@@ -53,14 +53,31 @@ def _parse_json_response(raw: str) -> dict:
 
     data = json.loads(text)
 
-    required = {"background", "methodology", "innovation", "conclusion"}
-    missing = required - set(data.keys())
-    if missing:
-        raise ValueError(f"LLM 返回 JSON 缺少字段: {missing}")
+    # 必需的四要素字段
+    required_kp = {"background", "methodology", "innovation", "conclusion"}
+    missing_kp = required_kp - set(data.keys())
+    if missing_kp:
+        raise ValueError(f"LLM 返回 JSON 缺少四要素字段: {missing_kp}")
 
-    # 截断至 200 字符，防止超出数据库字段限制
-    for key in required:
+    # 截断四要素至 200 字符
+    for key in required_kp:
         data[key] = str(data.get(key) or "").strip()[:200] or "暂无相关信息"
+
+    # 处理元数据字段（可选）
+    metadata_fields = {"title", "authors", "year", "source"}
+    for field in metadata_fields:
+        if field in data:
+            if field == "year":
+                # 年份必须是整数或null
+                try:
+                    data[field] = int(data[field]) if data[field] is not None else None
+                except (ValueError, TypeError):
+                    data[field] = None
+            elif field in ("authors", "source"):
+                # 字符串字段，限制长度
+                data[field] = str(data[field]).strip()[:500] if data[field] else None
+            elif field == "title":
+                data[field] = str(data[field]).strip()[:1000] if data[field] else None
 
     return data
 
@@ -83,7 +100,7 @@ async def _set_paper_extracting(paper_id: str) -> None:
 
 
 async def _persist_result(paper_id: str, key_points: dict) -> None:
-    """将四要素写入 KeyPoints 表，并将 Paper.status 更新为 PENDING_CONFIRMATION。"""
+    """将元数据和四要素写入数据库，并将 Paper.status 更新为 PENDING_CONFIRMATION。"""
     from sqlalchemy import select
     _ensure_backend_root_in_path()
     from db.session import get_session
@@ -91,13 +108,24 @@ async def _persist_result(paper_id: str, key_points: dict) -> None:
 
     async with get_session() as session:
         async with session.begin():
-            # 更新 Paper 状态
+            # 更新 Paper 状态和元数据
             p_result = await session.execute(select(Paper).where(Paper.id == paper_id))
             paper = p_result.scalar_one_or_none()
             if paper is None:
                 logger.error("Paper %s 不存在，跳过写入", paper_id)
                 return
+            
             paper.status = PaperStatus.PENDING_CONFIRMATION
+            
+            # 更新元数据（如果LLM提取到了）
+            if key_points.get("title"):
+                paper.title = key_points["title"]
+            if key_points.get("authors"):
+                paper.authors = key_points["authors"]
+            if key_points.get("year") is not None:
+                paper.year = key_points["year"]
+            if key_points.get("source"):
+                paper.source = key_points["source"]
 
             # Upsert KeyPoints
             kp_result = await session.execute(

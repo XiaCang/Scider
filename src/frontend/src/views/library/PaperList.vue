@@ -95,7 +95,16 @@ const handleTaskCompleted = async (event: Event) => {
 }
 
 // 组件挂载时启动自动刷新并监听任务完成事件
-onMounted(() => {
+onMounted(async () => {
+  // 初始加载数据
+  console.log('[PaperList] 组件挂载，开始加载数据...')
+  await Promise.all([
+    paperStore.loadPapers(),
+    folderStore.loadFolders()
+  ])
+  console.log(`[PaperList] 数据加载完成，论文数量: ${paperStore.papers.length}`)
+  
+  // 启动自动刷新
   startAutoRefresh()
   window.addEventListener('task-completed', handleTaskCompleted as EventListener)
 })

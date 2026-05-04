@@ -86,6 +86,7 @@ class Paper(Base):
     abstract = Column(Text, nullable=True)
     doi = Column(String(255), unique=True, nullable=True)
     year = Column(Integer, nullable=True)
+    source = Column(String(512), nullable=True)  # 论文出处（期刊/会议名称）
     pdf_path = Column(String(1024), nullable=True)
     md5_hash = Column(String(64), unique=True, nullable=True)
     file_size = Column(Integer, nullable=True)
