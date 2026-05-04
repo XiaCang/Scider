@@ -440,3 +440,26 @@ async def upload_pdf(
         code=0,
         status_code=200,
     )
+
+
+@router.delete("/{paper_id}")
+async def delete_paper_endpoint(
+    paper_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """删除论文（级联删除关联数据）"""
+    # ── 1. JWT 认证检查 ──
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    # ── 2. 删除论文 ──
+    from db.crud_paper import delete_paper
+    
+    ok = await delete_paper(session=session, paper_id=paper_id, user_id=user["id"])
+    
+    if not ok:
+        return error(msg="论文不存在或无权删除", code=404, data=None, status_code=404)
+
+    return success(data=None, msg="删除成功", code=0, status_code=200)

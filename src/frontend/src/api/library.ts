@@ -15,6 +15,11 @@ export const fetchLibraryApi = () => request.get('/papers')
 export const saveKeyPointsApi = (paperId: string, keyPoints: PaperKeyPoints) =>
   request.patch(`/papers/${paperId}/key-points`, { keyPoints })
 
+/**
+ * 删除论文
+ */
+export const deletePaperApi = (paperId: string) =>
+  request.delete(`/papers/${paperId}`)
 
 /**
  * 获取文件夹列表

@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Search, Delete, Close, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
-import { uploadPaperApi } from '../../api/library'  
+import { uploadPaperApi, deletePaperApi } from '../../api/library'  
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
 import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
@@ -196,13 +196,26 @@ const handleBatchDelete = async () => {
 // 彻底删除选中的论文（全局）
 const performGlobalBatchDelete = async () => {
   const idsToDelete = Array.from(selectedPaperIds.value)
-  for (const paperId of idsToDelete) {
-    folderStore.removePaperGlobally(paperId)
-    const idx = paperStore.papers.findIndex(p => p.id === paperId)
-    if (idx !== -1) paperStore.papers.splice(idx, 1)
+  
+  try {
+    // 调用后端API逐个删除论文
+    for (const paperId of idsToDelete) {
+      await deletePaperApi(paperId)
+    }
+    
+    // 删除成功后，更新本地状态
+    for (const paperId of idsToDelete) {
+      folderStore.removePaperGlobally(paperId)
+      const idx = paperStore.papers.findIndex(p => p.id === paperId)
+      if (idx !== -1) paperStore.papers.splice(idx, 1)
+    }
+    
+    selectedPaperIds.value.clear()
+    ElMessage.success(`已彻底删除 ${idsToDelete.length} 篇论文`)
+  } catch (error) {
+    console.error('[performGlobalBatchDelete] 删除失败:', error)
+    ElMessage.error('删除失败，请重试')
   }
-  selectedPaperIds.value.clear()
-  ElMessage.success(`已彻底删除 ${idsToDelete.length} 篇论文`)
 }
 
 // 仅从当前文件夹移除（不删除论文本体）
