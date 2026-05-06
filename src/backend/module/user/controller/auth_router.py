@@ -87,13 +87,19 @@ async def token(form_data: OAuth2PasswordRequestForm = Depends()):
         return error(msg="邮箱或密码错误", code=401, data=None, status_code=200)
     
 
+
+
 @router.post("/api/user/send-code")
 async def send_code(payload: SendCodeIn):
     # generate 6-digit code and store in redis with 5-minute expiry
     code = str(random.randint(0, 999999)).zfill(6)
     r = get_redis()
     key = f"verify:{payload.email}"
-    await r.set(key, code, ex=300)
+    try:
+        await r.set(key, code, ex=300)
+    except Exception as e:
+        logger.exception("failed to set verification code to redis")
+        return error(msg="内部服务错误: 无法连接到 Redis", code=500, data=None, status_code=500)
 
     # try send email if SMTP configured
     smtp_host = os.getenv("SMTP_HOST")
