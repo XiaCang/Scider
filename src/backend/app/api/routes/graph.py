@@ -37,31 +37,33 @@ class SimilarityGraphOut(BaseModel):
     meta: dict[str, Any]
 
 
-def _build_paper_info(row: dict[str, Any]) -> dict[str, Any]:
-    kp = row["key_points"]
+def _build_paper_info(row: dict[str, Any], *, include_keypoints: bool) -> dict[str, Any]:
     st = row.get("status") or ""
-    return {
+    info: dict[str, Any] = {
         "id": row["paper_id"],
         "title": row["title"],
         "authors": row["authors"],
         "year": row["year"],
-        "status": _paper_status_from_string(st) if st else "pending_parsing",
+        "status": _paper_status_from_string(st) if st else PaperStatus.PENDING_PARSING.value,
         "source": "library",
-        "keyPoints": {
+    }
+    if include_keypoints:
+        kp = row["key_points"]
+        info["keyPoints"] = {
             "background": kp.get("background", ""),
             "method": kp.get("method", ""),
             "innovation": kp.get("innovation", ""),
             "conclusion": kp.get("conclusion", ""),
-        },
-    }
+        }
+    return info
 
 
 def _paper_status_from_string(s: str) -> str:
+    """与前端 PaperStatus 一致，使用枚举 value（大写 SNAKE_CASE）。"""
     try:
-        st = PaperStatus(s)
-        return st.name.lower()
+        return PaperStatus(s).value
     except ValueError:
-        return s.lower() if s else "pending_parsing"
+        return s.upper() if s else PaperStatus.PENDING_PARSING.value
 
 
 @router.get("/similarity", response_model=None)
@@ -72,6 +74,10 @@ async def similarity_graph(
     max_nodes: int = Query(200, ge=1, le=200, description="最多节点数（论文篇数），≤200"),
     min_similarity: float = Query(0.55, ge=0.0, le=1.0),
     top_k: int = Query(8, ge=1, le=50, description="每节点保留的最高相似边数"),
+    compact: bool = Query(
+        True,
+        description="为 true 时不查 keypoints、响应不含 keyPoints 字段，以减小体积、加快序列化",
+    ),
 ):
     """
     返回当前用户文库内、已有向量的论文相似度图。
@@ -87,11 +93,13 @@ async def similarity_graph(
     if not user:
         return error(msg="未认证", code=401, data=None, status_code=401)
 
+    include_kp = not compact
     rows = await list_papers_with_embeddings(
         session,
         user["id"],
         folder_id=folder_id,
         max_nodes=max_nodes,
+        include_keypoints=include_kp,
     )
 
     if len(rows) == 0:
@@ -120,7 +128,7 @@ async def similarity_graph(
                     name=short,
                     type="paper",
                     category=0,
-                    paperInfo=_build_paper_info(r),
+                    paperInfo=_build_paper_info(r, include_keypoints=include_kp),
                 )
             ],
             links=[],
@@ -129,6 +137,7 @@ async def similarity_graph(
                 "edge_count": 0,
                 "reason": "need_two_or_more_for_similarity_edges",
                 "embedding_model": settings.EMBEDDING_MODEL,
+                "compact": compact,
             },
         )
         return success(data=single.model_dump(), msg="ok", code=0)
@@ -154,7 +163,7 @@ async def similarity_graph(
                 name=short,
                 type="paper",
                 category=0,
-                paperInfo=_build_paper_info(r),
+                paperInfo=_build_paper_info(r, include_keypoints=include_kp),
             )
         )
 
@@ -178,6 +187,7 @@ async def similarity_graph(
             "min_similarity": min_similarity,
             "top_k_per_node": top_k,
             "embedding_model": settings.EMBEDDING_MODEL,
+            "compact": compact,
         },
     )
 

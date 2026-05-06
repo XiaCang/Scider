@@ -7,8 +7,13 @@ export const fetchSimilarityGraphApi = (params?: {
   max_nodes?: number
   min_similarity?: number
   top_k?: number
+  /** 默认 true：不返回 keyPoints，减轻负载 */
+  compact?: boolean
 }) =>
-  request.get<ApiResponse<SimilarityGraphPayload>>('/graph/similarity', { params })
+  request.get<ApiResponse<SimilarityGraphPayload>>('/graph/similarity', {
+    params,
+    timeout: 60000,
+  })
 
 export interface SimilarityGraphPayload {
   nodes: Array<{

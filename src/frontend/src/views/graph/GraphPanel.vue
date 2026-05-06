@@ -3,10 +3,11 @@ import { ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
+import { fetchSimilarityGraphApi } from '../../api/graph'
 import { useFolderStore } from '../../store/folder'
 import { usePaperStore } from '../../store/paper'
 import type { Folder } from '../../types/folder'
-import type { PaperKeyPoints } from '../../types/library'
+import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
 import type { GraphLink, GraphNode, NodeType } from '../../types/graph'
 import GraphNodeDetail from './GraphNodeDetail.vue'
 
@@ -24,6 +25,45 @@ const paperStore = usePaperStore()
 const chartRef = ref<HTMLDivElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
 const isLoading = ref(false)
+
+/** 相似度图（后端向量） | 四要素展开（本地论文列表） */
+const graphMode = ref<'similarity' | 'dimensions'>('similarity')
+
+const emptyKeyPoints = (): PaperKeyPoints => ({
+  background: '',
+  method: '',
+  innovation: '',
+  conclusion: '',
+})
+
+function normalizePaperInfo(raw: Record<string, unknown> | undefined): LibraryPaper {
+  if (!raw) {
+    return {
+      id: '',
+      title: '',
+      authors: '',
+      year: 0,
+      status: 'PENDING_PARSING',
+      source: 'library',
+      keyPoints: emptyKeyPoints(),
+    }
+  }
+  const kp = (raw.keyPoints as Partial<PaperKeyPoints> | undefined) || {}
+  return {
+    id: String(raw.id ?? ''),
+    title: String(raw.title ?? ''),
+    authors: String(raw.authors ?? ''),
+    year: Number(raw.year ?? 0),
+    status: (raw.status as LibraryPaper['status']) || 'PENDING_PARSING',
+    source: String(raw.source ?? 'library'),
+    keyPoints: {
+      background: String(kp.background ?? ''),
+      method: String(kp.method ?? ''),
+      innovation: String(kp.innovation ?? ''),
+      conclusion: String(kp.conclusion ?? ''),
+    },
+  }
+}
 
 // 节点详情
 const nodeDetailVisible = ref(false)
@@ -128,6 +168,51 @@ function buildGraphFromPapers() {
   isLoading.value = false
 }
 
+async function loadSimilarityGraph() {
+  isLoading.value = true
+  try {
+    const res = await fetchSimilarityGraphApi({
+      folder_id: folderStore.currentFolderId ?? undefined,
+      max_nodes: 200,
+      compact: true,
+    })
+    if (res.code !== 0 || res.data == null) {
+      ElMessage.warning(res.msg || '图谱数据异常')
+      cachedNodes = []
+      cachedLinks = []
+      applyFilterAndRender()
+      return
+    }
+    const payload = res.data
+    cachedNodes = payload.nodes.map((n) => ({
+      id: n.id,
+      name: n.name,
+      type: 'paper' as const,
+      category: n.category ?? 0,
+      paperInfo: normalizePaperInfo(n.paperInfo as Record<string, unknown> | undefined),
+    }))
+    cachedLinks = payload.links.map((l) => ({
+      source: l.source,
+      target: l.target,
+      relationType: (l.relationType as GraphLink['relationType']) || 'semantic',
+      label: l.label,
+    }))
+    applyFilterAndRender()
+    const reason = payload.meta?.reason
+    if (reason === 'no_embeddings' && cachedNodes.length === 0) {
+      ElMessage.info('暂无已向量化论文，请在文库中确认四要素后自动建向量再查看相似度图')
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '加载相似度图谱失败'
+    ElMessage.error(msg)
+    cachedNodes = []
+    cachedLinks = []
+    applyFilterAndRender()
+  } finally {
+    isLoading.value = false
+  }
+}
+
 function findFolder(tree: Folder[], id: string): Folder | undefined {
   for (const node of tree) {
     if (node.id === id) return node
@@ -143,6 +228,8 @@ function findFolder(tree: Folder[], id: string): Folder | undefined {
 const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   if (!chartRef.value) return
   if (!chartInstance) chartInstance = echarts.init(chartRef.value)
+
+  const chartCategories = graphMode.value === 'similarity' ? categories.slice(0, 1) : categories
 
   // 统计连接数用于动态大小
   const nodeConnCount: Record<string, number> = {}
@@ -188,7 +275,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       }
     },
     legend: { 
-      data: categories.map(c => c.name), 
+      data: chartCategories.map(c => c.name), 
       orient: 'vertical', 
       right: 15, 
       top: 15,
@@ -229,7 +316,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
         },
         label: { show: false },
       })),
-      categories,
+      categories: chartCategories,
       roam: true,
       draggable: true,
       force: { repulsion: 1000, gravity: 0.03, edgeLength: [180, 350], friction: 0.65 },
@@ -269,7 +356,15 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
 
 // 综合筛选并渲染
 const applyFilterAndRender = () => {
-  if (cachedNodes.length === 0) return
+  if (cachedNodes.length === 0) {
+    renderChart([], [])
+    return
+  }
+
+  if (graphMode.value === 'similarity') {
+    renderChart(cachedNodes, cachedLinks)
+    return
+  }
 
   const visibleTypes: NodeType[] = ['paper']
   if (filters.background) visibleTypes.push('background')
@@ -292,11 +387,17 @@ watch(
 )
 // 监听文件夹变化 → 重新构建图谱
 watch(() => folderStore.currentFolderId, () => {
-  buildGraphFromPapers()
+  if (graphMode.value === 'similarity') loadSimilarityGraph()
+  else buildGraphFromPapers()
 })
 // 监听论文列表变化 → 重新构建图谱
 watch(() => paperStore.papers.length, () => {
-  buildGraphFromPapers()
+  if (graphMode.value === 'dimensions') buildGraphFromPapers()
+})
+
+watch(graphMode, (mode) => {
+  if (mode === 'similarity') loadSimilarityGraph()
+  else buildGraphFromPapers()
 })
 
 // ---- 点击节点 ----
@@ -353,11 +454,11 @@ const stopResize = () => {
 
 // ---- 生命周期 ----
 onMounted(async () => {
-  // 确保论文数据已加载
   if (paperStore.papers.length === 0) {
     await paperStore.loadPapers()
   }
-  buildGraphFromPapers()
+  if (graphMode.value === 'similarity') await loadSimilarityGraph()
+  else buildGraphFromPapers()
   window.addEventListener('resize', () => chartInstance?.resize())
 })
 onUnmounted(() => {
@@ -370,7 +471,11 @@ onUnmounted(() => {
   <div class="graph-panel">
     <header class="graph-header">
       <div class="header-left">
-        <div class="graph-filters">
+        <el-radio-group v-model="graphMode" size="small" class="graph-mode-tabs">
+          <el-radio-button label="similarity">相似度图谱</el-radio-button>
+          <el-radio-button label="dimensions">四要素展开</el-radio-button>
+        </el-radio-group>
+        <div v-show="graphMode === 'dimensions'" class="graph-filters">
           <el-checkbox v-model="filters.background" size="small" class="filter-chip">
             <span class="filter-icon" style="background: #a78bfa" /> 研究背景
           </el-checkbox>
@@ -427,6 +532,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+}
+
+.graph-mode-tabs {
+  flex-shrink: 0;
 }
 
 .section-title {
