@@ -16,7 +16,7 @@ export function useSearch() {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
   /** 标准化搜索结果的字段名（API 返回 semantic_id → 映射为 id） */
-  function normalizeResult(item: Record<string, unknown>): SearchResult {
+  function normalizeResult(item: any): SearchResult {
     return {
       id: (item.semantic_id as string) || (item.id as string) || '',
       title: (item.title as string) || '',
