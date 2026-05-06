@@ -45,8 +45,8 @@ const rules = computed<FormRules>(() => {
 
   if (mode.value === 'register') {
     baseRules.name = [
-      { required: true, message: '请输入姓名', trigger: 'blur' },
-      { min: 2, max: 20, message: '姓名长度应为 2-20 个字符', trigger: 'blur' }
+      { required: true, message: '请输入昵称', trigger: 'blur' },
+      { min: 2, max: 20, message: '昵称长度应为 2-20 个字符', trigger: 'blur' }
     ]
     baseRules.code = [
       { required: true, message: '请输入验证码', trigger: 'blur' },
@@ -189,7 +189,7 @@ const handleSubmit = async () => {
           <p>
             {{ mode === 'login'
               ? '使用邮箱进入你的论文工作台。'
-              : '先用基础信息完成注册，后续可直接对接后端真实接口。' }}
+              : '填写基本信息创建你的账号。' }}
           </p>
         </div>
 
@@ -202,8 +202,8 @@ const handleSubmit = async () => {
           @submit.prevent="handleSubmit"
         >
           <!-- 注册时显示姓名 -->
-          <el-form-item v-if="mode === 'register'" label="姓名" prop="name">
-            <el-input v-model="form.name" placeholder="例如：张同学">
+          <el-form-item v-if="mode === 'register'" label="昵称" prop="name">
+            <el-input v-model="form.name" placeholder="例如：科研小能手">
               <template #prefix>
                 <el-icon><User /></el-icon>
               </template>
