@@ -10,16 +10,92 @@
       "name": "papers"
     },
     {
-      "name": "discover"
+      "name": "tasks"
     },
     {
-      "name": "tasks"
+      "name": "论文发现"
+    },
+    {
+      "name": "discover"
     },
     {
       "name": "folders"
     }
   ],
   "paths": {
+    "/api/papers/{paper_id}/key-points": {
+      "patch": {
+        "summary": "保存四要素并确认、触发向量化",
+        "deprecated": false,
+        "description": "保存四要素并确认、触发向量化",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer <JWT>，登录接口返回的 data.token",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "description": "application/json",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "example": {
+                "keyPoints": {
+                  "background": "…",
+                  "method": "…",
+                  "innovation": "…",
+                  "conclusion": "…"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
     "/api/papers/upload": {
       "post": {
         "summary": "上传 PDF 论文",
@@ -178,147 +254,6 @@
             "bearerAuth": []
           }
         ]
-      }
-    },
-    "/api/discover/search": {
-      "get": {
-        "summary": "Search Papers",
-        "deprecated": false,
-        "description": "调用 Semantic Scholar 检索论文，支持年份/来源类型筛选和排序。",
-        "operationId": "search_papers_api_discover_search_get",
-        "tags": [
-          "discover"
-        ],
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "检索关键词",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "检索关键词",
-              "title": "Q"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "分页偏移",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "description": "分页偏移",
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "每页数量，最大 50",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 50,
-              "minimum": 1,
-              "description": "每页数量，最大 50",
-              "default": 10,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "year_from",
-            "in": "query",
-            "description": "年份下限（含）",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "年份下限（含）",
-              "title": "Year From"
-            }
-          },
-          {
-            "name": "year_to",
-            "in": "query",
-            "description": "年份上限（含）",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "年份上限（含）",
-              "title": "Year To"
-            }
-          },
-          {
-            "name": "source_type",
-            "in": "query",
-            "description": "来源类型：conference | journal | arXiv",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "来源类型：conference | journal | arXiv",
-              "title": "Source Type"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "description": "排序：relevance | citations | date",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "排序：relevance | citations | date",
-              "default": "relevance",
-              "title": "Sort"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "headers": {}
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {}
-          }
-        },
-        "security": []
       }
     },
     "/api/user/login": {
@@ -867,12 +802,12 @@
     },
     "/api/discover/import": {
       "post": {
-        "summary": "Import Paper",
+        "summary": "导入论文到文库",
         "deprecated": false,
-        "description": "单篇导入：创建 Paper 记录并触发异步解析任务。\n若同一用户已存在相同 DOI 的论文，返回 409。",
+        "description": "将检索到的论文导入到用户文库，自动下载 PDF（如有）并触发异步解析任务。需要 JWT 鉴权。",
         "operationId": "import_paper_api_discover_import_post",
         "tags": [
-          "discover"
+          "论文发现"
         ],
         "parameters": [],
         "requestBody": {
@@ -880,6 +815,15 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ImportRequest"
+              },
+              "example": {
+                "title": "Attention Is All You Need",
+                "authors": "Ashish Vaswani, Noam Shazeer",
+                "abstract": "ipsum labore dolor anim dolore",
+                "doi": "10.48550/arXiv.1706.03762",
+                "year": 2017,
+                "venue": "NIPS",
+                "pdf_url": "http://arxiv.org/pdf/2103.14030"
               }
             }
           },
@@ -887,10 +831,202 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "导入成功",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "paper_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    "status": "pending_parsing"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证（缺少或无效的 JWT Token）",
+            "headers": {}
+          },
+          "409": {
+            "description": "论文已存在于文库中（根据 DOI 判断）",
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/search": {
+      "get": {
+        "summary": "检索论文",
+        "deprecated": false,
+        "description": "调用 Semantic Scholar API 进行关键词检索，支持年份、来源类型筛选和多种排序方式",
+        "operationId": "search_papers_api_discover_search_get",
+        "tags": [
+          "论文发现"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "检索关键词",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "检索关键词",
+              "title": "Q",
+              "example": "transformer attention"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "分页偏移量",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "分页偏移量",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "每页数量，最大 50",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "每页数量，最大 50",
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "year_from",
+            "in": "query",
+            "description": "年份下限（含）",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份下限（含）",
+              "title": "Year From",
+              "example": 2017
+            }
+          },
+          {
+            "name": "year_to",
+            "in": "query",
+            "description": "年份上限（含）",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份上限（含）",
+              "title": "Year To",
+              "example": 2024
+            }
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "description": "来源类型筛选",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "来源类型筛选",
+              "enum": [
+                "conference",
+                "journal",
+                "arXiv"
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "排序方式",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "排序方式",
+              "enum": [
+                "relevance",
+                "citations",
+                "date"
+              ],
+              "default": "relevance",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "检索成功",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "total": 1523,
+                    "offset": 0,
+                    "limit": 10,
+                    "data": [
+                      {
+                        "semantic_id": "649def34f8be52c8b66281af98ae884c09aef38b",
+                        "title": "Attention Is All You Need",
+                        "authors": "Ashish Vaswani, Noam Shazeer",
+                        "year": 2017,
+                        "venue": "NIPS",
+                        "source_type": "conference",
+                        "citation_count": 85234,
+                        "pdf_url": "https://arxiv.org/pdf/1706.03762.pdf"
+                      }
+                    ]
+                  }
+                }
               }
             },
             "headers": {}
@@ -904,6 +1040,10 @@
                 }
               }
             },
+            "headers": {}
+          },
+          "502": {
+            "description": "Semantic Scholar API 调用失败",
             "headers": {}
           }
         },
@@ -957,45 +1097,57 @@
     },
     "/api/discover/references/{semantic_id}": {
       "get": {
-        "summary": "Get References",
+        "summary": "获取参考文献",
         "deprecated": false,
-        "description": "获取该论文的参考文献（上游），并标注哪些已在用户文库中。",
+        "description": "获取指定论文的参考文献列表（该论文引用的文献，即上游），并标注哪些已在用户文库中。需要 JWT 鉴权。",
         "operationId": "get_references_api_discover_references__semantic_id__get",
         "tags": [
-          "discover"
+          "论文发现"
         ],
         "parameters": [
           {
             "name": "semantic_id",
             "in": "path",
-            "description": "",
+            "description": "Semantic Scholar 论文 ID",
             "required": true,
             "example": "",
             "schema": {
               "type": "string",
-              "title": "Semantic Id"
-            }
-          },
-          {
-            "name": "user_id",
-            "in": "query",
-            "description": "当前用户 ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "当前用户 ID",
-              "title": "User Id"
+              "description": "Semantic Scholar 论文 ID",
+              "title": "Semantic Id",
+              "example": "649def34f8be52c8b66281af98ae884c09aef38b"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "获取成功",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "data": [
+                      {
+                        "semantic_id": "abc123",
+                        "title": "Neural Machine Translation",
+                        "authors": "Ilya Sutskever, Oriol Vinyals",
+                        "year": 2014,
+                        "venue": "NIPS",
+                        "citation_count": 12345,
+                        "in_library": true
+                      }
+                    ]
+                  }
+                }
               }
             },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
             "headers": {}
           },
           "422": {
@@ -1007,6 +1159,10 @@
                 }
               }
             },
+            "headers": {}
+          },
+          "502": {
+            "description": "Semantic Scholar API 调用失败",
             "headers": {}
           }
         },
@@ -1015,45 +1171,57 @@
     },
     "/api/discover/citations/{semantic_id}": {
       "get": {
-        "summary": "Get Citations",
+        "summary": "获取引用文献",
         "deprecated": false,
-        "description": "获取引用该论文的文献（下游），并标注哪些已在用户文库中。",
+        "description": "获取引用指定论文的文献列表（下游），并标注哪些已在用户文库中。需要 JWT 鉴权。",
         "operationId": "get_citations_api_discover_citations__semantic_id__get",
         "tags": [
-          "discover"
+          "论文发现"
         ],
         "parameters": [
           {
             "name": "semantic_id",
             "in": "path",
-            "description": "",
+            "description": "Semantic Scholar 论文 ID",
             "required": true,
             "example": "",
             "schema": {
               "type": "string",
-              "title": "Semantic Id"
-            }
-          },
-          {
-            "name": "user_id",
-            "in": "query",
-            "description": "当前用户 ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "当前用户 ID",
-              "title": "User Id"
+              "description": "Semantic Scholar 论文 ID",
+              "title": "Semantic Id",
+              "example": "649def34f8be52c8b66281af98ae884c09aef38b"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "获取成功",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "data": [
+                      {
+                        "semantic_id": "xyz789",
+                        "title": "BERT: Pre-training of Deep Bidirectional Transformers",
+                        "authors": "Jacob Devlin, Ming-Wei Chang",
+                        "year": 2019,
+                        "venue": "NAACL",
+                        "citation_count": 67890,
+                        "in_library": false
+                      }
+                    ]
+                  }
+                }
               }
             },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
             "headers": {}
           },
           "422": {
@@ -1065,6 +1233,10 @@
                 }
               }
             },
+            "headers": {}
+          },
+          "502": {
+            "description": "Semantic Scholar API 调用失败",
             "headers": {}
           }
         },
@@ -1458,6 +1630,29 @@
         ]
       }
     },
+    "/api/graph/similarity": {
+      "get": {
+        "summary": "相似度图谱",
+        "deprecated": false,
+        "description": "相似度图谱（Query 见下）\nQuery 参数（均可选，除说明外有默认值）：\n\nfolder_id：只含该文件夹下论文\nmax_nodes：默认 200，范围 1–200\nmin_similarity：默认 0.55\ntop_k：默认 8",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
@@ -1509,6 +1704,28 @@
         ],
         "title": "BulkImportRequest"
       },
+      "FolderResponse": {
+        "type": "object",
+        "description": "文件夹对象",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "文件夹 ID（UUID hex）",
+            "example": "a1b2c3d4e5f6..."
+          },
+          "name": {
+            "type": "string",
+            "description": "文件夹名称",
+            "example": "我的论文"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "创建时间",
+            "example": "2026-04-30T10:00:00"
+          }
+        }
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1522,11 +1739,31 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0 成功，非 0 失败",
+            "example": 0
+          },
+          "msg": {
+            "type": "string",
+            "description": "提示消息",
+            "example": "创建成功"
+          },
+          "data": {
+            "description": "响应数据（可能为 null）"
+          }
+        }
+      },
       "ImportRequest": {
         "properties": {
           "title": {
             "type": "string",
-            "title": "Title"
+            "title": "Title",
+            "description": "论文标题",
+            "example": "Attention Is All You Need"
           },
           "authors": {
             "anyOf": [
@@ -1537,7 +1774,9 @@
                 "type": "null"
               }
             ],
-            "title": "Authors"
+            "title": "Authors",
+            "description": "作者列表（逗号分隔）",
+            "example": "Ashish Vaswani, Noam Shazeer"
           },
           "abstract": {
             "anyOf": [
@@ -1548,7 +1787,8 @@
                 "type": "null"
               }
             ],
-            "title": "Abstract"
+            "title": "Abstract",
+            "description": "摘要"
           },
           "doi": {
             "anyOf": [
@@ -1559,7 +1799,9 @@
                 "type": "null"
               }
             ],
-            "title": "Doi"
+            "title": "Doi",
+            "description": "DOI",
+            "example": "10.48550/arXiv.1706.03762"
           },
           "year": {
             "anyOf": [
@@ -1570,7 +1812,9 @@
                 "type": "null"
               }
             ],
-            "title": "Year"
+            "title": "Year",
+            "description": "发表年份",
+            "example": 2017
           },
           "venue": {
             "anyOf": [
@@ -1581,19 +1825,29 @@
                 "type": "null"
               }
             ],
-            "title": "Venue"
+            "title": "Venue",
+            "description": "发表会议/期刊",
+            "example": "NIPS"
           },
-          "user_id": {
-            "type": "string",
-            "title": "User Id"
+          "pdf_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Url",
+            "description": "开放获取 PDF 链接（Semantic Scholar openAccessPdf.url）"
           }
         },
         "type": "object",
         "required": [
-          "title",
-          "user_id"
+          "title"
         ],
-        "title": "ImportRequest"
+        "title": "ImportRequest",
+        "description": "导入论文请求体"
       },
       "ValidationError": {
         "properties": {
@@ -1635,46 +1889,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "FolderResponse": {
-        "type": "object",
-        "description": "文件夹对象",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "文件夹 ID（UUID hex）",
-            "example": "a1b2c3d4e5f6..."
-          },
-          "name": {
-            "type": "string",
-            "description": "文件夹名称",
-            "example": "我的论文"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "创建时间",
-            "example": "2026-04-30T10:00:00"
-          }
-        }
-      },
-      "ApiResponse": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "integer",
-            "description": "业务状态码：0 成功，非 0 失败",
-            "example": 0
-          },
-          "msg": {
-            "type": "string",
-            "description": "提示消息",
-            "example": "创建成功"
-          },
-          "data": {
-            "description": "响应数据（可能为 null）"
-          }
-        }
       }
     },
     "responses": {},

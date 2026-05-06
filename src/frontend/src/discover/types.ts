@@ -16,10 +16,18 @@ export interface SearchResult {
   authors: string
   venue: string
   year: number
-  description: string
-  relation?: string
+  /** Semantic Scholar 论文 ID */
+  semantic_id?: string
+  /** 引用次数 */
+  citation_count?: number
+  /** 来源类型：conference | journal | arXiv */
+  source_type?: string
+  /** 开放获取 PDF 链接 */
+  pdf_url?: string
+  /** 推荐理由（仅推荐接口有） */
   reason?: string
-  citationCount?: number
+  /** 摘要简介（兼容旧推荐接口） */
+  description?: string
 }
 
 /** 上下游论文 */
@@ -29,13 +37,31 @@ export interface CitationPaper {
   authors: string
   venue: string
   year: number
-  description: string
-  citationCount: number
-  relation: 'upstream' | 'downstream'
+  /** Semantic Scholar 论文 ID */
+  semantic_id?: string
+  /** 引用次数 */
+  citation_count: number
+  /** 该论文是否已在用户文库中 */
+  in_library?: boolean
+  /** 摘要简介（兼容旧数据） */
+  description?: string
 }
 
 /** Discover tab 模式 */
 export type DiscoverTab = 'search' | 'citation'
+
+/** 搜索 API 返回的完整响应 data 结构 */
+export interface SearchResponseData {
+  total: number
+  offset: number
+  limit: number
+  data: SearchResult[]
+}
+
+/** 参考文献/引证文献 API 返回的完整响应 data 结构 */
+export interface CitationResponseData {
+  data: CitationPaper[]
+}
 
 /** 单篇导入请求体（对齐 /api/discover/import） */
 export interface ImportRequest {
@@ -45,11 +71,10 @@ export interface ImportRequest {
   doi?: string | null
   year?: number | null
   venue?: string | null
-  user_id: string
+  pdf_url?: string | null
 }
 
 /** 批量导入请求体（对齐 /api/discover/import/bulk） */
 export interface BulkImportRequest {
   papers: ImportRequest[]
-  user_id: string
 }

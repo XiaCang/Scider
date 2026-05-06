@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { searchPapersApi, fetchRecommendationsApi } from '../../api/discover'
-import type { SearchResult } from '../types'
+import type { SearchResult, SearchResponseData } from '../types'
 
 const DEBOUNCE_MS = 400
 
@@ -15,6 +15,23 @@ export function useSearch() {
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+  /** 标准化搜索结果的字段名（API 返回 semantic_id → 映射为 id） */
+  function normalizeResult(item: Record<string, unknown>): SearchResult {
+    return {
+      id: (item.semantic_id as string) || (item.id as string) || '',
+      title: (item.title as string) || '',
+      authors: (item.authors as string) || '',
+      venue: (item.venue as string) || '',
+      year: (item.year as number) || 0,
+      semantic_id: item.semantic_id as string,
+      citation_count: item.citation_count as number,
+      source_type: item.source_type as string,
+      pdf_url: item.pdf_url as string,
+      reason: item.reason as string,
+      description: item.description as string,
+    }
+  }
+
   /** 经过关键词、年份、来源、排序过滤后的结果 */
   const filteredResults = computed(() => {
     let items = results.value
@@ -25,7 +42,7 @@ export function useSearch() {
         item =>
           item.title.toLowerCase().includes(kw) ||
           item.authors.toLowerCase().includes(kw) ||
-          item.description.toLowerCase().includes(kw),
+          (item.description || '').toLowerCase().includes(kw),
       )
     }
 
@@ -58,7 +75,9 @@ export function useSearch() {
     error.value = null
     try {
       const data = await fetchRecommendationsApi()
-      results.value = data as SearchResult[]
+      // 兼容推荐接口返回格式（可能是数组或 ApiResponse）
+      const raw = Array.isArray(data) ? data : (data as any)?.data ?? []
+      results.value = (raw as any[]).map(normalizeResult)
     } catch (e) {
       error.value = e instanceof Error ? e.message : '推荐服务不可用'
     } finally {
@@ -85,7 +104,10 @@ export function useSearch() {
         source_type: selectedVenue.value || null,
         sort: sortBy.value === 'relevance' ? 'relevance' : undefined,
       })
-      results.value = res.data as SearchResult[]
+      // res: ApiResponse<SearchResponseData>
+      // res.data = { total, offset, limit, data: [...] }
+      const responseData = res.data as SearchResponseData
+      results.value = (responseData?.data ?? []).map(normalizeResult)
     } catch (e) {
       error.value = e instanceof Error ? e.message : '搜索服务不可用'
     } finally {

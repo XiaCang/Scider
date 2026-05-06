@@ -167,9 +167,10 @@ function viewDetails(itemId: string) {
                   <span v-if="item.venue" class="meta-dot">·</span>
                   <span v-if="item.venue">{{ item.venue }}</span>
                   <span class="meta-dot">·</span>
-                  <span class="meta-citation">被引 {{ item.citationCount }}</span>
+                  <span class="meta-citation">被引 {{ item.citation_count }}</span>
+                  <span v-if="item.in_library" class="meta-library">已在文库</span>
                 </div>
-                <p class="card-desc">{{ item.description }}</p>
+                <p v-if="item.description" class="card-desc">{{ item.description }}</p>
               </div>
               <div class="card-actions">
                 <button class="view-link" @click="viewDetails(item.id)">
@@ -221,9 +222,10 @@ function viewDetails(itemId: string) {
                   <span v-if="item.venue" class="meta-dot">·</span>
                   <span v-if="item.venue">{{ item.venue }}</span>
                   <span class="meta-dot">·</span>
-                  <span class="meta-citation">被引 {{ item.citationCount }}</span>
+                  <span class="meta-citation">被引 {{ item.citation_count }}</span>
+                  <span v-if="item.in_library" class="meta-library">已在文库</span>
                 </div>
-                <p class="card-desc">{{ item.description }}</p>
+                <p v-if="item.description" class="card-desc">{{ item.description }}</p>
               </div>
               <div class="card-actions">
                 <button class="view-link" @click="viewDetails(item.id)">
@@ -665,6 +667,15 @@ function viewDetails(itemId: string) {
   color: var(--brand-accent);
   font-weight: 500;
   opacity: 0.85;
+}
+
+.meta-library {
+  color: #10b981;
+  font-weight: 500;
+  font-size: 0.72rem;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
 .card-desc {

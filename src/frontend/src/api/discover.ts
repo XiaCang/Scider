@@ -1,6 +1,11 @@
 import request from '../network/request'
 import type { ApiResponse } from '../types/auth'
-import type { ImportRequest, BulkImportRequest } from '../discover/types'
+import type {
+  ImportRequest,
+  BulkImportRequest,
+  SearchResponseData,
+  CitationResponseData,
+} from '../discover/types'
 
 /** GET /api/discover/search — 检索论文 */
 export const searchPapersApi = (params: {
@@ -12,27 +17,34 @@ export const searchPapersApi = (params: {
   source_type?: string | null
   sort?: string
 }) =>
-  request.get<ApiResponse<unknown>>('/discover/search', { params })
+  request.get<ApiResponse<SearchResponseData>>('/discover/search', { params })
 
 /** 获取推荐（接口未纳入 api.json，保留兼容） */
 export const fetchRecommendationsApi = (direction?: string) =>
   request.get('/discover/recommendations', { params: { direction } })
 
 /** GET /api/discover/references/{semantic_id} — 参考文献（上游） */
-export const fetchUpstreamPapersApi = (semanticId: string, userId: string) =>
-  request.get<ApiResponse<unknown>>(`/discover/references/${semanticId}`, { params: { user_id: userId } })
+export const fetchUpstreamPapersApi = (semanticId: string) =>
+  request.get<ApiResponse<CitationResponseData>>(`/discover/references/${semanticId}`)
 
 /** GET /api/discover/citations/{semantic_id} — 引证文献（下游） */
-export const fetchDownstreamPapersApi = (semanticId: string, userId: string) =>
-  request.get<ApiResponse<unknown>>(`/discover/citations/${semanticId}`, { params: { user_id: userId } })
+export const fetchDownstreamPapersApi = (semanticId: string) =>
+  request.get<ApiResponse<CitationResponseData>>(`/discover/citations/${semanticId}`)
 
 /** 获取论文的完整引用图谱（接口未纳入 api.json，保留兼容） */
 export const fetchCitationGraphApi = (paperId: string) =>
   request.get('/discover/citations', { params: { paper_id: paperId } })
 
+/** 导入响应中的 data 字段 */
+export interface ImportPaperResult {
+  paper_id: string
+  task_id: string
+  status: string
+}
+
 /** POST /api/discover/import — 单篇导入 */
 export const importPaperApi = (data: ImportRequest) =>
-  request.post<ApiResponse<unknown>>('/discover/import', data)
+  request.post<ApiResponse<ImportPaperResult>>('/discover/import', data)
 
 /** POST /api/discover/import/bulk — 批量导入 */
 export const bulkImportPapersApi = (data: BulkImportRequest) =>

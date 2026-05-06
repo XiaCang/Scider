@@ -139,7 +139,7 @@ const currentSortLabel = computed(() =>
               <span v-if="item.venue" class="meta-venue">{{ item.venue }}</span>
             </div>
             <p v-if="item.reason" class="card-reason">{{ item.reason }}</p>
-            <p class="card-desc">{{ item.description }}</p>
+            <p v-if="item.description" class="card-desc">{{ item.description }}</p>
           </div>
           <div class="card-actions">
             <button class="view-link" @click="viewDetails(item.id)">
