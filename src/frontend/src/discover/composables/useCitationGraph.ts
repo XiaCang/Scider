@@ -1,13 +1,11 @@
 import { ref, computed } from 'vue'
 import { usePaperStore } from '../../store/paper'
-import { useAuthStore } from '../../store/auth'
 import { fetchUpstreamPapersApi, fetchDownstreamPapersApi } from '../../api/discover'
 import type { LibraryPaper } from '../../types/library'
-import type { CitationPaper } from '../types'
+import type { CitationPaper, CitationResponseData } from '../types'
 
 export function useCitationGraph() {
   const paperStore = usePaperStore()
-  const authStore = useAuthStore()
   const selectedPaperId = ref<string>('')
   const upstreamPapers = ref<CitationPaper[]>([])
   const downstreamPapers = ref<CitationPaper[]>([])
@@ -24,6 +22,21 @@ export function useCitationGraph() {
     libraryPapers.value.find(p => p.id === selectedPaperId.value) ?? null,
   )
 
+  /** 标准化引文结果字段（API 返回 semantic_id → 映射为 id） */
+  function normalizeCitation(item: Record<string, unknown>): CitationPaper {
+    return {
+      id: (item.semantic_id as string) || (item.id as string) || '',
+      title: (item.title as string) || '',
+      authors: (item.authors as string) || '',
+      venue: (item.venue as string) || '',
+      year: (item.year as number) || 0,
+      semantic_id: item.semantic_id as string,
+      citation_count: (item.citation_count as number) || 0,
+      in_library: !!item.in_library,
+      description: item.description as string,
+    }
+  }
+
   /** 上游论文：过滤 + 搜索 */
   const filteredUpstreamPapers = computed(() => {
     const kw = upstreamKeyword.value.trim().toLowerCase()
@@ -32,7 +45,7 @@ export function useCitationGraph() {
       p =>
         p.title.toLowerCase().includes(kw) ||
         p.authors.toLowerCase().includes(kw) ||
-        p.description.toLowerCase().includes(kw),
+        (p.description || '').toLowerCase().includes(kw),
     )
   })
 
@@ -44,7 +57,7 @@ export function useCitationGraph() {
       p =>
         p.title.toLowerCase().includes(kw) ||
         p.authors.toLowerCase().includes(kw) ||
-        p.description.toLowerCase().includes(kw),
+        (p.description || '').toLowerCase().includes(kw),
     )
   })
 
@@ -64,9 +77,10 @@ export function useCitationGraph() {
     upstreamLoading.value = true
     upstreamError.value = null
     try {
-      const userId = authStore.user?.userId || ''
-      const res = await fetchUpstreamPapersApi(selectedPaperId.value, userId)
-      upstreamPapers.value = res.data as CitationPaper[]
+      const res = await fetchUpstreamPapersApi(selectedPaperId.value)
+      // res: ApiResponse<CitationResponseData>, res.data = { data: [...] }
+      const citationData = res.data as CitationResponseData
+      upstreamPapers.value = (citationData?.data ?? []).map(normalizeCitation)
     } catch (e) {
       upstreamError.value = e instanceof Error ? e.message : '上游论文加载失败'
     } finally {
@@ -78,9 +92,9 @@ export function useCitationGraph() {
     downstreamLoading.value = true
     downstreamError.value = null
     try {
-      const userId = authStore.user?.userId || ''
-      const res = await fetchDownstreamPapersApi(selectedPaperId.value, userId)
-      downstreamPapers.value = res.data as CitationPaper[]
+      const res = await fetchDownstreamPapersApi(selectedPaperId.value)
+      const citationData = res.data as CitationResponseData
+      downstreamPapers.value = (citationData?.data ?? []).map(normalizeCitation)
     } catch (e) {
       downstreamError.value = e instanceof Error ? e.message : '下游论文加载失败'
     } finally {
