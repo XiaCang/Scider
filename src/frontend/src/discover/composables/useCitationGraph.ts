@@ -23,7 +23,7 @@ export function useCitationGraph() {
   )
 
   /** 标准化引文结果字段（API 返回 semantic_id → 映射为 id） */
-  function normalizeCitation(item: Record<string, unknown>): CitationPaper {
+  function normalizeCitation(item: any): CitationPaper {
     return {
       id: (item.semantic_id as string) || (item.id as string) || '',
       title: (item.title as string) || '',
