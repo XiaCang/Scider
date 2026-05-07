@@ -87,8 +87,6 @@ async def token(form_data: OAuth2PasswordRequestForm = Depends()):
         return error(msg="邮箱或密码错误", code=401, data=None, status_code=200)
     
 
-
-
 @router.post("/api/user/send-code")
 async def send_code(payload: SendCodeIn):
     # generate 6-digit code and store in redis with 5-minute expiry
@@ -98,8 +96,8 @@ async def send_code(payload: SendCodeIn):
     try:
         await r.set(key, code, ex=300)
     except Exception as e:
-        logger.exception("failed to set verification code to redis")
-        return error(msg="内部服务错误: 无法连接到 Redis", code=500, data=None, status_code=500)
+        logger.exception("failed to set verification code in redis")
+        return error(msg=f"内部服务错误: {str(e)}", code=500, data=None, status_code=500)
 
     # try send email if SMTP configured
     smtp_host = os.getenv("SMTP_HOST")
@@ -140,11 +138,20 @@ async def change_password(payload: ChangePasswordIn):
         # verify code from redis
         r = get_redis()
         key = f"verify:{payload.email}"
-        stored = await r.get(key)
+        try:
+            stored = await r.get(key)
+        except Exception:
+            logger.exception("failed to get verification code from redis")
+            return error(msg="内部服务错误: 无法连接到 Redis", code=500, data=None, status_code=500)
+
         if not stored or stored.decode() != payload.code:
             return error(msg="验证码错误或已过期", code=400, data=None, status_code=200)
         # delete used code
-        await r.delete(key)
+        try:
+            await r.delete(key)
+        except Exception:
+            logger.exception("failed to delete verification code from redis")
+            # proceed — deletion failure is non-fatal for the password change flow
 
         # perform password change via service
         from module.user.service.auth_service import change_user_password
@@ -155,4 +162,7 @@ async def change_password(payload: ChangePasswordIn):
         return success(data={"userId": updated.get("id"), "email": updated.get("email")}, msg="密码已更新", code=0)
     except ValueError as e:
         return error(msg=str(e), code=400, data=None, status_code=200)
+    except Exception as e:
+        logger.exception("change_password failed")
+        return error(msg=f"服务器内部错误: {str(e)}", code=500, data=None, status_code=500)
 

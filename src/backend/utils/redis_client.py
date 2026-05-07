@@ -1,7 +1,7 @@
 import os
 import redis.asyncio as aioredis
 
-REDIS_URL = os.getenv("REDIS_BROKER_URL", "redis://:water123@localhost:6379/0")
+REDIS_URL = os.getenv("REDIS_VERIFY_URL", "redis://:BBnomoney%40buaa2306@39.107.252.200:6379/2")
 
 
 
