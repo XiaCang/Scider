@@ -17,7 +17,7 @@ async def save_confirmed_key_points(
     user_id: str,
     *,
     background: str,
-    method: str,
+    methodology: str,
     innovation: str,
     conclusion: str,
 ) -> tuple[Paper | None, str | None]:
@@ -37,7 +37,7 @@ async def save_confirmed_key_points(
         session.add(kp)
 
     kp.background = background.strip()
-    kp.methodology = method.strip()
+    kp.methodology = methodology.strip()
     kp.innovation = innovation.strip()
     kp.conclusion = conclusion.strip()
     kp.is_confirmed = True

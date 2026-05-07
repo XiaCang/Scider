@@ -17,15 +17,15 @@ router = APIRouter(prefix="/papers", tags=["papers"])
 
 
 class KeyPointsIn(BaseModel):
+    """前端和 LLM 统一使用 methodology。接收 method（兼容旧前端）。"""
+    model_config = ConfigDict(populate_by_name=True)
     background: str = ""
-    method: str = ""
+    methodology: str = Field(default="", alias="method")
     innovation: str = ""
     conclusion: str = ""
 
 
 class PatchKeyPointsBody(BaseModel):
-    """与前端 `saveKeyPointsApi` 一致：{ keyPoints: { background, method, ... } }"""
-
     model_config = ConfigDict(populate_by_name=True)
     key_points: KeyPointsIn = Field(alias="keyPoints")
 
@@ -497,7 +497,7 @@ async def patch_key_points(
     kp = body.key_points
     if not (
         kp.background.strip()
-        and kp.method.strip()
+        and kp.methodology.strip()
         and kp.innovation.strip()
         and kp.conclusion.strip()
     ):
@@ -508,7 +508,7 @@ async def patch_key_points(
         paper_id,
         user["id"],
         background=kp.background,
-        method=kp.method,
+        methodology=kp.methodology,
         innovation=kp.innovation,
         conclusion=kp.conclusion,
     )
