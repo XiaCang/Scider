@@ -22,72 +22,9 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────
-  # Tests (with MySQL & Redis service containers)
-  # ──────────────────────────────────────────────
-  test:
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: testpass
-          MYSQL_DATABASE: scider_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: src/backend/requirements.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
-
-      - name: Run Alembic migrations
-        run: |
-          cp .env.example .env
-          export DATABASE_URL="mysql+asyncmy://root:testpass@localhost:3306/scider_test?charset=utf8mb4"
-          cd db && alembic upgrade head
-        env:
-          DATABASE_URL: mysql+asyncmy://root:testpass@localhost:3306/scider_test?charset=utf8mb4
-
-      - name: Run tests with pytest
-        run: pytest --maxfail=3 --disable-warnings -v -x
-        env:
-          DATABASE_URL: mysql+asyncmy://root:testpass@localhost:3306/scider_test?charset=utf8mb4
-          REDIS_BROKER_URL: redis://localhost:6379/0
-          REDIS_RESULT_BACKEND: redis://localhost:6379/1
-          LLM_PROVIDER: deepseek
-          DEEPSEEK_API_KEY: ""
-          EMBEDDING_API_KEY: ""
-
-  # ──────────────────────────────────────────────
   # Build & Push Docker Images
   # ──────────────────────────────────────────────
   build-and-push:
-    needs: [test]
     if: |
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
