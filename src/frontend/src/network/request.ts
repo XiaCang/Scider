@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios'
-import type { AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosRequestConfig } from 'axios'
 import { authStorage } from '../utils/auth_storage'
 import { ElMessage } from 'element-plus'
 
@@ -42,8 +42,8 @@ function extractErrorMessage(error: AxiosError<{ message?: string; msg?: string 
 }
 
 instance.interceptors.response.use(
-  (response: AxiosResponse<{ code: number; msg?: string; message?: string }>) => {
-    const body = response.data
+  (response) => {
+    const body = response.data as { code: number; msg?: string; message?: string } | undefined
 
     // 后端返回了业务错误码 (code !== 0)
     if (body && body.code !== undefined && body.code !== 0) {

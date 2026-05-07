@@ -54,10 +54,14 @@ export function useFolderOperations() {
           done()
         }
       })
-      await folderStore.createRootFolder(name.trim())
-      ElMessage.success('根文件夹创建成功')
+      try {
+        await folderStore.createRootFolder(name.trim())
+        ElMessage.success('根文件夹创建成功')
+      } catch (e) {
+        ElMessage.error(e instanceof Error ? e.message : '创建文件夹失败')
+      }
     } catch {
-      // 取消
+      // 取消对话框
     }
   }
 
@@ -86,26 +90,48 @@ export function useFolderOperations() {
           done()
         }
       })
-      await folderStore.createSubFolder(parentFolder.id, name.trim())
-      ElMessage.success('子文件夹创建成功')
-    } catch {}
+      try {
+        await folderStore.createSubFolder(parentFolder.id, name.trim())
+        ElMessage.success('子文件夹创建成功')
+      } catch (e) {
+        ElMessage.error(e instanceof Error ? e.message : '创建子文件夹失败')
+      }
+    } catch {
+      // 取消对话框
+    }
   }
 
   // ------------------- 纯 store 操作（供 FolderSettingsDialog 调用） -------------------
   async function renameFolder(folderId: string, newName: string) {
-    await folderStore.renameFolder(folderId, newName)
+    try {
+      await folderStore.renameFolder(folderId, newName)
+    } catch (e) {
+      ElMessage.error(e instanceof Error ? e.message : '重命名失败')
+    }
   }
 
   async function moveFolder(folderId: string, targetId: string) {
-    await folderStore.moveFolder(folderId, targetId)
+    try {
+      await folderStore.moveFolder(folderId, targetId)
+    } catch (e) {
+      ElMessage.error(e instanceof Error ? e.message : '移动文件夹失败')
+    }
   }
 
   async function copyFolder(folderId: string, targetId: string) {
-    await folderStore.copyFolder(folderId, targetId)
+    try {
+      await folderStore.copyFolder(folderId, targetId)
+    } catch (e) {
+      ElMessage.error(e instanceof Error ? e.message : '复制文件夹失败')
+    }
   }
 
   async function deleteFolder(folderId: string) {
-    await folderStore.deleteFolder(folderId)
+    try {
+      await folderStore.deleteFolder(folderId)
+    } catch (e) {
+      ElMessage.error(e instanceof Error ? e.message : '删除文件夹失败')
+    }
   }
 
   return {

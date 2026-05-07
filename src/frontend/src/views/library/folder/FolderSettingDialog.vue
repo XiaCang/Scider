@@ -152,7 +152,10 @@ const handleDelete = async () => {
     await deleteFolder(props.folder.id)
     ElMessage.success('文件夹已删除')
     emit('update:modelValue', false)
-  } catch { /* 取消 */ }
+  } catch (e: any) {
+    if (e?.toString()?.includes('cancel') || e?.toString()?.includes('close')) return
+    ElMessage.error(e instanceof Error ? e.message : '删除文件夹失败')
+  }
 }
 
 // 取消
@@ -175,8 +178,8 @@ const confirm = async () => {
       await copyFolder(props.folder.id, copyToFolderId.value)
     }
     emit('update:modelValue', false)
-  } catch {
-    // store 中的操作失败会有其他错误提示
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '操作失败')
   }
 }
 </script>

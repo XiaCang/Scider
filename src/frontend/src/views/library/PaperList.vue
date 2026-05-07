@@ -222,11 +222,15 @@ const performGlobalBatchDelete = async () => {
 const removePapersFromCurrentFolder = async () => {
   const folderId = currentFolderId.value
   const idsToRemove = Array.from(selectedPaperIds.value)
-  for (const paperId of idsToRemove) {
-    await folderStore.removePaperFromFolder(folderId, paperId)
+  try {
+    for (const paperId of idsToRemove) {
+      await folderStore.removePaperFromFolder(folderId, paperId)
+    }
+    selectedPaperIds.value.clear()
+    ElMessage.success(`已从当前文件夹移除 ${idsToRemove.length} 篇论文`)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '移除论文失败')
   }
-  selectedPaperIds.value.clear()
-  ElMessage.success(`已从当前文件夹移除 ${idsToRemove.length} 篇论文`)
 }
 
 // 保存关键点（单篇）
@@ -236,7 +240,7 @@ const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) =
     ElMessage.success('关键点已确认')
   } catch (error) {
     console.error('[handleSaveKeyPoints] 保存失败:', error)
-    ElMessage.error('保存失败')
+    ElMessage.error(error instanceof Error ? error.message : '保存失败')
   }
 }
 

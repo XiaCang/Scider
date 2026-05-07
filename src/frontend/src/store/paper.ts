@@ -26,6 +26,8 @@ export const usePaperStore = defineStore('paper', () => {
     try {
       const { data } = await fetchLibraryApi()
       papers.value = data
+    } catch (e) {
+      console.error('[paperStore] 加载论文列表失败:', e)
     } finally {
       loading.value = false
     }
