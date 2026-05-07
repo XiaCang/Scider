@@ -31,10 +31,10 @@ app = FastAPI(
 # ── CORS 跨域配置 ──
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 开发环境允许所有来源,生产环境应指定具体域名
-    allow_credentials=True,
-    allow_methods=["*"],  # 允许所有HTTP方法(GET, POST, PUT, DELETE, OPTIONS等)
-    allow_headers=["*"],  # 允许所有请求头
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ── JWT authentication middleware (ASGI middleware, not BaseHTTPMiddleware) ──

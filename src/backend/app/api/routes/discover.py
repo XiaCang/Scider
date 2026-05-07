@@ -133,7 +133,7 @@ async def import_paper(body: ImportRequest, request: Request):
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse(status_code=401, content=err(401, "未认证"))
-    user_id = str(user.id)
+    user_id = str(user["id"])
 
     async with get_session() as session:
         if body.doi:
@@ -202,7 +202,7 @@ async def get_references(
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse(status_code=401, content=err(401, "未认证"))
-    user_id = str(user.id)
+    user_id = str(user["id"])
     logger.info("discover.references semantic_id=%s user_id=%s", semantic_id, user_id)
     try:
         refs = semantic_scholar.get_references(semantic_id)
@@ -232,7 +232,7 @@ async def get_citations(
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse(status_code=401, content=err(401, "未认证"))
-    user_id = str(user.id)
+    user_id = str(user["id"])
     logger.info("discover.citations semantic_id=%s user_id=%s", semantic_id, user_id)
     try:
         cites = semantic_scholar.get_citations(semantic_id)
