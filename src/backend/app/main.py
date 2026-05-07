@@ -42,12 +42,8 @@ app.add_middleware(JWTAuthMiddleware)
 
 # ── 静态文件服务（用于PDF预览） ──
 UPLOAD_DIR_ABSOLUTE = str(Path(settings.UPLOAD_DIR).resolve())
+os.makedirs(UPLOAD_DIR_ABSOLUTE, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR_ABSOLUTE), name="uploads")
-
-
-@app.on_event("startup")
-async def startup():
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
 
 @app.get("/health")

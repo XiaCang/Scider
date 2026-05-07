@@ -23,9 +23,9 @@ load_dotenv(dotenv_path)
 
 # add your model's MetaData object here
 import sys
-# Insert project/src so `backend` package can be imported (project_root/src should be on path)
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from backend.db.models import Base  # noqa
+# Insert project root (2 levels up from db/alembic/) so db.models can be imported
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from db.models import Base  # noqa
 
 target_metadata = Base.metadata
 
