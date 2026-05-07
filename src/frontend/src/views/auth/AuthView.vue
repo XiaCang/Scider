@@ -83,8 +83,12 @@ const sendCode = async () => {
 
   codeSending.value = true
   try {
-    await sendCodeApi({ email: form.email })
-    ElMessage.success('验证码已发送至邮箱，请查收')
+    const res = await sendCodeApi({ email: form.email })
+    if (res.data?.sent) {
+      ElMessage.success('验证码已发送至邮箱，请查收')
+    } else {
+      ElMessage.warning('验证码已生成（未配置 SMTP，仅在服务端日志可查）')
+    }
     startCountdown(60)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '发送验证码失败')

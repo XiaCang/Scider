@@ -1,6 +1,7 @@
-import axios, { AxiosError} from 'axios'
-import type { AxiosRequestConfig } from 'axios'
-import {authStorage} from '../utils/auth_storage'
+import axios, { AxiosError } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse } from 'axios'
+import { authStorage } from '../utils/auth_storage'
+import { ElMessage } from 'element-plus'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -12,31 +13,57 @@ instance.interceptors.request.use((config) => {
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
-    console.log('[Request Interceptor] Token已添加:', token.substring(0, 20) + '...')
-  } else {
-    console.warn('[Request Interceptor] 警告: 未找到Token，请求将不包含Authorization头')
   }
 
   return config
 })
 
+/** 从后端响应或 Axios 错误中提取可读的错误信息 */
+function extractErrorMessage(error: AxiosError<{ message?: string; msg?: string }>): string {
+  // 后端返回的业务错误 (HTTP 4xx/5xx + body 中有 msg 或 message)
+  const backendMsg =
+    error.response?.data?.msg ||
+    error.response?.data?.message
+  if (backendMsg) return backendMsg
+
+  // 网络层错误
+  if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+    return '网络连接失败，请检查后端服务是否可用'
+  }
+  if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+    return '请求超时，请稍后重试'
+  }
+  if (error.code === 'ERR_CANCELED') {
+    return '请求已取消'
+  }
+
+  // 兜底
+  return error.message || '请求失败，请稍后重试'
+}
+
 instance.interceptors.response.use(
-  (response) => response.data,
+  (response: AxiosResponse<{ code: number; msg?: string; message?: string }>) => {
+    const body = response.data
+
+    // 后端返回了业务错误码 (code !== 0)
+    if (body && body.code !== undefined && body.code !== 0) {
+      const errMsg = body.msg || body.message || `业务错误 (code=${body.code})`
+      return Promise.reject(new Error(errMsg))
+    }
+
+    return response.data
+  },
   (error: AxiosError<{ message?: string; msg?: string }>) => {
+    // 401 → 清除 token 并跳转登录
     if (error.response?.status === 401) {
       authStorage.clearToken()
       if (!window.location.pathname.startsWith('/login')) {
+        ElMessage.error('登录已过期，请重新登录')
         window.location.href = '/login'
       }
     }
 
-    // 兼容后端的 msg 字段和前端的 message 字段
-    const message =
-      error.response?.data?.msg || 
-      error.response?.data?.message || 
-      error.message || 
-      'Request failed, please try again later.';
-
+    const message = extractErrorMessage(error)
     return Promise.reject(new Error(message))
   },
 )

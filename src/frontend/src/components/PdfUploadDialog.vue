@@ -130,46 +130,10 @@ const handleUpload = async () => {
       selectedFile.value = null
       uploadProgress.value = 0
       isVisible.value = false
-    } else {
-      // 处理业务错误
-      if (response.code === 401) {
-        ElMessage.warning('未认证，请登录')
-        router.push('/auth')
-      } else if (response.code === 409) {
-        ElMessage.warning(response.msg || '该论文已存在')
-      } else {
-        ElMessage.error(response.msg || '上传失败')
-      }
     }
   } catch (error: any) {
     console.error('Upload error:', error)
-    
-    // 提取错误信息
-    let errorMessage = '上传失败，请稍后重试'
-    
-    if (error.response) {
-      // 服务器返回了错误响应（HTTP错误）
-      const status = error.response.status
-      const data = error.response.data
-      
-      if (status === 401) {
-        errorMessage = '未认证，请登录'
-        router.push('/auth')
-      } else if (status === 400) {
-        errorMessage = data?.msg || data?.detail || '请求参数错误'
-      } else if (status === 409) {
-        errorMessage = data?.msg || '该论文已存在，请勿重复上传'
-      } else if (status === 413) {
-        errorMessage = '文件太大，请上传小于50MB的PDF'
-      } else {
-        errorMessage = data?.msg || data?.detail || `上传失败 (${status})`
-      }
-    } else if (error.request) {
-      // 请求已发送但没有收到响应
-      errorMessage = '网络连接失败，请检查网络'
-    }
-    
-    ElMessage.error(errorMessage)
+    ElMessage.error(error instanceof Error ? error.message : '上传失败，请稍后重试')
   } finally {
     isUploading.value = false
   }
