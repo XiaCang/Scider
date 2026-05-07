@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.example
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Compose & dockerignore (not needed in image)
+docker-compose*.yml
+.dockerignore
+
+# Dev & test artifacts
+tests/
+test_*.py
+test_*.http
+db/db_test/
+db/README.md
+
+# Docs
+*.md
+docs/
+
+# Generated
+openapi.json
+export_openapi.py

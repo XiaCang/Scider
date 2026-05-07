@@ -15,7 +15,7 @@ defaults:
     working-directory: src/frontend
 
 jobs:
-  lint-and-build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -41,7 +41,7 @@ jobs:
           path: src/frontend/dist
 
   deploy:
-    needs: lint-and-build
+    needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev' 
     runs-on: ubuntu-latest
     steps:

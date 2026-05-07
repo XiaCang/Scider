@@ -4,10 +4,10 @@ services:
     container_name: scider-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 218218wcj
-      MYSQL_DATABASE: db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-db}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -17,11 +17,10 @@ services:
     container_name: scider-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   backend:
-    image: ghcr.io/xiacang/software-scider/backend:dev
-    build: .
+    image: ghcr.io/xiacang/software-scider/backend:main
     container_name: scider-backend
     restart: unless-stopped
     ports:
@@ -29,34 +28,34 @@ services:
     env_file:
       - .env
     environment:
-      # Override host-based URLs to use Docker Compose service names
-      - DATABASE_URL=mysql+asyncmy://root:218218wcj@mysql:3306/db?charset=utf8mb4
+      - DATABASE_URL=mysql+asyncmy://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-db}?charset=utf8mb4
       - REDIS_BROKER_URL=redis://redis:6379/0
       - REDIS_RESULT_BACKEND=redis://redis:6379/1
     volumes:
       - uploads_data:/app/uploads
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
 
   worker:
-    image: ghcr.io/xiacang/software-scider/worker:worker-dev
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/xiacang/software-scider/worker:worker-main
     container_name: scider-worker
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+asyncmy://root:218218wcj@mysql:3306/db?charset=utf8mb4
+      - DATABASE_URL=mysql+asyncmy://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-db}?charset=utf8mb4
       - REDIS_BROKER_URL=redis://redis:6379/0
       - REDIS_RESULT_BACKEND=redis://redis:6379/1
     volumes:
       - uploads_data:/app/uploads
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
 
 volumes:
   mysql_data:
