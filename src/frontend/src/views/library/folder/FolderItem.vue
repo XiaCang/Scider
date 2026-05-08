@@ -70,15 +70,24 @@ const toggleExpand = (event: MouseEvent) => {
 
 // 拖拽事件处理
 const onDragStart = (event: DragEvent) => {
-  event.dataTransfer!.setData('text/plain', props.folder.id)
+  event.dataTransfer!.setData('text/plain', `folder:${props.folder.id}`)
   event.dataTransfer!.effectAllowed = 'move'
 }
 
 const onDragOver = (event: DragEvent) => {
   event.preventDefault()
   if (!event.dataTransfer) return
-  const draggedId = event.dataTransfer.getData('text/plain')
-  // 不允许拖到自己或后代上
+  const data = event.dataTransfer.getData('text/plain')
+
+  // 论文拖入文件夹
+  if (data.startsWith('paper:')) {
+    isDragOver.value = true
+    event.dataTransfer.dropEffect = 'move'
+    return
+  }
+
+  // 文件夹拖拽（已有逻辑）
+  const draggedId = data.startsWith('folder:') ? data.slice(7) : data
   if (draggedId === props.folder.id || isDescendant(draggedId, props.folder.id)) {
     event.dataTransfer.dropEffect = 'none'
     return
@@ -94,16 +103,25 @@ const onDragLeave = () => {
 const onDrop = (event: DragEvent) => {
   event.preventDefault()
   isDragOver.value = false
-  const draggedId = event.dataTransfer!.getData('text/plain')
-  if (!draggedId || draggedId === props.folder.id) return
+  const data = event.dataTransfer!.getData('text/plain')
+  if (!data) return
+
+  // 论文拖入文件夹 → 添加到文件夹
+  if (data.startsWith('paper:')) {
+    const paperId = data.slice(6)
+    folderStore.addPaperToFolder(props.folder.id, paperId)
+    return
+  }
+
+  // 文件夹拖拽（已有逻辑）
+  const draggedId = data.startsWith('folder:') ? data.slice(7) : data
+  if (draggedId === props.folder.id) return
   if (isDescendant(draggedId, props.folder.id)) return
 
   const ctrlKey = event.ctrlKey || event.metaKey
   if (ctrlKey) {
-    // 复制
     folderStore.copyFolder(draggedId, props.folder.id)
   } else {
-    // 移动
     folderStore.moveFolder(draggedId, props.folder.id)
   }
 }

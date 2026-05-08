@@ -125,26 +125,28 @@ const statusClassMap: Record<string, string> = {
         <h2 class="paper-title">{{ paper.title }}</h2>
 
         <div class="paper-meta">
-          <div class="meta-item">
+          <div class="meta-item meta-item--full">
             <span class="meta-label">作者：</span>
-            <span class="meta-value">{{ paper.authors }}</span>
+            <span class="meta-value meta-value--ellipsis" :title="paper.authors">{{ paper.authors }}</span>
           </div>
 
-          <div class="meta-item">
-            <span class="meta-label">年份：</span>
-            <span class="meta-value">{{ paper.year }}</span>
-          </div>
+          <div class="meta-row">
+            <div class="meta-item">
+              <span class="meta-label">年份：</span>
+              <span class="meta-value">{{ paper.year }}</span>
+            </div>
 
-          <div class="meta-item">
-            <span class="meta-label">来源：</span>
-            <span class="meta-value">{{ paper.source }}</span>
-          </div>
+            <div class="meta-item">
+              <span class="meta-label">来源：</span>
+              <span class="meta-value meta-value--ellipsis" :title="paper.source">{{ paper.source }}</span>
+            </div>
 
-          <div class="meta-item">
-            <span class="meta-label">状态：</span>
-            <span class="status-pill" :class="statusClassMap[paper.status]">
-              {{ statusTextMap[paper.status] }}
-            </span>
+            <div class="meta-item">
+              <span class="meta-label">状态：</span>
+              <span class="status-pill" :class="statusClassMap[paper.status]">
+                {{ statusTextMap[paper.status] }}
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -271,16 +273,30 @@ const statusClassMap: Record<string, string> = {
 }
 
 .paper-meta {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+/* 作者行独占一行 */
+.meta-item--full {
+  max-width: 100%;
+}
+
+/* 年份 / 来源 / 状态 一行排列 */
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .meta-item {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
+  min-width: 0;
 }
 
 .meta-label {
@@ -291,9 +307,13 @@ const statusClassMap: Record<string, string> = {
 
 .meta-value {
   color: var(--text-primary);
+}
+
+.meta-value--ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 /* 关键点编辑区 */
@@ -399,8 +419,9 @@ const statusClassMap: Record<string, string> = {
 
 /* 响应式调整 */
 @media (max-width: 768px) {
-  .paper-meta {
-    grid-template-columns: 1fr;
+  .meta-row {
+    flex-direction: column;
+    gap: 0.3rem;
   }
 
   .action-section {

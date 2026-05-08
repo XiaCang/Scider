@@ -154,22 +154,30 @@ export const useFolderStore = defineStore('folder', () => {
 
   // 论文与文件夹关联
   async function addPaperToFolder(folderId: string, paperId: string) {
-    await addPaperToFolderApi(folderId, paperId)
-    const folder = findFolderById(folders.value, folderId)
-    if (folder) {
-      if (!folder.paperIds) folder.paperIds = []
-      if (!folder.paperIds.includes(paperId)) {
-        folder.paperIds.push(paperId)
+    try {
+      await addPaperToFolderApi(folderId, paperId)
+      const folder = findFolderById(folders.value, folderId)
+      if (folder) {
+        if (!folder.paperIds) folder.paperIds = []
+        if (!folder.paperIds.includes(paperId)) {
+          folder.paperIds.push(paperId)
+        }
       }
+    } catch (e) {
+      console.error('[folderStore] addPaperToFolder failed:', e)
     }
   }
 
   async function removePaperFromFolder(folderId: string, paperId: string) {
-    await removePaperFromFolderApi(folderId, paperId)
-    const folder = findFolderById(folders.value, folderId)
-    if (folder && folder.paperIds) {
-      const idx = folder.paperIds.indexOf(paperId)
-      if (idx !== -1) folder.paperIds.splice(idx, 1)
+    try {
+      await removePaperFromFolderApi(folderId, paperId)
+      const folder = findFolderById(folders.value, folderId)
+      if (folder && folder.paperIds) {
+        const idx = folder.paperIds.indexOf(paperId)
+        if (idx !== -1) folder.paperIds.splice(idx, 1)
+      }
+    } catch (e) {
+      console.error('[folderStore] removePaperFromFolder failed:', e)
     }
   }
 

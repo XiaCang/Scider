@@ -41,17 +41,19 @@ const handleUpdateExpanded = (value: Set<string>) => {
 <style scoped>
 .graph-page-container {
   display: flex;
-  height: 100%;
+  height: 100vh;
   background: var(--bg-page, #f5f7fa);
 }
 
 .graph-sidebar {
   width: 280px;
   min-width: 260px;
+  height: 100%;
   border-right: 1px solid var(--line-soft, #e4e7ed);
   background: #fff;
   overflow-y: auto;
   padding: 10px;
+  box-sizing: border-box;
 }
 
 .graph-main {
@@ -59,6 +61,5 @@ const handleUpdateExpanded = (value: Set<string>) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 10px;
 }
 </style>

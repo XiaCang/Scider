@@ -31,9 +31,11 @@ async def get_folders_by_user(
     session: AsyncSession,
     user_id: str,
 ) -> list[Folder]:
-    """List all folders belonging to a user, ordered by creation time."""
+    """List all folders belonging to a user, ordered by creation time, with paper IDs loaded."""
+    from sqlalchemy.orm import selectinload
     q = (
         select(Folder)
+        .options(selectinload(Folder.papers))
         .where(Folder.user_id == user_id)
         .order_by(Folder.created_at.desc())
     )
@@ -55,6 +57,34 @@ async def update_folder_name(
     await session.commit()
     await session.refresh(folder)
     return folder
+
+
+async def add_paper_to_folder(
+    session: AsyncSession,
+    folder_id: str,
+    paper_id: str,
+) -> bool:
+    """Add a paper to a folder by setting the paper's folder_id."""
+    paper = await session.get(Paper, paper_id)
+    if not paper:
+        return False
+    paper.folder_id = folder_id
+    await session.commit()
+    return True
+
+
+async def remove_paper_from_folder(
+    session: AsyncSession,
+    folder_id: str,
+    paper_id: str,
+) -> bool:
+    """Remove a paper from a folder by clearing its folder_id."""
+    paper = await session.get(Paper, paper_id)
+    if not paper or paper.folder_id != folder_id:
+        return False
+    paper.folder_id = None
+    await session.commit()
+    return True
 
 
 async def delete_folder(

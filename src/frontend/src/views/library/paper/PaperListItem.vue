@@ -35,7 +35,7 @@ const statusClassMap: Record<string, string> = {
 
 // 处理复选框变化
 const toggleSelect = (paperId: string, event: Event) => {
-  event.stopPropagation() // 防止冒泡到卡片其他区域
+  event.stopPropagation()
   const checked = (event.target as HTMLInputElement).checked
   const newSet = new Set(props.selectedIds)
   if (checked) {
@@ -45,6 +45,12 @@ const toggleSelect = (paperId: string, event: Event) => {
   }
   emit('update:selectedIds', newSet)
 }
+
+// 拖拽开始
+const onDragStart = (paperId: string, event: DragEvent) => {
+  event.dataTransfer!.setData('text/plain', `paper:${paperId}`)
+  event.dataTransfer!.effectAllowed = 'move'
+}
 </script>
 
 <template>
@@ -53,7 +59,13 @@ const toggleSelect = (paperId: string, event: Event) => {
       <el-empty description="暂无论文" :image-size="100" />
     </div>
 
-    <div v-for="paper in papers" :key="paper.id" class="paper-card">
+    <div
+      v-for="paper in papers"
+      :key="paper.id"
+      class="paper-card"
+      draggable="true"
+      @dragstart="onDragStart(paper.id, $event)"
+    >
       <!-- 圆形复选框（右上角） -->
       <div class="card-checkbox">
         <input
@@ -68,7 +80,7 @@ const toggleSelect = (paperId: string, event: Event) => {
         <div class="paper-info-left">
           <div class="paper-title">{{ paper.title }}</div>
           <div class="paper-authors">{{ paper.authors || '未知作者' }}</div>
-          <div class="paper-venue">{{ '未知出处' }}</div>
+          <div class="paper-venue">{{ paper.source || '未知出处' }}</div>
           <div class="paper-year">{{ paper.year || '未知年份' }}</div>
         </div>
         <!-- 右侧状态区 -->
@@ -108,6 +120,15 @@ const toggleSelect = (paperId: string, event: Event) => {
 .paper-card:hover {
   background: #fafcff;
   border-color: #cbd5e1;
+}
+
+.paper-card[draggable="true"] {
+  cursor: grab;
+}
+
+.paper-card[draggable="true"]:active {
+  opacity: 0.6;
+  cursor: grabbing;
 }
 
 /* 圆形复选框 - 右上角 */

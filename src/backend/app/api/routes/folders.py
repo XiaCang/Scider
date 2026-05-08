@@ -8,6 +8,8 @@ from db.crud_folder import (
     get_folders_by_user,
     update_folder_name,
     delete_folder,
+    add_paper_to_folder,
+    remove_paper_from_folder,
 )
 from db.session import get_db
 from utils.response import success, error
@@ -24,6 +26,14 @@ class CreateFolderIn(BaseModel):
 
 class RenameFolderIn(BaseModel):
     name: str
+
+
+class AddPaperIn(BaseModel):
+    paper_id: str
+
+
+class RemovePaperIn(BaseModel):
+    paper_id: str
 
 
 # ── Endpoints ──
@@ -74,6 +84,7 @@ async def list_folders(
             "id": f.id,
             "name": f.name,
             "created_at": f.created_at.isoformat(),
+            "paperIds": [p.id for p in (f.papers or [])],
         }
         for f in folders
     ]
@@ -145,6 +156,50 @@ async def rename(
         code=0,
         status_code=200,
     )
+
+
+@router.post("/{folder_id}/papers")
+async def add_paper(
+    request: Request,
+    folder_id: str,
+    payload: AddPaperIn,
+    session: AsyncSession = Depends(get_db),
+):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    folder = await get_folder_by_id(session=session, folder_id=folder_id)
+    if not folder or folder.user_id != user["id"]:
+        return error(msg="文件夹不存在或无权访问", code=404, data=None, status_code=404)
+
+    ok = await add_paper_to_folder(session, folder_id, payload.paper_id)
+    if not ok:
+        return error(msg="论文不存在", code=404, data=None, status_code=404)
+
+    return success(data=None, msg="已添加到文件夹", code=0, status_code=200)
+
+
+@router.delete("/{folder_id}/papers/{paper_id}")
+async def remove_paper(
+    request: Request,
+    folder_id: str,
+    paper_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    folder = await get_folder_by_id(session=session, folder_id=folder_id)
+    if not folder or folder.user_id != user["id"]:
+        return error(msg="文件夹不存在或无权访问", code=404, data=None, status_code=404)
+
+    ok = await remove_paper_from_folder(session, folder_id, paper_id)
+    if not ok:
+        return error(msg="论文不在该文件夹中", code=404, data=None, status_code=404)
+
+    return success(data=None, msg="已从文件夹移除", code=0, status_code=200)
 
 
 @router.delete("/{folder_id}")

@@ -348,39 +348,6 @@ const handleNavigateToPaper = (paperId: string) => {
     .catch(() => ElMessage.error('页面跳转失败'))
 }
 
-// ---- 画布拖拽调整高度 ----
-const canvasHeight = ref(600)
-let isResizing = false
-let startY = 0
-let startHeight = 0
-const MIN_HEIGHT = 300
-const MAX_HEIGHT = 2000
-
-const startResize = (e: MouseEvent) => {
-  e.preventDefault()
-  isResizing = true
-  startY = e.clientY
-  startHeight = canvasHeight.value
-  document.addEventListener('mousemove', onResizeMove)
-  document.addEventListener('mouseup', stopResize)
-  document.body.style.cursor = 'ns-resize'
-  document.body.style.userSelect = 'none'
-}
-const onResizeMove = (e: MouseEvent) => {
-  if (!isResizing) return
-  const delta = e.clientY - startY
-  canvasHeight.value = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + delta))
-  chartInstance?.resize()
-}
-const stopResize = () => {
-  isResizing = false
-  document.removeEventListener('mousemove', onResizeMove)
-  document.removeEventListener('mouseup', stopResize)
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-  setTimeout(() => chartInstance?.resize(), 50)
-}
-
 // ---- 生命周期 ----
 onMounted(async () => {
   // 确保论文数据已加载
@@ -418,11 +385,8 @@ onUnmounted(() => {
     </header>
 
     <div class="graph-canvas-wrapper">
-      <div class="graph-canvas" :style="{ height: canvasHeight + 'px' }">
+      <div class="graph-canvas">
         <div v-loading="isLoading" ref="chartRef" class="graph-chart" />
-        <div class="resize-handle" @mousedown="startResize" title="拖拽调整画布高度">
-          <div class="resize-handle-bar" />
-        </div>
       </div>
     </div>
 
@@ -440,7 +404,6 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   padding: 0 1.5rem 1.5rem;
-  overflow-y: auto;
 }
 
 .graph-header {
@@ -495,9 +458,8 @@ onUnmounted(() => {
 }
 
 .graph-canvas {
-  position: relative;
-  width: 100%;
-  min-height: 300px;
+  position: absolute;
+  inset: 0;
   border: 1px solid var(--line-soft);
   border-radius: 16px;
   background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
@@ -508,33 +470,5 @@ onUnmounted(() => {
 .graph-chart {
   width: 100%;
   height: 100%;
-}
-
-.resize-handle {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 12px;
-  cursor: ns-resize;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(to bottom, transparent, rgba(59,130,246,0.05));
-}
-
-.resize-handle-bar {
-  width: 60px;
-  height: 4px;
-  background: rgba(59,130,246,0.3);
-  border-radius: 2px;
-  transition: all 0.2s;
-}
-
-.resize-handle:hover .resize-handle-bar {
-  width: 80px;
-  background: rgba(59,130,246,0.5);
-  box-shadow: 0 0 8px rgba(59,130,246,0.3);
 }
 </style>

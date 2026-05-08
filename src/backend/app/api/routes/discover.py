@@ -18,7 +18,7 @@ import httpx
 from fastapi import APIRouter, Query, Request, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.config import settings
 from app.services import semantic_scholar
@@ -78,7 +78,8 @@ class ImportResponse(BaseModel):
         502: {"description": "Semantic Scholar API 调用失败"}
     }
 )
-def search_papers(
+async def search_papers(
+    request: Request,
     q: str = Query(..., min_length=1, description="检索关键词"),
     offset: int = Query(0, ge=0, description="分页偏移量"),
     limit: int = Query(10, ge=1, le=50, description="每页数量，最大 50"),
@@ -87,15 +88,20 @@ def search_papers(
     source_type: Optional[str] = Query(None, description="来源类型筛选", enum=["conference", "journal", "arXiv"]),
     sort: str = Query("relevance", description="排序方式", enum=["relevance", "citations", "date"]),
 ):
-    """调用 Semantic Scholar 检索论文，支持年份/来源类型筛选和排序。"""
+    """调用 Semantic Scholar 检索论文，支持年份/来源类型筛选和排序，标注文库状态。"""
     logger.info("discover.search q=%r offset=%d limit=%d year=%s-%s source_type=%s sort=%s",
                 q, offset, limit, year_from, year_to, source_type, sort)
     try:
-        result = semantic_scholar.search_papers(
+        result = await asyncio.to_thread(
+            semantic_scholar.search_papers,
             q, offset=offset, limit=limit,
             year_from=year_from, year_to=year_to,
             source_type=source_type, sort=sort,
         )
+        # 标注已在文库中的论文
+        user = getattr(request.state, "user", None)
+        if user:
+            result["data"] = await _annotate_in_library(result["data"], str(user["id"]))
         logger.info("discover.search done total=%d returned=%d", result["total"], len(result["data"]))
         return ok(data=result)
     except RuntimeError as e:
@@ -233,10 +239,15 @@ async def import_paper(body: ImportRequest, request: Request):
         await session.refresh(paper)
         logger.info("discover.import paper created paper_id=%s user_id=%s", paper.id, user_id)
 
-    from app.tasks.parse_task import parse_pdf_task
-    task = parse_pdf_task.delay(paper.id, pdf_path or "")
-    logger.info("discover.import task dispatched task_id=%s paper_id=%s", task.id, paper.id)
-    return ok(data={"paper_id": paper.id, "task_id": task.id, "status": paper.status.value})
+    # 有 PDF 才派发解析任务；仅导入元数据的论文等待后续 PDF 上传
+    if pdf_path:
+        from app.tasks.parse_task import parse_pdf_task
+        task = parse_pdf_task.delay(paper.id, pdf_path)
+        logger.info("discover.import task dispatched task_id=%s paper_id=%s", task.id, paper.id)
+        return ok(data={"paper_id": paper.id, "task_id": task.id, "status": paper.status.value})
+    else:
+        logger.info("discover.import no pdf_url, paper created without parse task paper_id=%s", paper.id)
+        return ok(data={"paper_id": paper.id, "task_id": None, "status": paper.status.value})
 
 
 # ---------------------------------------------------------------------------
@@ -392,20 +403,46 @@ async def _resolve_semantic_id(paper) -> str | None:
 
 
 async def _annotate_in_library(papers: list[dict], user_id: str) -> list[dict]:
-    """批量查询 DOI 是否已在用户文库中，为每条记录添加 in_library 字段。"""
+    """批量查询论文（按 DOI 或标题）是否已在用户文库中，为每条记录添加 in_library 字段。"""
+    # 1. 收集有 DOI 的论文，批量查询
     dois = [p["doi"] for p in papers if p.get("doi")]
-    if not dois:
-        for p in papers:
-            p["in_library"] = False
-        return papers
+    in_library_dois: set[str] = set()
+    if dois:
+        async with get_session() as session:
+            rows = await session.scalars(
+                select(Paper.doi).where(Paper.doi.in_(dois), Paper.user_id == user_id)
+            )
+            in_library_dois = set(rows.all())
 
-    async with get_session() as session:
-        rows = await session.scalars(
-            select(Paper.doi).where(Paper.doi.in_(dois), Paper.user_id == user_id)
+    # 2. 收集无 DOI 的论文标题，按标题匹配
+    no_doi_titles = [
+        (i, p["title"]) for i, p in enumerate(papers)
+        if not p.get("doi") and p.get("title")
+    ]
+    in_library_by_title: set[int] = set()
+    if no_doi_titles:
+        title_list = [t for _, t in no_doi_titles]
+        from sqlalchemy import func
+        async with get_session() as session:
+            rows = await session.execute(
+                select(Paper.title).where(
+                    func.lower(Paper.title).in_([t.lower() for t in title_list]),
+                    Paper.user_id == user_id,
+                )
+            )
+            matched_titles = {r[0].lower() for r in rows.all()}
+        for i, title in no_doi_titles:
+            if title.lower() in matched_titles:
+                in_library_by_title.add(i)
+
+    logger.debug(
+        "_annotate_in_library dois=%d matched=%d titles=%d matched=%d",
+        len(dois), len(in_library_dois),
+        len(no_doi_titles), len(in_library_by_title),
+    )
+    for i, p in enumerate(papers):
+        p["in_library"] = (
+            p.get("doi") in in_library_dois
+            or i in in_library_by_title
         )
-        in_library_dois = set(rows.all())
-
-    logger.debug("_annotate_in_library checked=%d in_library=%d", len(dois), len(in_library_dois))
-    for p in papers:
-        p["in_library"] = p.get("doi") in in_library_dois
     return papers

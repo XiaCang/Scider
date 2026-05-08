@@ -15,19 +15,25 @@
 
     <div class="card-divider" />
 
-    <p v-if="paper.description" class="card-abstract">{{ paper.description }}</p>
+    <p v-if="abstract" class="card-abstract">{{ abstract }}</p>
     <p v-else class="card-abstract card-abstract-empty">暂无摘要</p>
   </article>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { SearchResult, CitationPaper } from '../../discover/types'
 
 type PaperItem = (SearchResult | CitationPaper) & { in_library?: boolean }
 
-defineProps<{
+const props = defineProps<{
   paper: PaperItem
 }>()
+
+const abstract = computed(() => {
+  const p = props.paper as any
+  return p.abstract || p.description || ''
+})
 </script>
 
 <style scoped>
