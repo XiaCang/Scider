@@ -95,15 +95,23 @@ const handleTaskCompleted = async (event: Event) => {
 }
 
 // 组件挂载时启动自动刷新并监听任务完成事件
-onMounted(async () => {
-  // 初始加载数据
+const initData = async () => {
   console.log('[PaperList] 组件挂载，开始加载数据...')
-  await Promise.all([
-    paperStore.loadPapers(),
-    folderStore.loadFolders()
-  ])
-  console.log(`[PaperList] 数据加载完成，论文数量: ${paperStore.papers.length}`)
-  
+  try {
+    await Promise.all([
+      paperStore.loadPapers(),
+      folderStore.loadFolders()
+    ])
+    console.log(`[PaperList] 数据加载完成，论文数量: ${paperStore.papers.length}`)
+  } catch (e: any) {
+    if (!e.message?.includes('未认证') && !e.message?.includes('Token')) {
+      ElMessage.error('加载数据失败，请检查网络连接')
+    }
+  }
+}
+
+onMounted(async () => {
+  await initData()
   // 启动自动刷新
   startAutoRefresh()
   window.addEventListener('task-completed', handleTaskCompleted as EventListener)

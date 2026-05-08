@@ -98,9 +98,9 @@ const router = createRouter({
   },
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore(pinia)
-  authStore.hydrate()
+  await authStore.hydrate()
 
   if (typeof to.meta.title === 'string') {
     document.title = to.meta.title

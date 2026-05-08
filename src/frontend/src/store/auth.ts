@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { loginApi, registerApi } from '../api/auth'
+import { loginApi, registerApi, getProfileApi } from '../api/auth'
 import type { AuthUser, LoginPayload, RegisterPayload } from '../types/auth'
 import { authStorage } from '../utils/auth_storage'
 
@@ -9,18 +9,41 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>('')
   const user = ref<AuthUser | null>(null)
   const hydrated = ref<boolean>(false)
+  const initializing = ref<boolean>(false)
 
   // getters
   const isAuthenticated = computed(() => Boolean(token.value))
   const displayName = computed(() => user.value?.username || '研究者')
 
   // actions
-  function hydrate() {
+  async function hydrate() {
     if (hydrated.value) return
-
-    token.value = authStorage.getToken()
-    user.value = authStorage.getProfile()
     hydrated.value = true
+
+    const savedToken = authStorage.getToken()
+    if (!savedToken) {
+      token.value = ''
+      user.value = null
+      return
+    }
+
+    // 向后端验证 token 有效性
+    initializing.value = true
+    try {
+      const profile = await getProfileApi()
+      token.value = savedToken
+      user.value = {
+        userId: profile.data.user.id,
+        username: profile.data.user.name,
+      }
+    } catch {
+      // Token 过期或无效，清除
+      token.value = ''
+      user.value = null
+      authStorage.clearAll()
+    } finally {
+      initializing.value = false
+    }
   }
 
   async function login(payload: LoginPayload) {
@@ -79,6 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     user,
     hydrated,
+    initializing,
     // getters
     isAuthenticated,
     displayName,

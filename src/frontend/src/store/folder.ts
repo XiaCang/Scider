@@ -92,6 +92,9 @@ export const useFolderStore = defineStore('folder', () => {
     try {
       const res = await fetchFoldersApi()
       folders.value = res.data
+    } catch (e) {
+      console.error('[folderStore] 加载文件夹列表失败:', e)
+      throw e // 让调用方也能感知错误
     } finally {
       loading.value = false
     }

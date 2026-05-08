@@ -184,6 +184,67 @@ async def import_paper(body: ImportRequest, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get(
+    "/references/by-paper/{paper_id}",
+    summary="根据本地论文 ID 获取参考文献",
+    description="根据本地论文 ID 查找 DOI 后调用 Semantic Scholar 获取参考文献（上游）",
+    response_model=None,
+)
+async def get_references_by_paper(
+    paper_id: str = Path(..., description="本地论文 ID"),
+    request: Request = None,
+):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+    user_id = str(user["id"])
+    logger.info("discover.references.by_paper paper_id=%s user_id=%s", paper_id, user_id)
+    async with get_session() as session:
+        paper = await session.scalar(
+            select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
+        )
+        if not paper or not paper.doi:
+            return JSONResponse(status_code=404, content=err(404, "论文不存在或缺少 DOI"))
+        semantic_id = f"DOI:{paper.doi}"
+    try:
+        refs = semantic_scholar.get_references(semantic_id)
+    except RuntimeError as e:
+        logger.error("discover.references.by_paper failed: %s", e)
+        return JSONResponse(status_code=502, content=err(502, str(e)))
+    refs = await _annotate_in_library(refs, user_id)
+    return ok(data={"data": refs})
+
+
+@router.get(
+    "/citations/by-paper/{paper_id}",
+    summary="根据本地论文 ID 获取引用文献",
+    description="根据本地论文 ID 查找 DOI 后调用 Semantic Scholar 获取引用文献（下游）",
+    response_model=None,
+)
+async def get_citations_by_paper(
+    paper_id: str = Path(..., description="本地论文 ID"),
+    request: Request = None,
+):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+    user_id = str(user["id"])
+    logger.info("discover.citations.by_paper paper_id=%s user_id=%s", paper_id, user_id)
+    async with get_session() as session:
+        paper = await session.scalar(
+            select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
+        )
+        if not paper or not paper.doi:
+            return JSONResponse(status_code=404, content=err(404, "论文不存在或缺少 DOI"))
+        semantic_id = f"DOI:{paper.doi}"
+    try:
+        cites = semantic_scholar.get_citations(semantic_id)
+    except RuntimeError as e:
+        logger.error("discover.citations.by_paper failed: %s", e)
+        return JSONResponse(status_code=502, content=err(502, str(e)))
+    cites = await _annotate_in_library(cites, user_id)
+    return ok(data={"data": cites})
+
+@router.get(
     "/references/{semantic_id}",
     summary="获取参考文献",
     description="获取指定论文的参考文献列表（该论文引用的文献，即上游），并标注哪些已在用户文库中",

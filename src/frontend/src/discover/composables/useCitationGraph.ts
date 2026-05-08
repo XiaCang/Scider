@@ -1,6 +1,9 @@
 import { ref, computed } from 'vue'
 import { usePaperStore } from '../../store/paper'
-import { fetchUpstreamPapersApi, fetchDownstreamPapersApi } from '../../api/discover'
+import {
+  fetchUpstreamByPaperApi,
+  fetchDownstreamByPaperApi,
+} from '../../api/discover'
 import type { LibraryPaper } from '../../types/library'
 import type { CitationPaper, CitationResponseData } from '../types'
 
@@ -77,8 +80,8 @@ export function useCitationGraph() {
     upstreamLoading.value = true
     upstreamError.value = null
     try {
-      const res = await fetchUpstreamPapersApi(selectedPaperId.value)
-      // res: ApiResponse<CitationResponseData>, res.data = { data: [...] }
+      // 使用 by-paper 端点（通过本地 paper_id 查找 DOI 再调 Semantic Scholar）
+      const res = await fetchUpstreamByPaperApi(selectedPaperId.value)
       const citationData = res.data as CitationResponseData
       upstreamPapers.value = (citationData?.data ?? []).map(normalizeCitation)
     } catch (e) {
@@ -92,7 +95,7 @@ export function useCitationGraph() {
     downstreamLoading.value = true
     downstreamError.value = null
     try {
-      const res = await fetchDownstreamPapersApi(selectedPaperId.value)
+      const res = await fetchDownstreamByPaperApi(selectedPaperId.value)
       const citationData = res.data as CitationResponseData
       downstreamPapers.value = (citationData?.data ?? []).map(normalizeCitation)
     } catch (e) {

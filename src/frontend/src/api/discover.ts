@@ -31,6 +31,14 @@ export const fetchUpstreamPapersApi = (semanticId: string) =>
 export const fetchDownstreamPapersApi = (semanticId: string) =>
   request.get<ApiResponse<CitationResponseData>>(`/discover/citations/${semanticId}`)
 
+/** GET /api/discover/references/by-paper/{paper_id} — 通过本地论文 ID 获取参考文献（上游） */
+export const fetchUpstreamByPaperApi = (paperId: string) =>
+  request.get<ApiResponse<CitationResponseData>>(`/discover/references/by-paper/${paperId}`)
+
+/** GET /api/discover/citations/by-paper/{paper_id} — 通过本地论文 ID 获取引用文献（下游） */
+export const fetchDownstreamByPaperApi = (paperId: string) =>
+  request.get<ApiResponse<CitationResponseData>>(`/discover/citations/by-paper/${paperId}`)
+
 /** 获取论文的完整引用图谱（接口未纳入 api.json，保留兼容） */
 export const fetchCitationGraphApi = (paperId: string) =>
   request.get('/discover/citations', { params: { paper_id: paperId } })
