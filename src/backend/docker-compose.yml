@@ -11,6 +11,12 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p218218wcj"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -37,8 +43,10 @@ services:
     volumes:
       - uploads_data:/app/uploads
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   worker:
     image: ghcr.io/xiacang/software-scider/worker:worker-dev
@@ -57,8 +65,10 @@ services:
     volumes:
       - uploads_data:/app/uploads
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   mysql_data:

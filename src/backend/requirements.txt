@@ -12,7 +12,6 @@ PyMuPDF>=1.24
 openai>=1.30
 aiofiles>=23.0
 python-multipart>=0.0.6
-PyMuPDF>=1.23.0
 PyJWT>=2.8
 passlib[bcrypt]>=1.7.4
 # passlib 1.7.4 与 bcrypt>=4.1 不兼容（移除了 __about__）；开发机 hash 命令与登录校验都依赖此组合

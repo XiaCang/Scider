@@ -11,7 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.discover import router as discover_router
 from app.api.routes.papers import router as papers_router
-from app.api.routes.papers import router as papers_router
 from app.api.routes.folders import router as folders_router
 from app.api.routes.graph import router as graph_router
 from app.core.config import settings

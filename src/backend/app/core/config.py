@@ -17,7 +17,6 @@ class Settings:
 
     DATABASE_URL = os.getenv("DATABASE_URL", "")
     SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
     # ──────────────────────────────────────────────
     # LLM Provider: "deepseek" | "qwen"
     # Both expose an OpenAI-compatible REST API,

@@ -10,5 +10,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Entrypoint: run migrations before starting worker
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Celery worker entrypoint
 CMD ["celery", "-A", "app.worker:celery_app", "worker", "--loglevel=info", "--concurrency=4"]
