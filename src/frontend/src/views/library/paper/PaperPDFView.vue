@@ -8,6 +8,7 @@ import VuePdfEmbed from 'vue-pdf-embed'
 import type { PaperNote, PaperPdfInfo } from '../../../types/library'
 import {
   fetchPaperPdfInfoApi,
+  fetchPaperPdfFileApi,
   fetchPaperNotesApi,
   createNoteApi,
   updateNoteApi
@@ -36,6 +37,7 @@ const showNoteDrawer = ref(true)
 const pdfLoading = ref(true)
 const pdfError = ref('')
 const pdfViewerRef = ref<HTMLElement | null>(null)
+let pdfObjectUrl = ''  // 用于清理 Blob URL
 
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -55,10 +57,15 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeyDown)
-  
+
   // 清理事件监听器
   if (pdfViewerRef.value) {
     pdfViewerRef.value.removeEventListener('wheel', handleWheelZoom)
+  }
+
+  // 清理 Blob URL
+  if (pdfObjectUrl) {
+    URL.revokeObjectURL(pdfObjectUrl)
   }
 })
 
@@ -100,22 +107,23 @@ const loadPaperData = async () => {
     }
 
     paperTitle.value = pdfInfo.title || '未命名论文'
-    
-    // 构建完整的PDF URL（相对路径转绝对路径）
-    // 注意：PDF文件在 /uploads 路径下，不在 /api 路径下
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
-    // 从API基础URL中提取服务器地址（去掉 /api 后缀）
-    const serverBaseUrl = apiBaseUrl.replace(/\/api$/, '')
-    
-    pdfUrl.value = pdfInfo.pdfUrl.startsWith('http') 
-      ? pdfInfo.pdfUrl 
-      : `${serverBaseUrl}${pdfInfo.pdfUrl}`
-    
+
+    // 通过API获取PDF二进制流（绕过静态文件URL，避免IDM拦截）
+    try {
+      if (pdfObjectUrl) {
+        URL.revokeObjectURL(pdfObjectUrl)
+      }
+      const pdfBlob = await fetchPaperPdfFileApi(paperId.value)
+      pdfObjectUrl = URL.createObjectURL(pdfBlob)
+      pdfUrl.value = pdfObjectUrl
+    } catch (err) {
+      console.error('[loadPaperData] PDF文件流加载失败:', err)
+      pdfError.value = 'PDF文件加载失败'
+      pdfLoading.value = false
+    }
+
     pageCount.value = pdfInfo.pageCount || 0
-    
-    console.log('[loadPaperData] API Base URL:', apiBaseUrl)
-    console.log('[loadPaperData] Server Base URL:', serverBaseUrl)
-    console.log('[loadPaperData] 最终PDF URL:', pdfUrl.value)
+
     console.log('[loadPaperData] 论文标题:', paperTitle.value)
 
     // 获取笔记

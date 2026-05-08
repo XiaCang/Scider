@@ -125,6 +125,14 @@ export const fetchPaperPdfInfoApi = (paperId: string) =>
   request.get<PaperPdfInfo>(`/papers/${paperId}/pdf-info`)
 
 /**
+ * 获取PDF文件二进制流（用于浏览器内预览，避免IDM等下载工具拦截）
+ */
+export const fetchPaperPdfFileApi = (paperId: string) =>
+  request.get(`/papers/${paperId}/pdf-file`, {
+    responseType: 'blob',
+  }) as Promise<Blob>
+
+/**
  * 获取论文笔记列表
  */
 export const fetchPaperNotesApi = (paperId: string) =>

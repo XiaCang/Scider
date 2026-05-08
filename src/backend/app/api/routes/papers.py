@@ -470,3 +470,39 @@ async def patch_key_points(
         code=0,
         status_code=200,
     )
+
+
+@router.get("/{paper_id}/pdf-file")
+async def get_pdf_file(
+    paper_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """获取PDF文件流，设置 Content-Disposition: inline 防止浏览器下载。"""
+    from fastapi.responses import FileResponse
+    from sqlalchemy import select
+    from db.models import Paper
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    result = await session.execute(
+        select(Paper).where(Paper.id == paper_id, Paper.user_id == user["id"])
+    )
+    paper = result.scalar_one_or_none()
+
+    if not paper or not paper.pdf_path:
+        return error(msg="论文不存在或无PDF文件", code=404, data=None, status_code=404)
+
+    pdf_path = paper.pdf_path
+    if not os.path.exists(pdf_path):
+        return error(msg="PDF文件不存在", code=404, data=None, status_code=404)
+
+    filename = f"{paper.title}.pdf" if paper.title else "paper.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
