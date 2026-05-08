@@ -2,12 +2,10 @@
 import {
   ArrowRight,
   Folder,
-  Plus,
   Setting
 } from '@element-plus/icons-vue'
 import { ref, computed } from 'vue'
 import { useFolderStore } from '../../../store/folder'
-import { useFolderOperations } from '../../../hooks/useFolderOperations'
 import FolderSettingDialog from './FolderSettingDialog.vue'
 import type { Folder as LibraryFolder } from '../../../types/folder'
 
@@ -29,7 +27,6 @@ const emit = defineEmits<{
 }>()
 
 const folderStore = useFolderStore()
-const { createSubFolder } = useFolderOperations()
 
 // 悬停状态（用于切换图标和显示操作按钮）
 const isHovering = ref(false)
@@ -111,11 +108,6 @@ const onDrop = (event: DragEvent) => {
   }
 }
 
-// 加号按钮：新建子文件夹（自动以当前文件夹为父级）
-const handleAdd = async () => {
-  await createSubFolder(props.folder)
-}
-
 // 齿轮按钮：打开设置对话框
 const openSettings = () => {
   settingsVisible.value = true
@@ -157,9 +149,6 @@ const openSettings = () => {
 
         <!-- 右侧操作按钮组（hover 或拖放时显示） -->
         <div v-if="showActions" class="action-group" :class="{ 'is-visible': isHovering || isDragOver }">
-          <el-icon class="action-btn" @click.stop="handleAdd" title="新建子文件夹">
-            <Plus />
-          </el-icon>
           <el-icon class="action-btn" @click.stop="openSettings" title="文件夹设置">
             <Setting />
           </el-icon>

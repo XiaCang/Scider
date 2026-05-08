@@ -29,6 +29,7 @@ export interface LibraryPaper {
   status: PaperStatus
   source: string
   keyPoints: PaperKeyPoints
+  created_at?: string
 }
 
 /**

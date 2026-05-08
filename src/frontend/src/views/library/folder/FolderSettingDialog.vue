@@ -3,101 +3,62 @@
     :model-value="modelValue"
     @update:model-value="emit('update:modelValue', $event)"
     title="文件夹设置"
-    width="460px"
+    width="420px"
     destroy-on-close
     class="folder-settings-dialog"
   >
-    <div class="settings-form">
-      <!-- 标题图标区 -->
-      <div class="form-item">
-        <label>
-          <el-icon><Folder /></el-icon>
-          文件夹名称
-        </label>
+    <div class="settings-body">
+      <!-- 重命名卡片 -->
+      <div class="setting-card">
+        <div class="card-header">
+          <el-icon class="card-icon rename-icon"><EditPen /></el-icon>
+          <div class="card-title">
+            <span class="card-label">文件夹名称</span>
+            <span class="card-desc">修改后将立即生效</span>
+          </div>
+        </div>
         <el-input
           v-model="name"
           placeholder="输入文件夹名称"
           size="large"
+          class="rename-input"
         />
       </div>
 
-      <!-- 移动到 -->
-      <div class="form-item">
-        <label>
-          <el-icon><ArrowRight /></el-icon>
-          移动到
-        </label>
-        <el-select
-          v-model="moveToFolderId"
-          placeholder="选择目标文件夹"
-          clearable
-          size="large"
-        >
-          <el-option
-            v-for="f in moveTargets"
-            :key="f.id"
-            :label="f.name"
-            :value="f.id"
-          />
-        </el-select>
-      </div>
-
-      <!-- 复制到 -->
-      <div class="form-item">
-        <label>
-          <el-icon><CopyDocument /></el-icon>
-          复制到
-        </label>
-        <el-select
-          v-model="copyToFolderId"
-          placeholder="选择目标文件夹"
-          clearable
-          size="large"
-        >
-          <el-option
-            v-for="f in copyTargets"
-            :key="f.id"
-            :label="f.name"
-            :value="f.id"
-          />
-        </el-select>
-      </div>
-
       <!-- 危险操作区 -->
-      <div class="form-divider"></div>
-      <div class="form-actions">
-        <el-button
-          type="danger"
-          @click="handleDelete"
-          size="large"
-          plain
-        >
-          <el-icon><Delete /></el-icon>
-          删除文件夹
-        </el-button>
+      <div class="danger-zone">
+        <div class="danger-header">
+          <span class="danger-title">危险操作</span>
+        </div>
+        <div class="danger-card">
+          <div class="danger-card-left">
+            <el-icon class="danger-icon"><DeleteFilled /></el-icon>
+            <div>
+              <div class="danger-label">删除文件夹</div>
+              <div class="danger-desc">文件夹及其中的论文关联将被移除，论文本身不受影响</div>
+            </div>
+          </div>
+          <el-button type="danger" @click="handleDelete" plain size="small">
+            删除
+          </el-button>
+        </div>
       </div>
     </div>
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="cancel" size="large">取消</el-button>
-        <el-button type="primary" @click="confirm" size="large">确定</el-button>
+        <el-button @click="cancel" size="default">取消</el-button>
+        <el-button type="primary" @click="confirm" size="default">确定</el-button>
       </div>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Folder,
-  ArrowRight,
-  CopyDocument,
-  Delete
-} from '@element-plus/icons-vue'
-import { useFolderStore } from '../../../store/folder'
-import { useFolderOperations, getAllFolders, isDescendant } from '../../../hooks/useFolderOperations'
+import { EditPen, DeleteFilled } from '@element-plus/icons-vue'
+import { useFolderOperations } from '../../../hooks/useFolderOperations'
 import type { Folder as LibraryFolder } from '../../../types/folder'
 
 const props = defineProps<{
@@ -108,46 +69,28 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
-const folderStore = useFolderStore()
-const { renameFolder, moveFolder, copyFolder, deleteFolder } = useFolderOperations()
+const { renameFolder, deleteFolder } = useFolderOperations()
 
 // 表单数据
 const name = ref(props.folder.name)
-const moveToFolderId = ref<string | null>(null)
-const copyToFolderId = ref<string | null>(null)
 
-// 所有文件夹扁平列表
-const allFolders = computed(() => getAllFolders(folderStore.folders))
-
-// 移动到可选目标：排除自身及其所有后代
-const moveTargets = computed(() =>
-  allFolders.value.filter(f => {
-    if (f.id === props.folder.id) return false
-    return !isDescendant(folderStore.folders, props.folder.id, f.id)
-  })
-)
-
-// 复制到可选目标：仅排除自身
-const copyTargets = computed(() =>
-  allFolders.value.filter(f => f.id !== props.folder.id)
-)
-
-// 重置表单
+// 重置
 watch(() => props.modelValue, (visible) => {
-  if (visible) {
-    name.value = props.folder.name
-    moveToFolderId.value = null
-    copyToFolderId.value = null
-  }
+  if (visible) name.value = props.folder.name
 })
 
-// 删除操作（带确认）
+// 删除
 const handleDelete = async () => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除文件夹“${props.folder.name}”及其所有子文件夹吗？此操作不可恢复。`,
-      '警告',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      `确定要删除文件夹"${props.folder.name}"吗？论文本身不会被删除。`,
+      '删除文件夹',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        draggable: true,
+      }
     )
     await deleteFolder(props.folder.id)
     ElMessage.success('文件夹已删除')
@@ -158,91 +101,168 @@ const handleDelete = async () => {
   }
 }
 
-// 取消
 const cancel = () => emit('update:modelValue', false)
 
-// 确定：批量执行修改
+// 确定：只执行重命名
 const confirm = async () => {
+  const trimmedName = name.value.trim()
+  if (!trimmedName) {
+    ElMessage.warning('文件夹名称不能为空')
+    return
+  }
+  if (trimmedName === props.folder.name) {
+    emit('update:modelValue', false)
+    return
+  }
   try {
-    // 重命名
-    const trimmedName = name.value.trim()
-    if (trimmedName && trimmedName !== props.folder.name) {
-      await renameFolder(props.folder.id, trimmedName)
-    }
-    // 移动
-    if (moveToFolderId.value) {
-      await moveFolder(props.folder.id, moveToFolderId.value)
-    }
-    // 复制
-    if (copyToFolderId.value) {
-      await copyFolder(props.folder.id, copyToFolderId.value)
-    }
+    await renameFolder(props.folder.id, trimmedName)
+    ElMessage.success('文件夹已重命名')
     emit('update:modelValue', false)
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '操作失败')
+    ElMessage.error(e instanceof Error ? e.message : '重命名失败')
   }
 }
 </script>
 
 <style scoped>
-.folder-settings-dialog :deep(.el-dialog__header) {
-  padding: 24px 24px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.folder-settings-dialog :deep(.el-dialog__body) {
-  padding: 20px 24px;
-}
-
-.settings-form {
+.settings-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
-.form-item {
+/* ── 设置卡片 ── */
+.setting-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s;
+}
+
+.setting-card:focus-within {
+  border-color: var(--brand, #4f46e5);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-icon {
+  font-size: 1.25rem;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.rename-icon {
+  background: #eef2ff;
+  color: var(--brand, #4f46e5);
+}
+
+.card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.card-desc {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.rename-input {
+  margin-left: 38px;
+  width: calc(100% - 38px);
+}
+
+/* ── 危险操作区 ── */
+.danger-zone {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.form-item label {
+.danger-header {
+  padding: 0 2px;
+}
+
+.danger-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.danger-card {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+  justify-content: space-between;
+  gap: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: border-color 0.2s;
 }
 
-.form-item label .el-icon {
-  font-size: 1rem;
-  color: var(--text-secondary);
+.danger-card:hover {
+  border-color: #fca5a5;
 }
 
-.form-divider {
-  height: 1px;
-  background: var(--line-soft);
-  margin: 4px 0;
-}
-
-.form-actions {
+.danger-card-left {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
+.danger-icon {
+  font-size: 1.3rem;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.danger-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.danger-desc {
+  font-size: 0.75rem;
+  color: #b91c1c;
+  opacity: 0.8;
+  line-height: 1.3;
+}
+
+/* ── 底部按钮 ── */
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
 }
 </style>
 
 <style>
-/* 全局样式覆盖（可选，提升下拉框一致性） */
-.folder-settings-dialog .el-select {
-  width: 100%;
+.folder-settings-dialog .el-dialog__header {
+  padding: 20px 24px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.folder-settings-dialog .el-dialog__body {
+  padding: 20px 24px;
 }
 </style>

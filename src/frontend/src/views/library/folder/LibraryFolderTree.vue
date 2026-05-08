@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../../store/folder'
 import { useFolderOperations } from '../../../hooks/useFolderOperations'
 import { useFolderTreeFilter } from '../../../hooks/useFolderTreeFilter'
@@ -33,8 +33,6 @@ const showSearch = ref(false)
 const disableTransition = ref(true)
 onMounted(() => requestAnimationFrame(() => requestAnimationFrame(() => (disableTransition.value = false))))
 
-const viewMode = ref<'all' | 'recent'>('all')
-
 // 过滤排序后的根文件夹列表
 const filteredFolders = computed(() => filterAndSort(folderStore.folders))
 
@@ -45,17 +43,7 @@ const toggleExpand = (id: string) => {
 }
 
 const handleSelectFolder = (id: string) => {
-  viewMode.value = 'all'
   emit('select-folder', id)
-}
-
-const handleTabClick = (tab: 'recent' | 'all') => {
-  if (tab === 'all') {
-    viewMode.value = 'all'
-    emit('select-folder', 'all')
-  } else {
-    viewMode.value = 'recent'
-  }
 }
 
 const handleAddRootFolder = () => {
@@ -67,17 +55,9 @@ const handleAddRootFolder = () => {
   <div class="folder-panel">
     <div class="folder-panel__header">
       <div class="title-row">
-        <h3 class="folder-panel__title">文库文件夹</h3>
+        <h3 class="folder-panel__title">文库</h3>
         <div class="title-actions">
-          <el-icon
-            class="action-icon"
-            :class="{ 'is-active': showSearch }"
-            @click="showSearch = !showSearch"
-            title="搜索文件夹"
-          >
-            <Search />
-          </el-icon>
-          <el-icon class="action-icon" @click="handleAddRootFolder" title="新建根文件夹">
+          <el-icon class="action-icon" @click="handleAddRootFolder" title="新建文件夹">
             <Plus />
           </el-icon>
           <FolderSortPopover
@@ -88,28 +68,35 @@ const handleAddRootFolder = () => {
           />
         </div>
       </div>
-      <!-- 搜索栏（筛选模式下展开） -->
-      <FolderSearchBar v-if="viewMode === 'all' && showSearch" v-model="searchQuery" />
-      <div class="folder-tabs">
-        <button
-          class="tab-btn"
-          :class="{ active: viewMode === 'recent' }"
-          @click="handleTabClick('recent')"
-        >
-          最近论文
-        </button>
-        <button
-          class="tab-btn"
-          :class="{ active: viewMode === 'all' }"
-          @click="handleTabClick('all')"
-        >
-          全部论文
-        </button>
+    </div>
+
+    <!-- 导航区：最近论文 / 全部论文 -->
+    <div class="nav-list">
+      <div
+        class="nav-item"
+        :class="{ active: activeFolderId === 'recent' }"
+        @click="handleSelectFolder('recent')"
+      >
+        <span class="nav-item-icon">🕐</span>
+        <span class="nav-item-label">最近论文</span>
+      </div>
+      <div
+        class="nav-item"
+        :class="{ active: activeFolderId === 'all' }"
+        @click="handleSelectFolder('all')"
+      >
+        <span class="nav-item-icon">📂</span>
+        <span class="nav-item-label">全部论文</span>
       </div>
     </div>
 
-    <div class="folder-manager">
-      <div v-if="viewMode === 'all'" class="folder-list">
+    <!-- 文件夹区域（始终显示） -->
+    <div class="folder-section">
+      <div class="folder-section-title">文件夹</div>
+      <div v-if="showSearch" class="search-bar-wrapper">
+        <FolderSearchBar v-model="searchQuery" />
+      </div>
+      <div class="folder-list">
         <FolderItem
           v-for="folder in filteredFolders"
           :key="folder.id"
@@ -121,9 +108,9 @@ const handleAddRootFolder = () => {
           @select-folder="handleSelectFolder"
           @toggle-expand="toggleExpand"
         />
-      </div>
-      <div v-else class="recent-placeholder">
-        <p>最近论文功能即将开放</p>
+        <div v-if="filteredFolders.length === 0" class="empty-hint">
+          暂无文件夹
+        </div>
       </div>
     </div>
   </div>
@@ -142,18 +129,15 @@ const handleAddRootFolder = () => {
 }
 
 .folder-panel__header {
-  display: flex;
-  flex-direction: column;
   padding: 16px 16px 8px;
   border-bottom: 1px solid var(--line-soft);
-  background: transparent;
 }
 
 .title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 
 .folder-panel__title {
@@ -183,58 +167,75 @@ const handleAddRootFolder = () => {
   color: var(--text-primary);
 }
 
-.action-icon.is-active {
-  color: var(--brand);
-  background: var(--brand-soft, rgba(79, 70, 229, 0.1));
-}
-
-.folder-tabs {
+/* ── 导航区 ── */
+.nav-list {
+  padding: 8px 12px 4px;
   display: flex;
-  gap: 0;
-  background: var(--bg-soft);
-  border-radius: 10px;
-  padding: 2px;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.tab-btn {
-  flex: 1;
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  font-size: 0.88rem;
+  color: var(--text-primary);
 }
 
-.tab-btn.active {
-  background: white;
+.nav-item:hover {
+  background: var(--bg-soft);
+}
+
+.nav-item.active {
+  background: var(--brand-soft, rgba(79, 70, 229, 0.1));
   color: var(--brand);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   font-weight: 600;
 }
 
-.folder-manager {
+.nav-item-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.nav-item-label {
   flex: 1;
-  padding: 12px 12px 16px;
+}
+
+/* ── 文件夹区域 ── */
+.folder-section {
+  padding: 4px 12px 16px;
+  flex: 1;
   overflow-y: auto;
+}
+
+.folder-section-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  padding: 6px 4px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.search-bar-wrapper {
+  margin-bottom: 6px;
 }
 
 .folder-list {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
 }
 
-.recent-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+.empty-hint {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 0.82rem;
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  opacity: 0.8;
 }
 </style>
