@@ -28,7 +28,7 @@ export function useSearch() {
       source_type: item.source_type as string,
       pdf_url: item.pdf_url as string,
       reason: item.reason as string,
-      description: item.description as string,
+      description: (item.abstract as string) || (item.description as string) || '',
     }
   }
 

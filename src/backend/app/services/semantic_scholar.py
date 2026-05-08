@@ -62,7 +62,7 @@ def _request(method: str, url: str, **kwargs) -> dict:
     for attempt in range(_MAX_RETRIES):
         time.sleep(_MIN_INTERVAL)  # 主动限速，防止匿名 429
         try:
-            with httpx.Client(timeout=2000, headers=_headers()) as client:
+            with httpx.Client(timeout=30000, headers=_headers()) as client:
                 r = getattr(client, method)(url, **kwargs)
 
                 if r.status_code == 429:

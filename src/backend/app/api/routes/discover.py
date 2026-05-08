@@ -8,6 +8,7 @@ discover.py — 论文发现模块路由
   GET  /discover/citations/{id}      下游引用文献（含文库标注）
 """
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -202,11 +203,13 @@ async def get_references_by_paper(
         paper = await session.scalar(
             select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
         )
-        if not paper or not paper.doi:
-            return JSONResponse(status_code=404, content=err(404, "论文不存在或缺少 DOI"))
-        semantic_id = f"DOI:{paper.doi}"
+        if not paper:
+            return JSONResponse(status_code=404, content=err(404, "论文不存在"))
+    semantic_id = await _resolve_semantic_id(paper)
+    if not semantic_id:
+        return JSONResponse(status_code=404, content=err(404, "无法确定论文的 Semantic Scholar ID"))
     try:
-        refs = semantic_scholar.get_references(semantic_id)
+        refs = await asyncio.to_thread(semantic_scholar.get_references, semantic_id)
     except RuntimeError as e:
         logger.error("discover.references.by_paper failed: %s", e)
         return JSONResponse(status_code=502, content=err(502, str(e)))
@@ -233,11 +236,13 @@ async def get_citations_by_paper(
         paper = await session.scalar(
             select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
         )
-        if not paper or not paper.doi:
-            return JSONResponse(status_code=404, content=err(404, "论文不存在或缺少 DOI"))
-        semantic_id = f"DOI:{paper.doi}"
+        if not paper:
+            return JSONResponse(status_code=404, content=err(404, "论文不存在"))
+    semantic_id = await _resolve_semantic_id(paper)
+    if not semantic_id:
+        return JSONResponse(status_code=404, content=err(404, "无法确定论文的 Semantic Scholar ID"))
     try:
-        cites = semantic_scholar.get_citations(semantic_id)
+        cites = await asyncio.to_thread(semantic_scholar.get_citations, semantic_id)
     except RuntimeError as e:
         logger.error("discover.citations.by_paper failed: %s", e)
         return JSONResponse(status_code=502, content=err(502, str(e)))
@@ -266,7 +271,7 @@ async def get_references(
     user_id = str(user["id"])
     logger.info("discover.references semantic_id=%s user_id=%s", semantic_id, user_id)
     try:
-        refs = semantic_scholar.get_references(semantic_id)
+        refs = await asyncio.to_thread(semantic_scholar.get_references, semantic_id)
     except RuntimeError as e:
         logger.error("discover.references failed: %s", e)
         return JSONResponse(status_code=502, content=err(502, str(e)))
@@ -296,7 +301,7 @@ async def get_citations(
     user_id = str(user["id"])
     logger.info("discover.citations semantic_id=%s user_id=%s", semantic_id, user_id)
     try:
-        cites = semantic_scholar.get_citations(semantic_id)
+        cites = await asyncio.to_thread(semantic_scholar.get_citations, semantic_id)
     except RuntimeError as e:
         logger.error("discover.citations failed: %s", e)
         return JSONResponse(status_code=502, content=err(502, str(e)))
@@ -307,6 +312,25 @@ async def get_citations(
 # ---------------------------------------------------------------------------
 # 内部工具
 # ---------------------------------------------------------------------------
+
+async def _resolve_semantic_id(paper) -> str | None:
+    """从论文记录解析出 Semantic Scholar ID，优先用 DOI，否则按标题搜索。"""
+    if paper.doi:
+        return f"DOI:{paper.doi}"
+    if paper.title:
+        logger.info("_resolve_semantic_id 论文无 DOI，按标题搜索 paper_id=%s title=%r", paper.id, paper.title[:60])
+        try:
+            result = await asyncio.to_thread(semantic_scholar.search_papers, paper.title, 0, 3)
+            papers = result.get("data", [])
+            if papers:
+                s2_id = papers[0].get("semantic_id") or papers[0].get("paperId")
+                if s2_id:
+                    logger.info("_resolve_semantic_id 搜索命中 paper_id=%s s2_id=%s", paper.id, s2_id)
+                    return s2_id
+        except Exception as e:
+            logger.warning("_resolve_semantic_id 搜索失败 paper_id=%s error=%s", paper.id, e)
+    return None
+
 
 async def _annotate_in_library(papers: list[dict], user_id: str) -> list[dict]:
     """批量查询 DOI 是否已在用户文库中，为每条记录添加 in_library 字段。"""

@@ -36,7 +36,7 @@ export function useCitationGraph() {
       semantic_id: item.semantic_id as string,
       citation_count: (item.citation_count as number) || 0,
       in_library: !!item.in_library,
-      description: item.description as string,
+      description: (item.abstract as string) || (item.description as string) || '',
     }
   }
 

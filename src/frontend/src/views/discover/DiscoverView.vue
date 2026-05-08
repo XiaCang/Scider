@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { useSearch } from '../../discover/composables/useSearch'
+import PaperResultCard from '../../discover/components/PaperResultCard.vue'
 import { yearOptions, venueOptions, sortOptions } from '../../discover/constants'
 
 const {
@@ -127,27 +128,11 @@ const currentSortLabel = computed(() =>
       </div>
 
       <TransitionGroup name="card-enter" tag="div" class="card-list">
-        <article v-for="item in filteredResults" :key="item.id" class="paper-card">
-          <div class="card-body">
-            <div class="card-header">
-              <h3 class="card-title">{{ item.title }}</h3>
-            </div>
-            <div class="card-meta">
-              <span class="meta-year">{{ item.year }}</span>
-              <span class="meta-dot">·</span>
-              <span class="meta-authors">{{ item.authors }}</span>
-              <span v-if="item.venue" class="meta-venue">{{ item.venue }}</span>
-            </div>
-            <p v-if="item.reason" class="card-reason">{{ item.reason }}</p>
-            <p v-if="item.description" class="card-desc">{{ item.description }}</p>
-          </div>
-          <div class="card-actions">
-            <button class="view-link" @click="viewDetails(item.id)">
-              查看详情
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
-        </article>
+        <PaperResultCard
+          v-for="item in filteredResults"
+          :key="item.id"
+          :paper="item"
+        />
       </TransitionGroup>
     </div>
   </section>
@@ -367,96 +352,6 @@ const currentSortLabel = computed(() =>
   gap: 1rem;
 }
 
-.paper-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem 1.35rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
-  transition: all 0.2s ease;
-}
-
-.paper-card:hover {
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
-  border-color: rgba(148, 163, 184, 0.15);
-}
-
-.card-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.card-title {
-  margin: 0 0 0.35rem;
-  font-size: 1.02rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.45;
-}
-
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  flex-wrap: wrap;
-}
-
-.meta-dot {
-  opacity: 0.4;
-}
-
-.meta-venue {
-  color: var(--brand-accent);
-  opacity: 0.75;
-}
-
-.card-reason {
-  margin: 0 0 0.35rem;
-  font-size: 0.82rem;
-  color: var(--brand-accent);
-  line-height: 1.5;
-  opacity: 0.85;
-}
-
-.card-desc {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
-  line-height: 1.6;
-}
-
-.card-actions {
-  flex-shrink: 0;
-  padding-top: 0.2rem;
-}
-
-.view-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: color 0.2s ease;
-  white-space: nowrap;
-}
-
-.view-link:hover {
-  color: var(--brand-accent);
-}
-
 /* ════════ 过渡动画 ════════ */
 .fade-drop-enter-active,
 .fade-drop-leave-active {
@@ -482,14 +377,5 @@ const currentSortLabel = computed(() =>
     padding: 1rem;
   }
 
-  .paper-card {
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-  }
-
-  .card-actions {
-    align-self: flex-end;
-  }
 }
 </style>
