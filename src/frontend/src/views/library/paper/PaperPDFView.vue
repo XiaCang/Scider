@@ -171,12 +171,14 @@ const handlePdfLoaded = (pdfDoc: any) => {
   console.log('[PDF] 加载成功，总页数:', pdfDoc.numPages)
   pageCount.value = pdfDoc.numPages
   pdfLoading.value = false
-  
+
   // 在PDF加载完成后添加滚轮缩放监听
   setTimeout(() => {
     if (pdfViewerRef.value) {
       pdfViewerRef.value.addEventListener('wheel', handleWheelZoom, { passive: false })
     }
+    // 首次加载自动适应宽度
+    handleFitWidth()
   }, 500)
 }
 
@@ -541,40 +543,21 @@ const formatTime = (isoString: string) => {
   width: 100%;
 }
 
-/* 让 VuePdfEmbed 的根容器成为定位参考 */
 .pdf-viewer :deep(.vue-pdf-embed) {
-  position: relative;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-/* 直接子 div 必须也是 relative，并保证无内边距/边距影响 */
-.pdf-viewer :deep(.vue-pdf-embed > div) {
-  position: relative !important;
-  display: block;
-  width: 100%;
-  height: auto;
-  font-size: 0;           /* 消除空白间隙 */
-}
-
-/* canvas 撑起父容器高度 */
+/* canvas 尺寸完全由 :scale prop 控制，外部不覆盖 */
 .pdf-viewer :deep(canvas) {
   display: block;
-  width: 100% !important;
-  height: auto !important;
-  margin: 0;
+  max-width: 100%;
 }
 
-/* 文本层绝对定位覆盖，尺寸与父容器一致 */
+/* 文本层跟随 canvas 自然定位 */
 .pdf-viewer :deep(.pdf-text-layer) {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow: hidden;
   color: transparent !important;
-  pointer-events: auto;   /* 保证文字可选 */
-  z-index: 1;             /* 置于 canvas 上方 */
 }
 
 .pdf-viewer :deep(.pdf-text-layer span) {
