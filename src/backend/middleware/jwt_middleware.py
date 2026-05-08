@@ -53,6 +53,23 @@ class JWTAuthMiddleware:
             return
         for p in EXEMPT_PATHS:
             if path.startswith(p):
+                # 免认证路径：尝试解析 JWT（如果有），成功则 attach user；
+                # 没 token 或 token 无效也不拒绝，让 handler 自行决定。
+                headers = dict((k.decode().lower(), v.decode()) for k, v in scope.get("headers", []))
+                auth = headers.get("authorization")
+                if auth:
+                    parts = auth.split()
+                    if len(parts) == 2 and parts[0].lower() == "bearer":
+                        try:
+                            payload = jwt.decode(parts[1], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                            user_id = payload.get("sub")
+                            if user_id:
+                                user = await get_user_by_id(user_id)
+                                if user:
+                                    scope.setdefault("state", {})
+                                    scope["state"]["user"] = user
+                        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+                            pass  # 静默忽略无效 token，允许匿名访问
                 await self.app(scope, receive, send)
                 return
 

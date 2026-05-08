@@ -75,11 +75,11 @@ export function useSearch() {
     error.value = null
     try {
       const data = await fetchRecommendationsApi()
-      // 兼容推荐接口返回格式（可能是数组或 ApiResponse）
       const raw = Array.isArray(data) ? data : (data as any)?.data ?? []
       results.value = (raw as any[]).map(normalizeResult)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : '推荐服务不可用'
+    } catch {
+      // 推荐失败不影响搜索功能，静默处理
+      console.warn('[Recommend] 推荐服务暂不可用')
     } finally {
       loading.value = false
     }

@@ -104,6 +104,65 @@ def search_papers(
 
 
 # ---------------------------------------------------------------------------
+# 推荐
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/recommendations",
+    summary="获取论文推荐",
+    description="基于用户文库中的论文，通过 Semantic Scholar 搜索相似论文进行推荐",
+    response_model=None,
+)
+async def get_recommendations(
+    request: Request,
+    direction: str = Query("", description="推荐方向（预留）"),
+):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+    user_id = str(user["id"])
+    logger.info("discover.recommendations user_id=%s direction=%s", user_id, direction)
+
+    # 获取用户文库中最近 3 篇论文
+    async with get_session() as session:
+        rows = await session.execute(
+            select(Paper)
+            .where(Paper.user_id == user_id)
+            .order_by(Paper.created_at.desc())
+            .limit(3)
+        )
+        papers = rows.scalars().all()
+
+    if not papers:
+        logger.info("discover.recommendations 文库为空 user_id=%s", user_id)
+        return ok(data=[])
+
+    # 按标题搜索 SS，收集推荐结果
+    seen_semantic_ids: set[str] = set()
+    results: list[dict] = []
+    for paper in papers:
+        if not paper.title:
+            continue
+        try:
+            result = await asyncio.to_thread(
+                semantic_scholar.search_papers, paper.title, 0, 4
+            )
+            for p in result.get("data", []):
+                sid = p.get("semantic_id")
+                if sid and sid not in seen_semantic_ids:
+                    seen_semantic_ids.add(sid)
+                    p["reason"] = f"相似于「{paper.title[:40]}」"
+                    results.append(p)
+        except RuntimeError as e:
+            logger.warning("discover.recommendations search failed title=%s err=%s", paper.title[:40], e)
+            continue
+
+    results = await _annotate_in_library(results, user_id)
+    logger.info("discover.recommendations done user_id=%s count=%d", user_id, len(results))
+    return ok(data=results)
+
+
+# ---------------------------------------------------------------------------
 # 导入
 # ---------------------------------------------------------------------------
 
