@@ -30,10 +30,6 @@ function onYearPick(val: string) { selectedYear.value = val; yearOpen.value = fa
 function onVenuePick(val: string) { selectedVenue.value = val; venueOpen.value = false }
 function onSortPick(val: string) { sortBy.value = val; sortOpen.value = false }
 
-function viewDetails(itemId: string) {
-  console.log('view details:', itemId)
-}
-
 const currentYearLabel = computed(() =>
   yearOptions.find(o => o.value === selectedYear.value)?.label ?? '全部年份'
 )

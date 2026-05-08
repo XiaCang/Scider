@@ -55,10 +55,6 @@ function onClear() {
 function closeSelector() {
   selectorOpen.value = false
 }
-
-function viewDetails(itemId: string) {
-  console.log('view details:', itemId)
-}
 </script>
 
 <template>

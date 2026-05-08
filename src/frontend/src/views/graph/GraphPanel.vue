@@ -9,6 +9,7 @@ import type { Folder } from '../../types/folder'
 import type { PaperKeyPoints } from '../../types/library'
 import type { GraphLink, GraphNode, NodeType } from '../../types/graph'
 import GraphNodeDetail from './GraphNodeDetail.vue'
+import { fetchSimilarityGraphApi } from '../../api/graph'
 
 const categories = [
   { name: '论文', itemStyle: { color: '#173668' } },
@@ -126,6 +127,9 @@ function buildGraphFromPapers() {
   cachedLinks = links
   applyFilterAndRender()
   isLoading.value = false
+
+  // 异步加载后端相似度边（增强性，不阻塞主图谱）
+  loadSimilarityEdges()
 }
 
 function findFolder(tree: Folder[], id: string): Folder | undefined {
@@ -137,6 +141,32 @@ function findFolder(tree: Folder[], id: string): Folder | undefined {
     }
   }
   return undefined
+}
+
+// ---- 从后端加载基于 embedding 余弦相似度的边 ----
+async function loadSimilarityEdges() {
+  try {
+    const res: any = await fetchSimilarityGraphApi({
+      folder_id: folderStore.currentFolderId,
+      max_nodes: 200,
+      min_similarity: 0.55,
+      top_k: 8,
+    })
+    const payload = res?.data
+    if (payload?.links?.length) {
+      for (const link of payload.links) {
+        cachedLinks.push({
+          source: link.source,
+          target: link.target,
+          relationType: 'semantic' as const,
+          label: link.label,
+        })
+      }
+      applyFilterAndRender()
+    }
+  } catch {
+    // 相似度边是增强性的，不阻塞主图谱渲染
+  }
 }
 
 // ---- 图表渲染 ----
