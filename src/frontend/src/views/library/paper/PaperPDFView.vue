@@ -114,7 +114,9 @@ const loadPaperData = async () => {
         URL.revokeObjectURL(pdfObjectUrl)
       }
       const pdfBlob = await fetchPaperPdfFileApi(paperId.value)
-      pdfObjectUrl = URL.createObjectURL(pdfBlob)
+      // 后端返回 octet-stream 防 IDM 拦截，这里显式转为 PDF Blob
+      const pdfBlobTyped = new Blob([pdfBlob], { type: 'application/pdf' })
+      pdfObjectUrl = URL.createObjectURL(pdfBlobTyped)
       pdfUrl.value = pdfObjectUrl
     } catch (err) {
       console.error('[loadPaperData] PDF文件流加载失败:', err)

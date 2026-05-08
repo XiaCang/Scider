@@ -27,7 +27,10 @@ app = FastAPI(
     openapi_url="/openapi.json",  # OpenAPI schema 路径
 )
 
-# ── CORS 跨域配置 ──
+# ── JWT authentication middleware ──
+app.add_middleware(JWTAuthMiddleware)
+
+# ── CORS 跨域配置（最外层，确保所有响应都带上 CORS 头） ──
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,9 +38,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ── JWT authentication middleware (ASGI middleware, not BaseHTTPMiddleware) ──
-app.add_middleware(JWTAuthMiddleware)
 
 # ── 静态文件服务（用于PDF预览） ──
 UPLOAD_DIR_ABSOLUTE = str(Path(settings.UPLOAD_DIR).resolve())

@@ -502,7 +502,7 @@ async def get_pdf_file(
     filename = f"{paper.title}.pdf" if paper.title else "paper.pdf"
     return FileResponse(
         path=pdf_path,
-        media_type="application/pdf",
+        media_type="application/octet-stream",  # 避免 IDM 等下载工具拦截
         filename=filename,
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
