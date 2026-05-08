@@ -16,7 +16,7 @@ class Settings:
     REDIS_RESULT_BACKEND = os.getenv("REDIS_RESULT_BACKEND", "redis://:water123@localhost:6379/1")
 
     DATABASE_URL = os.getenv("DATABASE_URL", "")
-    SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
+    SEMANTIC_SCHOLAR_API_KEY = "s2k-jVRhawVQWsztF9yxIQRwMrMxyMF8vY6iCDFSfx41"
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
     # ──────────────────────────────────────────────
     # LLM Provider: "deepseek" | "qwen"
