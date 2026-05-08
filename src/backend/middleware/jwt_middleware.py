@@ -15,6 +15,8 @@ EXEMPT_PATHS = (
     "/api/user/send-code",
     "/api/user/change-password",
     "/api/tasks/",
+    "/api/discover/search",  # 论文搜索（公开）
+    "/api/discover/recommendations",  # 论文推荐（公开）
     "/uploads",  # 静态文件服务（PDF预览）
     "/docs",
     "/openapi.json",
