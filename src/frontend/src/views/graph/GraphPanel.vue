@@ -195,10 +195,17 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
             semantic: '语义关联',
             citation: '引用关系'
           }
+          // 处理 label 可能是对象的情况
+          let labelText = ''
+          if (params.data.label) {
+            labelText = typeof params.data.label === 'string' 
+              ? params.data.label 
+              : JSON.stringify(params.data.label)
+          }
           return `
             <div style="padding: 4px 0;">
               <div style="font-weight: 600; margin-bottom: 4px;">${relationLabels[params.data.relationType] || '关联'}</div>
-              ${params.data.label ? `<div style="color: #666; font-size: 11px;">${params.data.label}</div>` : ''}
+              ${labelText ? `<div style="color: #666; font-size: 11px;">${labelText}</div>` : ''}
             </div>
           `
         }
