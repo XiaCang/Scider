@@ -3,6 +3,11 @@ import { ref, computed, onMounted } from 'vue'
 import { Search, Document } from '@element-plus/icons-vue'
 import { useCitationGraph } from '../../discover/composables/useCitationGraph'
 import PaperResultCard from '../../discover/components/PaperResultCard.vue'
+import PaperDetailSimple from '../library/paper/PaperDetailSimple.vue'
+import type { LibraryPaper } from '../../types/library'
+import { fetchPaperByIdApi } from '../../api/library'
+import { importPaperApi } from '../../api/discover'
+import { ElMessage } from 'element-plus'
 
 const {
   selectedPaperId,
@@ -55,6 +60,73 @@ function onClear() {
 function closeSelector() {
   selectorOpen.value = false
 }
+
+/* ── 论文详情抽屉 ── */
+const detailVisible = ref(false)
+const detailPaper = ref<LibraryPaper | null>(null)
+
+// 处理点击论文卡片
+const handlePaperClick = async (paper: any) => {
+  // 如果论文已在文库中，获取完整详情
+  if ((paper as any).in_library && paper.id) {
+    try {
+      const { data } = await fetchPaperByIdApi(paper.id)
+      detailPaper.value = data
+    } catch (err) {
+      ElMessage.error('加载论文详情失败')
+      console.error(err)
+      return
+    }
+  } else {
+    // 对于未入库的论文，使用搜索结果的简化信息
+    detailPaper.value = {
+      id: paper.semantic_id || paper.id || '',
+      title: paper.title || '',
+      authors: paper.authors || '',
+      year: paper.year || 0,
+      venue: paper.venue || '',
+      citation_count: paper.citation_count || 0,
+      abstract: paper.abstract || paper.description || '',
+      pdf_url: paper.pdf_url || '',
+      doi: paper.doi || '',
+      status: 'PENDING',
+      source: paper.source_type || 'external',
+      keyPoints: null,
+      in_library: false,
+    } as any
+  }
+  
+  detailVisible.value = true
+}
+
+// 添加到文库
+const handleImportToLibrary = async (paper: any) => {
+  try {
+    // 构造导入请求数据
+    const importData = {
+      title: paper.title,
+      authors: paper.authors || null,
+      abstract: paper.abstract || null,
+      doi: paper.doi || null,
+      year: paper.year || null,
+      venue: paper.venue || null,
+      pdf_url: paper.pdf_url || null,
+    }
+    
+    // 调用导入API
+    await importPaperApi(importData)
+    
+    ElMessage.success('论文已成功添加到文库')
+    detailVisible.value = false
+    
+    // 刷新文库数据
+    await ensureLibraryLoaded()
+  } catch (err) {
+    ElMessage.error('添加论文到文库失败')
+    console.error(err)
+  }
+}
+
 </script>
 
 <template>
@@ -154,11 +226,16 @@ function closeSelector() {
           </div>
 
           <TransitionGroup name="card-enter" tag="div" class="card-list">
-            <PaperResultCard
+            <div
               v-for="item in filteredUpstreamPapers"
               :key="item.id"
-              :paper="item"
-            />
+              @click="handlePaperClick(item)"
+              class="paper-card-wrapper"
+            >
+              <PaperResultCard
+                :paper="item"
+              />
+            </div>
           </TransitionGroup>
         </template>
       </section>
@@ -192,15 +269,29 @@ function closeSelector() {
           </div>
 
           <TransitionGroup name="card-enter" tag="div" class="card-list">
-            <PaperResultCard
+            <div
               v-for="item in filteredDownstreamPapers"
               :key="item.id"
-              :paper="item"
-            />
+              @click="handlePaperClick(item)"
+              class="paper-card-wrapper"
+            >
+              <PaperResultCard
+                :paper="item"
+              />
+            </div>
           </TransitionGroup>
+
         </template>
       </section>
     </template>
+
+    <!-- 论文详情抽屉 -->
+    <PaperDetailSimple
+      v-model="detailVisible"
+      :paper="detailPaper"
+      @import-to-library="handleImportToLibrary"
+    />
+
   </section>
 </template>
 
@@ -579,6 +670,19 @@ function closeSelector() {
   gap: 0.85rem;
 }
 
+.paper-card-wrapper {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.paper-card-wrapper:hover {
+  transform: translateY(-2px);
+}
+
+.paper-card-wrapper:active {
+  transform: translateY(0);
+}
+
 /* ════════ 过渡 ════════ */
 .fade-drop-enter-active,
 .fade-drop-leave-active {
@@ -610,6 +714,21 @@ function closeSelector() {
 
   .selector-trigger {
     padding: 0.65rem 0.85rem;
+  }
+}
+
+/* 论文详情弹窗样式 */
+.dialog-content {
+  min-height: 400px;
+}
+
+:deep(.paper-detail-dialog) {
+  .el-dialog__header {
+    display: none;
+  }
+  
+  .el-dialog__body {
+    padding: 0;
   }
 }
 </style>

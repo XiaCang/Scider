@@ -30,6 +30,8 @@ export interface LibraryPaper {
   source: string
   keyPoints: PaperKeyPoints
   created_at?: string
+  in_library?: boolean
+  abstract?: string
 }
 
 /**
