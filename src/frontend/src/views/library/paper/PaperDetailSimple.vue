@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check } from '@element-plus/icons-vue'
+import { Link } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 
 import type { LibraryPaper } from '../../../types/library'
@@ -11,7 +11,6 @@ interface Props {
 
 interface Emits {
   (e: 'update:modelValue', value: boolean): void
-  (e: 'importToLibrary', paper: any): void
 }
 
 const props = defineProps<Props>()
@@ -23,10 +22,38 @@ const drawerVisible = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-// 添加到文库
-const handleImportToLibrary = () => {
-  if (!props.paper) return
-  emit('importToLibrary', props.paper)
+// 获取论文链接（优先使用 Semantic Scholar URL，其次 DOI URL）
+const paperUrl = computed(() => {
+  if (!props.paper) return null
+  
+  // 优先使用直接提供的 url 字段
+  if (props.paper.url) {
+    return props.paper.url
+  }
+  
+  // 其次使用 doi_url
+  if (props.paper.doi_url) {
+    return props.paper.doi_url
+  }
+  
+  // 如果有 semantic_id，构造 Semantic Scholar 链接
+  if (props.paper.id && !props.paper.id.startsWith('local-')) {
+    return `https://www.semanticscholar.org/paper/${props.paper.id}`
+  }
+  
+  // 最后尝试从 doi 构造
+  if (props.paper.doi) {
+    return `https://doi.org/${props.paper.doi}`
+  }
+  
+  return null
+})
+
+// 跳转到来源网址
+const handleJumpToSource = () => {
+  if (paperUrl.value) {
+    window.open(paperUrl.value, '_blank')
+  }
 }
 
 // 状态映射（中文显示）
@@ -99,12 +126,13 @@ const statusClassMap: Record<string, string> = {
       <!-- 操作按钮区 -->
       <section class="action-section">
         <el-button
-          type="success"
+          type="primary"
           size="large"
-          @click="handleImportToLibrary"
+          :disabled="!paperUrl"
+          @click="handleJumpToSource"
         >
-          <el-icon><Check /></el-icon>
-          添加到文库
+          <el-icon><Link /></el-icon>
+          跳转到来源网址
         </el-button>
       </section>
     </div>
