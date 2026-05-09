@@ -252,23 +252,34 @@ const handlePaperClick = async (paper: any) => {
 .pill {
   display: flex;
   align-items: center;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  background-color: #f9fafb;
-  color: #4b5563;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
   font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.2);
+    color: #4f46e5;
+  }
 
   &.active {
-    background-color: #e2e8f0;
+    background-color: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #4f46e5;
   }
 }
 
 .pill-cv {
-  margin-left: 0.25rem;
-  width: 8px;
-  height: 5px;
-  transition: transform 0.2s ease-in-out;
+  width: 10px;
+  height: 10px;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   &.up {
     transform: rotate(180deg);
@@ -277,33 +288,79 @@ const handlePaperClick = async (paper: any) => {
 
 .pill-dropdown {
   position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  background-color: #fff;
-  border-radius: 4px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  z-index: 10;
+  top: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 140px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  z-index: 100;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background-color: #ffffff;
+    box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.02);
+  }
 
   &--right {
-    right: 0;
     left: auto;
+    right: 0;
+    transform: none;
+
+    &::before {
+      left: auto;
+      right: 20px;
+      transform: rotate(45deg);
+    }
   }
 }
 
 .pill-opt {
   display: block;
-  padding: 0.5rem 1rem;
-  color: #1e293b;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border: none;
+  background-color: transparent;
+  color: #334155;
   font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
   cursor: pointer;
+  transition: all 0.15s ease;
 
   &:hover {
-    background-color: #f9fafb;
+    background-color: #f8fafc;
+    color: #4f46e5;
   }
 
   &.sel {
-    background-color: #e2e8f0;
+    background-color: rgba(99, 102, 241, 0.08);
+    color: #4f46e5;
+    font-weight: 500;
+
+    &::after {
+      content: '✓';
+      float: right;
+      margin-left: 0.5rem;
+      color: #4f46e5;
+      font-weight: 600;
+    }
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid #f1f5f9;
   }
 }
 
@@ -401,14 +458,30 @@ const handlePaperClick = async (paper: any) => {
 }
 
 /* ── 过渡效果 ── */
-.fade-drop-enter-active,
-.fade-drop-leave-active {
-  transition: opacity 0.2s ease-in-out;
+.fade-drop-enter-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.fade-drop-enter-from,
+.fade-drop-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-drop-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
 .fade-drop-leave-to {
   opacity: 0;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.pill-dropdown--right.fade-drop-enter-from {
+  transform: translateY(-8px);
+}
+
+.pill-dropdown--right.fade-drop-leave-to {
+  transform: translateY(-4px);
 }
 
 .card-enter-enter-active,
