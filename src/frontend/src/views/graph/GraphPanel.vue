@@ -307,8 +307,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
 
 // 综合筛选并渲染
 const applyFilterAndRender = () => {
-  if (cachedNodes.length === 0) return
-
+  // 不再提前返回，允许渲染空图谱以清空画布
   const visibleTypes: NodeType[] = ['paper']
   if (filters.background) visibleTypes.push('background')
   if (filters.method) visibleTypes.push('method')
