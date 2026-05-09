@@ -36,6 +36,10 @@ class RemovePaperIn(BaseModel):
     paper_id: str
 
 
+class BatchAddPapersIn(BaseModel):
+    paper_ids: list[str]
+
+
 # ── Endpoints ──
 
 
@@ -178,6 +182,48 @@ async def add_paper(
         return error(msg="论文不存在", code=404, data=None, status_code=404)
 
     return success(data=None, msg="已添加到文件夹", code=0, status_code=200)
+
+
+@router.post("/{folder_id}/papers/batch")
+async def batch_add_papers(
+    request: Request,
+    folder_id: str,
+    payload: BatchAddPapersIn,
+    session: AsyncSession = Depends(get_db),
+):
+    """批量添加论文到文件夹"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    if not payload.paper_ids:
+        return error(msg="论文ID列表不能为空", code=400, data=None, status_code=400)
+
+    folder = await get_folder_by_id(session=session, folder_id=folder_id)
+    if not folder or folder.user_id != user["id"]:
+        return error(msg="文件夹不存在或无权访问", code=404, data=None, status_code=404)
+
+    # 批量添加论文
+    added_count = 0
+    skipped_count = 0
+    
+    for paper_id in payload.paper_ids:
+        ok = await add_paper_to_folder(session, folder_id, paper_id)
+        if ok:
+            added_count += 1
+        else:
+            skipped_count += 1
+    
+    msg = f"成功添加 {added_count} 篇论文"
+    if skipped_count > 0:
+        msg += f"，{skipped_count} 篇已存在或不存在"
+    
+    return success(
+        data={"added": added_count, "skipped": skipped_count},
+        msg=msg,
+        code=0,
+        status_code=200
+    )
 
 
 @router.delete("/{folder_id}/papers/{paper_id}")
