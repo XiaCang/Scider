@@ -62,6 +62,11 @@ const abstract = computed(() => {
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .card-meta {
@@ -71,15 +76,16 @@ const abstract = computed(() => {
   font-size: 0.78rem;
   color: var(--text-secondary);
   flex-wrap: wrap;
-}
-
-.meta-dot {
-  opacity: 0.3;
+  overflow: hidden;
 }
 
 .meta-venue {
   color: var(--brand-accent);
   opacity: 0.75;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta-citation {

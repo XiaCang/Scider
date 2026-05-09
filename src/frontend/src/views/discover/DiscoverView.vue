@@ -437,6 +437,8 @@ const handleImportToLibrary = async (paper: any) => {
 
 .paper-card-wrapper {
   cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
 
   &:hover {
     background-color: #f3f4f6;
@@ -463,5 +465,4 @@ const handleImportToLibrary = async (paper: any) => {
 .card-enter-leave-to {
   opacity: 0;
 }
-
 </style>

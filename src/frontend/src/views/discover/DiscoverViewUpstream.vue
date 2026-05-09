@@ -673,6 +673,8 @@ const handleImportToLibrary = async (paper: any) => {
 .paper-card-wrapper {
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .paper-card-wrapper:hover {
