@@ -117,7 +117,7 @@ function buildGraphFromPapers() {
           source: elemNodes[i].id,
           target: elemNodes[j].id,
           relationType: 'semantic',
-          label: `同属「${dim.label}」维度`,
+          reason: `同属「${dim.label}」维度`, // 使用 reason 字段存储语义关联理由
         })
       }
     }
@@ -159,7 +159,7 @@ async function loadSimilarityEdges() {
           source: link.source,
           target: link.target,
           relationType: 'semantic' as const,
-          label: link.label,
+          reason: link.label, // 使用 reason 字段存储语义关联理由，避免与 ECharts label 配置冲突
         })
       }
       applyFilterAndRender()
@@ -195,17 +195,18 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
             semantic: '语义关联',
             citation: '引用关系'
           }
-          // 处理 label 可能是对象的情况
-          let labelText = ''
-          if (params.data.label) {
-            labelText = typeof params.data.label === 'string' 
-              ? params.data.label 
-              : JSON.stringify(params.data.label)
+          // 使用 reason 字段显示语义关联理由（避免与 ECharts label 配置冲突）
+          const reasonText = params.data.reason || params.data.label
+          let displayText = ''
+          if (reasonText) {
+            displayText = typeof reasonText === 'string' 
+              ? reasonText 
+              : JSON.stringify(reasonText)
           }
           return `
             <div style="padding: 4px 0;">
               <div style="font-weight: 600; margin-bottom: 4px;">${relationLabels[params.data.relationType] || '关联'}</div>
-              ${labelText ? `<div style="color: #666; font-size: 11px;">${labelText}</div>` : ''}
+              ${displayText ? `<div style="color: #666; font-size: 11px;">${displayText}</div>` : ''}
             </div>
           `
         }
