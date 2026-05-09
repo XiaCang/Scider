@@ -11,6 +11,9 @@ import type { GraphLink, GraphNode, NodeType } from '../../types/graph'
 import GraphNodeDetail from './GraphNodeDetail.vue'
 import { fetchSimilarityGraphApi } from '../../api/graph'
 
+// 图谱配置常量
+const SIMILARITY_THRESHOLD = 0.4 // 相似度阈值，与后端保持一致
+
 const categories = [
   { name: '论文', itemStyle: { color: '#173668' } },
   { name: '研究背景', itemStyle: { color: '#a78bfa' } },
@@ -108,21 +111,6 @@ function buildGraphFromPapers() {
     }
   }
 
-  // 跨论文语义关联：同类型要素之间建立关联
-  for (const dim of dimensionConfig) {
-    const elemNodes = nodes.filter(n => n.type === dim.nodeType)
-    for (let i = 0; i < elemNodes.length; i++) {
-      for (let j = i + 1; j < elemNodes.length; j++) {
-        links.push({
-          source: elemNodes[i].id,
-          target: elemNodes[j].id,
-          relationType: 'semantic',
-          reason: `同属「${dim.label}」维度`, // 使用 reason 字段存储语义关联理由
-        })
-      }
-    }
-  }
-
   cachedNodes = nodes
   cachedLinks = links
   applyFilterAndRender()
@@ -149,18 +137,25 @@ async function loadSimilarityEdges() {
     const res: any = await fetchSimilarityGraphApi({
       folder_id: folderStore.currentFolderId,
       max_nodes: 200,
-      min_similarity: 0.55,
+      min_similarity: SIMILARITY_THRESHOLD,
       top_k: 8,
     })
     const payload = res?.data
     if (payload?.links?.length) {
       for (const link of payload.links) {
-        cachedLinks.push({
-          source: link.source,
-          target: link.target,
-          relationType: 'semantic' as const,
-          reason: link.label, // 使用 reason 字段存储语义关联理由，避免与 ECharts label 配置冲突
-        })
+        // 提取相似度数值（从 "相似度 0.85" 格式中提取数字）
+        const similarityMatch = link.label?.match(/相似度\s+([\d.]+)/)
+        const similarityValue = similarityMatch ? parseFloat(similarityMatch[1]) : 0
+        
+        // 只显示相似度 >= 阈值的边
+        if (similarityValue >= SIMILARITY_THRESHOLD) {
+          cachedLinks.push({
+            source: link.source,
+            target: link.target,
+            relationType: 'semantic' as const,
+            reason: similarityValue.toFixed(2), // 只保留相似度数值，如 "0.85"
+          })
+        }
       }
       applyFilterAndRender()
     }
@@ -195,18 +190,20 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
             semantic: '语义关联',
             citation: '引用关系'
           }
-          // 使用 reason 字段显示语义关联理由（避免与 ECharts label 配置冲突）
-          const reasonText = params.data.reason || params.data.label
-          let displayText = ''
-          if (reasonText) {
-            displayText = typeof reasonText === 'string' 
-              ? reasonText 
-              : JSON.stringify(reasonText)
+          
+          // 只有语义关联才显示理由，其他类型不显示
+          let reasonHtml = ''
+          if (params.data.relationType === 'semantic') {
+            const reasonText = params.data.reason || params.data.label
+            if (reasonText && typeof reasonText === 'string') {
+              reasonHtml = `<div style="color: #666; font-size: 11px;">${reasonText}</div>`
+            }
           }
+          
           return `
             <div style="padding: 4px 0;">
               <div style="font-weight: 600; margin-bottom: 4px;">${relationLabels[params.data.relationType] || '关联'}</div>
-              ${displayText ? `<div style="color: #666; font-size: 11px;">${displayText}</div>` : ''}
+              ${reasonHtml}
             </div>
           `
         }
