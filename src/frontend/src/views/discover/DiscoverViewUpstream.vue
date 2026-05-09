@@ -9,6 +9,9 @@ import { fetchPaperByIdApi } from '../../api/library'
 import { importPaperApi } from '../../api/discover'
 import { ElMessage } from 'element-plus'
 
+/* ── 视图切换状态 ── */
+const activeView = ref<'upstream' | 'downstream'>('upstream')
+
 const {
   selectedPaperId,
   selectedPaper,
@@ -193,19 +196,35 @@ const handleImportToLibrary = async (paper: any) => {
 
     <!-- ── 已选择论文 —— 上下游结果 ── -->
     <template v-if="selectedPaperId">
-      <!-- 上游 -->
-      <section class="relation-section">
-        <div class="section-header">
-          <div class="section-title-wrap">
-            <span class="title-badge upstream">↑</span>
-            <h2 class="section-title">上游论文</h2>
-            <span class="count-pill">{{ filteredUpstreamPapers.length }}</span>
-          </div>
-          <div v-if="selectedPaper" class="section-context">
-            基于 <strong>{{ selectedPaper.title }}</strong>
-          </div>
-        </div>
+      <!-- 视图切换按钮 -->
+      <div class="view-toggle">
+        <button 
+          class="toggle-btn" 
+          :class="{ active: activeView === 'upstream' }"
+          @click="activeView = 'upstream'"
+        >
+          <span class="toggle-icon upstream">↑</span>
+          <span class="toggle-label">上游论文</span>
+          <span class="toggle-count">{{ filteredUpstreamPapers.length }}</span>
+        </button>
+        <button 
+          class="toggle-btn" 
+          :class="{ active: activeView === 'downstream' }"
+          @click="activeView = 'downstream'"
+        >
+          <span class="toggle-icon downstream">↓</span>
+          <span class="toggle-label">下游论文</span>
+          <span class="toggle-count">{{ filteredDownstreamPapers.length }}</span>
+        </button>
+      </div>
 
+      <!-- 上下文信息 -->
+      <div v-if="selectedPaper" class="section-context-single">
+        基于 <strong>{{ selectedPaper.title }}</strong>
+      </div>
+
+      <!-- 上游论文视图 -->
+      <section v-if="activeView === 'upstream'" class="relation-section">
         <div v-if="upstreamLoading" class="state-message">
           <div class="loading-dots"><span /><span /><span /></div>
           <p>加载上游论文中...</p>
@@ -240,16 +259,8 @@ const handleImportToLibrary = async (paper: any) => {
         </template>
       </section>
 
-      <!-- 下游 -->
-      <section class="relation-section">
-        <div class="section-header">
-          <div class="section-title-wrap">
-            <span class="title-badge downstream">↓</span>
-            <h2 class="section-title">下游论文</h2>
-            <span class="count-pill">{{ filteredDownstreamPapers.length }}</span>
-          </div>
-        </div>
-
+      <!-- 下游论文视图 -->
+      <section v-if="activeView === 'downstream'" class="relation-section">
         <div v-if="downstreamLoading" class="state-message">
           <div class="loading-dots"><span /><span /><span /></div>
           <p>加载下游论文中...</p>
@@ -280,7 +291,6 @@ const handleImportToLibrary = async (paper: any) => {
               />
             </div>
           </TransitionGroup>
-
         </template>
       </section>
     </template>
@@ -512,54 +522,94 @@ const handleImportToLibrary = async (paper: any) => {
 
 /* ════════ 分区 ════════ */
 .relation-section {
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.section-header {
+.section-context-single {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  margin-bottom: 1.25rem;
+  padding: 0 0.25rem;
+}
+
+.section-context-single strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ════════ 视图切换按钮 ════════ */
+.view-toggle {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
-  flex-wrap: wrap;
+  padding: 0.25rem;
+  background: rgba(248, 250, 252, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
 }
 
-.section-title-wrap {
+.toggle-btn {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
 }
 
-.title-badge {
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.toggle-btn.active {
+  background: white;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.toggle-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
   flex-shrink: 0;
 }
 
-.title-badge.upstream {
+.toggle-icon.upstream {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
 }
 
-.title-badge.downstream {
+.toggle-icon.downstream {
   background: rgba(16, 185, 129, 0.1);
   color: #10b981;
 }
 
-.section-title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-primary);
+.toggle-btn.active .toggle-icon.upstream {
+  background: rgba(59, 130, 246, 0.15);
 }
 
-.count-pill {
+.toggle-btn.active .toggle-icon.downstream {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.toggle-label {
+  font-weight: 500;
+}
+
+.toggle-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -573,18 +623,9 @@ const handleImportToLibrary = async (paper: any) => {
   font-weight: 600;
 }
 
-.section-context {
-  font-size: 0.78rem;
-  color: var(--text-tertiary);
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.section-context strong {
-  color: var(--text-secondary);
-  font-weight: 500;
+.toggle-btn.active .toggle-count {
+  background: rgba(47, 107, 255, 0.1);
+  color: var(--brand-accent);
 }
 
 /* ════════ 行内搜索 ════════ */
@@ -710,12 +751,21 @@ const handleImportToLibrary = async (paper: any) => {
     padding: 1rem;
   }
 
-  .section-context {
-    max-width: 100%;
-  }
-
   .selector-trigger {
     padding: 0.65rem 0.85rem;
+  }
+
+  .view-toggle {
+    gap: 0.35rem;
+  }
+
+  .toggle-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  .toggle-label {
+    display: none;
   }
 }
 
