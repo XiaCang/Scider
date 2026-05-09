@@ -63,11 +63,8 @@ const handlePaperClick = async (paper: any) => {
     }
   } else {
     // 对于未入库的论文，使用搜索结果的简化信息
-    const semanticId = paper.semantic_id || paper.id || ''
-    const doi = paper.doi || ''
-    
     selectedPaper.value = {
-      id: semanticId,
+      id: paper.semantic_id || paper.id || '',
       title: paper.title || '',
       authors: paper.authors || '',
       year: paper.year || 0,
@@ -75,9 +72,7 @@ const handlePaperClick = async (paper: any) => {
       citation_count: paper.citation_count || 0,
       abstract: paper.abstract || paper.description || '',
       pdf_url: paper.pdf_url || '',
-      doi: doi,
-      url: semanticId ? `https://www.semanticscholar.org/paper/${semanticId}` : null,
-      doi_url: doi ? `https://doi.org/${doi}` : null,
+      doi: paper.doi || '',
       status: 'PENDING',
       source: paper.source_type || 'external',
       keyPoints: null,
@@ -217,7 +212,9 @@ const handleImportToLibrary = async (paper: any) => {
     <PaperDetailSimple
       v-model="detailVisible"
       :paper="selectedPaper"
+      @import-to-library="handleImportToLibrary"
     />
+
   </section>
 </template>
 
@@ -269,7 +266,6 @@ const handleImportToLibrary = async (paper: any) => {
 .bar-filters {
   display: flex;
   align-items: center;
-  padding: 0 1rem;
 }
 
 /* ── 下拉面板 ── */
@@ -281,20 +277,22 @@ const handleImportToLibrary = async (paper: any) => {
 .pill {
   display: flex;
   align-items: center;
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #e2e8f0;
   border-radius: 4px;
-  background-color: #f9fafb;
-  color: #4b5563;
+  background-color: #fff;
   font-size: 0.875rem;
+  color: #1e293b;
   cursor: pointer;
 
   &.active {
-    background-color: #e2e8f0;
+    border-color: #4f46e5;
+    color: #4f46e5;
   }
 }
 
 .pill-cv {
-  margin-left: 0.25rem;
+  margin-left: 0.5rem;
   width: 8px;
   height: 5px;
   transition: transform 0.2s ease-in-out;
@@ -310,6 +308,7 @@ const handleImportToLibrary = async (paper: any) => {
   left: 0;
   width: 100%;
   background-color: #fff;
+  border: 1px solid #e2e8f0;
   border-radius: 4px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   z-index: 10;
@@ -323,24 +322,25 @@ const handleImportToLibrary = async (paper: any) => {
 .pill-opt {
   display: block;
   padding: 0.5rem 1rem;
-  color: #1e293b;
   font-size: 0.875rem;
+  color: #1e293b;
   cursor: pointer;
 
   &:hover {
-    background-color: #f9fafb;
+    background-color: #f3f4f6;
   }
 
   &.sel {
-    background-color: #e2e8f0;
+    background-color: #e0e7ff;
+    color: #4f46e5;
   }
 }
 
 /* ── 推荐提示 ── */
 .discover-hint {
   margin-bottom: 1rem;
-  color: #6b7280;
   font-size: 0.875rem;
+  color: #6b7280;
 }
 
 /* ── 加载态 ── */
@@ -349,16 +349,16 @@ const handleImportToLibrary = async (paper: any) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 0;
-  color: #6b7280;
+  height: 20rem;
   font-size: 0.875rem;
+  color: #6b7280;
 }
 
 .loading-dots {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .loading-dots span {
@@ -391,7 +391,7 @@ const handleImportToLibrary = async (paper: any) => {
 
 /* ── 错误态 ── */
 .state-error {
-  color: #dc2626;
+  color: #ef4444;
 }
 
 /* ── 结果列表 ── */
@@ -406,13 +406,13 @@ const handleImportToLibrary = async (paper: any) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 0;
-  color: #6b7280;
+  height: 20rem;
   font-size: 0.875rem;
+  color: #6b7280;
 }
 
 .empty-icon-wrap {
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .card-list {
@@ -423,9 +423,11 @@ const handleImportToLibrary = async (paper: any) => {
 
 .paper-card-wrapper {
   cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
 
   &:hover {
-    background-color: #f9fafb;
+    background-color: #f3f4f6;
   }
 }
 

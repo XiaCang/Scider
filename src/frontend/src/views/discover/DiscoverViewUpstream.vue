@@ -82,11 +82,8 @@ const handlePaperClick = async (paper: any) => {
     }
   } else {
     // 对于未入库的论文，使用搜索结果的简化信息
-    const semanticId = paper.semantic_id || paper.id || ''
-    const doi = paper.doi || ''
-    
     detailPaper.value = {
-      id: semanticId,
+      id: paper.semantic_id || paper.id || '',
       title: paper.title || '',
       authors: paper.authors || '',
       year: paper.year || 0,
@@ -94,9 +91,7 @@ const handlePaperClick = async (paper: any) => {
       citation_count: paper.citation_count || 0,
       abstract: paper.abstract || paper.description || '',
       pdf_url: paper.pdf_url || '',
-      doi: doi,
-      url: semanticId ? `https://www.semanticscholar.org/paper/${semanticId}` : null,
-      doi_url: doi ? `https://doi.org/${doi}` : null,
+      doi: paper.doi || '',
       status: 'PENDING',
       source: paper.source_type || 'external',
       keyPoints: null,
@@ -304,6 +299,7 @@ const handleImportToLibrary = async (paper: any) => {
     <PaperDetailSimple
       v-model="detailVisible"
       :paper="detailPaper"
+      @import-to-library="handleImportToLibrary"
     />
 
   </section>
