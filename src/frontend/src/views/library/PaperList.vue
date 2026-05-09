@@ -2,14 +2,15 @@
 <script setup lang="ts">
 import { computed, ref, h, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search, Delete, Close, Upload } from '@element-plus/icons-vue'
+import { Search, Delete, Close, Upload, CopyDocument } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { LibraryPaper, PaperKeyPoints } from '../../types/library'
-import { deletePaperApi } from '../../api/library'  
+import { deletePaperApi, batchAddPapersToFolderApi } from '../../api/library'  
 import PaperDetail from './paper/PaperDetail.vue'
 import PaperCardList from './paper/PaperListItem.vue'
 import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
 import ParsingProgressPopover from '../../components/ParsingProgressPopover.vue'
+import CopyToFolderDialog from '../../components/CopyToFolderDialog.vue'
 import { usePaperStore } from '../../store/paper'
 import { useFolderStore } from '../../store/folder'
 
@@ -21,6 +22,7 @@ const folderStore = useFolderStore()
 const searchQuery = ref('')
 const paperDetailVisible = ref(false)
 const showUploadDialog = ref(false)
+const showCopyDialog = ref(false)  // 控制复制对话框显示
 const selectedPaper = ref<LibraryPaper | null>(null)
 const selectedPaperIds = ref<Set<string>>(new Set())  // 选中的论文ID
 
@@ -246,6 +248,34 @@ const removePapersFromCurrentFolder = async () => {
   }
 }
 
+// 批量复制到文件夹
+const handleBatchCopy = () => {
+  if (selectedPaperIds.value.size === 0) {
+    ElMessage.warning('请先选择要复制的论文')
+    return
+  }
+  showCopyDialog.value = true
+}
+
+// 确认复制到文件夹
+const handleConfirmCopy = async (folderId: string) => {
+  const paperIds = Array.from(selectedPaperIds.value)
+  
+  try {
+    // 调用后端API批量添加论文到文件夹
+    await batchAddPapersToFolderApi(folderId, paperIds)
+    
+    // 更新本地状态
+    await folderStore.loadFolders()
+    
+    selectedPaperIds.value.clear()
+    ElMessage.success(`已将 ${paperIds.length} 篇论文复制到文件夹`)
+  } catch (error) {
+    console.error('[handleConfirmCopy] 复制失败:', error)
+    ElMessage.error('复制失败，请重试')
+  }
+}
+
 // 保存关键点（单篇）
 const handleSaveKeyPoints = async (paperId: string, keyPoints: PaperKeyPoints) => {
   try {
@@ -315,6 +345,15 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
             ref="parsingProgressRef"
             :papers="filteredPapers"
           />
+          <button 
+            class="copy-btn" 
+            @click="handleBatchCopy" 
+            :disabled="selectedPaperIds.size === 0"
+            title="复制到文件夹"
+          >
+            <el-icon><CopyDocument /></el-icon>
+            复制到文件夹
+          </button>
           <button class="delete-btn" @click="handleBatchDelete" :disabled="selectedPaperIds.size === 0">
             <el-icon><Delete /></el-icon>
             删除
@@ -349,6 +388,13 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
     <PdfUploadDialog
       v-model="showUploadDialog"
       @success="handleUploadSuccess"
+    />
+
+    <!-- 复制到文件夹对话框 -->
+    <CopyToFolderDialog
+      v-model="showCopyDialog"
+      :folders="folderStore.folders"
+      @confirm="handleConfirmCopy"
     />
   </div>
 </template>
@@ -517,6 +563,34 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
 .upload-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--brand, #4f46e5);
+  border-radius: 8px;
+  background: white;
+  color: var(--brand, #4f46e5);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copy-btn:hover:not(:disabled) {
+  background: var(--brand, #4f46e5);
+  color: white;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+.copy-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+  color: #94a3b8;
 }
 
 .delete-btn {
