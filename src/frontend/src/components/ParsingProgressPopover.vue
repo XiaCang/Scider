@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
-import { ElPopover, ElIcon, ElTag, ElBadge, ElProgress } from 'element-plus'
+import { ElPopover, ElIcon, ElTag, ElBadge, ElProgress, ElMessage } from 'element-plus'
 import { Loading, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { fetchTaskResultApi } from '../api/tasks'
 import type { LibraryPaper } from '../types/library'
@@ -94,6 +94,12 @@ const activeCount = computed(() => {
 // 轮询定时器
 let pollTimer: number | null = null
 
+// 超时检测定时器（每秒检查一次）
+let timeoutCheckTimer: number | null = null
+
+// 超时时长：3分钟
+const TIMEOUT_DURATION = 3 * 60 * 1000 // 3分钟 = 180000毫秒
+
 // 开始轮询
 const startPolling = () => {
   if (pollTimer) return
@@ -101,6 +107,9 @@ const startPolling = () => {
   pollTimer = window.setInterval(async () => {
     await updateTaskStatuses()
   }, 2000) // 每2秒更新一次
+  
+  // 启动超时检测定时器
+  startTimeoutCheck()
 }
 
 // 停止轮询
@@ -109,6 +118,60 @@ const stopPolling = () => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+  stopTimeoutCheck()
+}
+
+// 启动超时检测
+const startTimeoutCheck = () => {
+  if (timeoutCheckTimer) return
+  
+  timeoutCheckTimer = window.setInterval(() => {
+    checkTimeoutTasks()
+  }, 1000) // 每秒检查一次
+}
+
+// 停止超时检测
+const stopTimeoutCheck = () => {
+  if (timeoutCheckTimer) {
+    clearInterval(timeoutCheckTimer)
+    timeoutCheckTimer = null
+  }
+}
+
+// 检查超时任务
+const checkTimeoutTasks = () => {
+  const now = Date.now()
+  const tasksToRemove: ParsingTask[] = []
+  
+  parsingTasks.value.forEach(task => {
+    // 只检查进行中的任务
+    if (task.status === 'PENDING' || task.status === 'STARTED' || task.status === 'PROGRESS') {
+      const elapsedTime = now - task.createdAt
+      if (elapsedTime > TIMEOUT_DURATION) {
+        // 标记为失败
+        task.status = 'FAILURE'
+        task.error = `超过${TIMEOUT_DURATION / 60000}分钟仍未完成`
+        tasksToRemove.push(task)
+      }
+    }
+  })
+  
+  // 移除超时任务并提示
+  tasksToRemove.forEach(task => {
+    removeTask(task.taskId)
+    ElMessage.error({
+      message: `《${task.filename}》解析失败：${task.error}`,
+      duration: 5000
+    })
+    
+    // 通知父组件
+    window.dispatchEvent(new CustomEvent('task-completed', { 
+      detail: { 
+        paperId: task.paperId, 
+        status: 'FAILURE' 
+      } 
+    }))
+  })
 }
 
 // 更新所有任务状态
