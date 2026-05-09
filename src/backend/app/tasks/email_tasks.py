@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 def send_verification_email(self, to_email: str, subject: str, body: str) -> bool:
     """Send verification email using smtplib. Retries on exceptions.
 
+    
     Returns True on success, False when SMTP not configured.
     """
     smtp_host = os.getenv("SMTP_HOST")

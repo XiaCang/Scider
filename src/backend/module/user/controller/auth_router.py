@@ -85,6 +85,7 @@ async def token(form_data: OAuth2PasswordRequestForm = Depends()):
         return error(msg="邮箱或密码错误", code=401, data=None, status_code=200)
     
 
+
 @router.post("/api/user/send-code")
 async def send_code(payload: SendCodeIn):
     # generate 6-digit code and store in redis with 5-minute expiry
