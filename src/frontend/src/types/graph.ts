@@ -24,6 +24,7 @@ export interface GraphLink {
   target: string
   relationType: RelationType
   label?: string
+  reason?: string // 语义关联理由（避免与 ECharts label 配置冲突）
 }
 
 

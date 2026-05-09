@@ -4,7 +4,8 @@ WORKDIR /app
 
 # Copy dependencies first for better layer caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
