@@ -32,6 +32,10 @@ export interface LibraryPaper {
   created_at?: string
   in_library?: boolean
   abstract?: string
+  pdf_url?: string
+  doi?: string
+  url?: string
+  doi_url?: string
 }
 
 /**
