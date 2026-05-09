@@ -10,6 +10,12 @@ import type { ApiResponse } from '../types/auth'
 export const fetchLibraryApi = () => request.get('/papers')
 
 /**
+ * 获取单个论文详情
+ */
+export const fetchPaperByIdApi = (paperId: string) =>
+  request.get<ApiResponse<LibraryPaper>>(`/papers/${paperId}`)
+
+/**
  * 保存论文关键点
  */
 export const saveKeyPointsApi = (paperId: string, keyPoints: PaperKeyPoints) =>

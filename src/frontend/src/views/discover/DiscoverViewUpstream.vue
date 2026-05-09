@@ -3,6 +3,14 @@ import { ref, computed, onMounted } from 'vue'
 import { Search, Document } from '@element-plus/icons-vue'
 import { useCitationGraph } from '../../discover/composables/useCitationGraph'
 import PaperResultCard from '../../discover/components/PaperResultCard.vue'
+import PaperDetailSimple from '../library/paper/PaperDetailSimple.vue'
+import type { LibraryPaper } from '../../types/library'
+import { fetchPaperByIdApi } from '../../api/library'
+import { importPaperApi } from '../../api/discover'
+import { ElMessage } from 'element-plus'
+
+/* ── 视图切换状态 ── */
+const activeView = ref<'upstream' | 'downstream'>('upstream')
 
 const {
   selectedPaperId,
@@ -55,6 +63,73 @@ function onClear() {
 function closeSelector() {
   selectorOpen.value = false
 }
+
+/* ── 论文详情抽屉 ── */
+const detailVisible = ref(false)
+const detailPaper = ref<LibraryPaper | null>(null)
+
+// 处理点击论文卡片
+const handlePaperClick = async (paper: any) => {
+  // 如果论文已在文库中，获取完整详情
+  if ((paper as any).in_library && paper.id) {
+    try {
+      const { data } = await fetchPaperByIdApi(paper.id)
+      detailPaper.value = data
+    } catch (err) {
+      ElMessage.error('加载论文详情失败')
+      console.error(err)
+      return
+    }
+  } else {
+    // 对于未入库的论文，使用搜索结果的简化信息
+    detailPaper.value = {
+      id: paper.semantic_id || paper.id || '',
+      title: paper.title || '',
+      authors: paper.authors || '',
+      year: paper.year || 0,
+      venue: paper.venue || '',
+      citation_count: paper.citation_count || 0,
+      abstract: paper.abstract || paper.description || '',
+      pdf_url: paper.pdf_url || '',
+      doi: paper.doi || '',
+      status: 'PENDING',
+      source: paper.source_type || 'external',
+      keyPoints: null,
+      in_library: false,
+    } as any
+  }
+  
+  detailVisible.value = true
+}
+
+// 添加到文库
+const handleImportToLibrary = async (paper: any) => {
+  try {
+    // 构造导入请求数据
+    const importData = {
+      title: paper.title,
+      authors: paper.authors || null,
+      abstract: paper.abstract || null,
+      doi: paper.doi || null,
+      year: paper.year || null,
+      venue: paper.venue || null,
+      pdf_url: paper.pdf_url || null,
+    }
+    
+    // 调用导入API
+    await importPaperApi(importData)
+    
+    ElMessage.success('论文已成功添加到文库')
+    detailVisible.value = false
+    
+    // 刷新文库数据
+    await ensureLibraryLoaded()
+  } catch (err) {
+    ElMessage.error('添加论文到文库失败')
+    console.error(err)
+  }
+}
+
 </script>
 
 <template>
@@ -121,19 +196,35 @@ function closeSelector() {
 
     <!-- ── 已选择论文 —— 上下游结果 ── -->
     <template v-if="selectedPaperId">
-      <!-- 上游 -->
-      <section class="relation-section">
-        <div class="section-header">
-          <div class="section-title-wrap">
-            <span class="title-badge upstream">↑</span>
-            <h2 class="section-title">上游论文</h2>
-            <span class="count-pill">{{ filteredUpstreamPapers.length }}</span>
-          </div>
-          <div v-if="selectedPaper" class="section-context">
-            基于 <strong>{{ selectedPaper.title }}</strong>
-          </div>
-        </div>
+      <!-- 视图切换按钮 -->
+      <div class="view-toggle">
+        <button 
+          class="toggle-btn" 
+          :class="{ active: activeView === 'upstream' }"
+          @click="activeView = 'upstream'"
+        >
+          <span class="toggle-icon upstream">↑</span>
+          <span class="toggle-label">上游论文</span>
+          <span class="toggle-count">{{ filteredUpstreamPapers.length }}</span>
+        </button>
+        <button 
+          class="toggle-btn" 
+          :class="{ active: activeView === 'downstream' }"
+          @click="activeView = 'downstream'"
+        >
+          <span class="toggle-icon downstream">↓</span>
+          <span class="toggle-label">下游论文</span>
+          <span class="toggle-count">{{ filteredDownstreamPapers.length }}</span>
+        </button>
+      </div>
 
+      <!-- 上下文信息 -->
+      <div v-if="selectedPaper" class="section-context-single">
+        基于 <strong>{{ selectedPaper.title }}</strong>
+      </div>
+
+      <!-- 上游论文视图 -->
+      <section v-if="activeView === 'upstream'" class="relation-section">
         <div v-if="upstreamLoading" class="state-message">
           <div class="loading-dots"><span /><span /><span /></div>
           <p>加载上游论文中...</p>
@@ -154,25 +245,22 @@ function closeSelector() {
           </div>
 
           <TransitionGroup name="card-enter" tag="div" class="card-list">
-            <PaperResultCard
+            <div
               v-for="item in filteredUpstreamPapers"
               :key="item.id"
-              :paper="item"
-            />
+              @click="handlePaperClick(item)"
+              class="paper-card-wrapper"
+            >
+              <PaperResultCard
+                :paper="item"
+              />
+            </div>
           </TransitionGroup>
         </template>
       </section>
 
-      <!-- 下游 -->
-      <section class="relation-section">
-        <div class="section-header">
-          <div class="section-title-wrap">
-            <span class="title-badge downstream">↓</span>
-            <h2 class="section-title">下游论文</h2>
-            <span class="count-pill">{{ filteredDownstreamPapers.length }}</span>
-          </div>
-        </div>
-
+      <!-- 下游论文视图 -->
+      <section v-if="activeView === 'downstream'" class="relation-section">
         <div v-if="downstreamLoading" class="state-message">
           <div class="loading-dots"><span /><span /><span /></div>
           <p>加载下游论文中...</p>
@@ -192,15 +280,28 @@ function closeSelector() {
           </div>
 
           <TransitionGroup name="card-enter" tag="div" class="card-list">
-            <PaperResultCard
+            <div
               v-for="item in filteredDownstreamPapers"
               :key="item.id"
-              :paper="item"
-            />
+              @click="handlePaperClick(item)"
+              class="paper-card-wrapper"
+            >
+              <PaperResultCard
+                :paper="item"
+              />
+            </div>
           </TransitionGroup>
         </template>
       </section>
     </template>
+
+    <!-- 论文详情抽屉 -->
+    <PaperDetailSimple
+      v-model="detailVisible"
+      :paper="detailPaper"
+      @import-to-library="handleImportToLibrary"
+    />
+
   </section>
 </template>
 
@@ -421,54 +522,94 @@ function closeSelector() {
 
 /* ════════ 分区 ════════ */
 .relation-section {
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.section-header {
+.section-context-single {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  margin-bottom: 1.25rem;
+  padding: 0 0.25rem;
+}
+
+.section-context-single strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ════════ 视图切换按钮 ════════ */
+.view-toggle {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
-  flex-wrap: wrap;
+  padding: 0.25rem;
+  background: rgba(248, 250, 252, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
 }
 
-.section-title-wrap {
+.toggle-btn {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
 }
 
-.title-badge {
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.toggle-btn.active {
+  background: white;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.toggle-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
   flex-shrink: 0;
 }
 
-.title-badge.upstream {
+.toggle-icon.upstream {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
 }
 
-.title-badge.downstream {
+.toggle-icon.downstream {
   background: rgba(16, 185, 129, 0.1);
   color: #10b981;
 }
 
-.section-title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-primary);
+.toggle-btn.active .toggle-icon.upstream {
+  background: rgba(59, 130, 246, 0.15);
 }
 
-.count-pill {
+.toggle-btn.active .toggle-icon.downstream {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.toggle-label {
+  font-weight: 500;
+}
+
+.toggle-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -482,18 +623,9 @@ function closeSelector() {
   font-weight: 600;
 }
 
-.section-context {
-  font-size: 0.78rem;
-  color: var(--text-tertiary);
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.section-context strong {
-  color: var(--text-secondary);
-  font-weight: 500;
+.toggle-btn.active .toggle-count {
+  background: rgba(47, 107, 255, 0.1);
+  color: var(--brand-accent);
 }
 
 /* ════════ 行内搜索 ════════ */
@@ -579,6 +711,21 @@ function closeSelector() {
   gap: 0.85rem;
 }
 
+.paper-card-wrapper {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.paper-card-wrapper:hover {
+  transform: translateY(-2px);
+}
+
+.paper-card-wrapper:active {
+  transform: translateY(0);
+}
+
 /* ════════ 过渡 ════════ */
 .fade-drop-enter-active,
 .fade-drop-leave-active {
@@ -604,12 +751,36 @@ function closeSelector() {
     padding: 1rem;
   }
 
-  .section-context {
-    max-width: 100%;
-  }
-
   .selector-trigger {
     padding: 0.65rem 0.85rem;
+  }
+
+  .view-toggle {
+    gap: 0.35rem;
+  }
+
+  .toggle-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  .toggle-label {
+    display: none;
+  }
+}
+
+/* 论文详情弹窗样式 */
+.dialog-content {
+  min-height: 400px;
+}
+
+:deep(.paper-detail-dialog) {
+  .el-dialog__header {
+    display: none;
+  }
+  
+  .el-dialog__body {
+    padding: 0;
   }
 }
 </style>

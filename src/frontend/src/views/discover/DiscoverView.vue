@@ -3,7 +3,12 @@ import { ref, computed } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { useSearch } from '../../discover/composables/useSearch'
 import PaperResultCard from '../../discover/components/PaperResultCard.vue'
+import PaperDetailSimple from '../library/paper/PaperDetailSimple.vue'
 import { yearOptions, venueOptions, sortOptions } from '../../discover/constants'
+import type { LibraryPaper } from '../../types/library'
+import { fetchPaperByIdApi } from '../../api/library'
+import { importPaperApi } from '../../api/discover'
+import { ElMessage } from 'element-plus'
 
 const {
   keyword,
@@ -39,6 +44,72 @@ const currentVenueLabel = computed(() =>
 const currentSortLabel = computed(() =>
   sortOptions.find(o => o.value === sortBy.value)?.label ?? '相关性'
 )
+
+/* ── 论文详情抽屉 ── */
+const detailVisible = ref(false)
+const selectedPaper = ref<LibraryPaper | null>(null)
+
+// 处理点击论文卡片
+const handlePaperClick = async (paper: any) => {
+  // 如果论文已在文库中，获取完整详情
+  if ((paper as any).in_library && paper.id) {
+    try {
+      const { data } = await fetchPaperByIdApi(paper.id)
+      selectedPaper.value = data
+    } catch (err) {
+      ElMessage.error('加载论文详情失败')
+      console.error(err)
+      return
+    }
+  } else {
+    // 对于未入库的论文，使用搜索结果的简化信息
+    selectedPaper.value = {
+      id: paper.semantic_id || paper.id || '',
+      title: paper.title || '',
+      authors: paper.authors || '',
+      year: paper.year || 0,
+      venue: paper.venue || '',
+      citation_count: paper.citation_count || 0,
+      abstract: paper.abstract || paper.description || '',
+      pdf_url: paper.pdf_url || '',
+      doi: paper.doi || '',
+      status: 'PENDING',
+      source: paper.source_type || 'external',
+      keyPoints: null,
+      in_library: false,
+    } as any
+  }
+  
+  detailVisible.value = true
+}
+
+// 添加到文库
+const handleImportToLibrary = async (paper: any) => {
+  try {
+    // 构造导入请求数据
+    const importData = {
+      title: paper.title,
+      authors: paper.authors || null,
+      abstract: paper.abstract || null,
+      doi: paper.doi || null,
+      year: paper.year || null,
+      venue: paper.venue || null,
+      pdf_url: paper.pdf_url || null,
+    }
+    
+    // 调用导入API
+    await importPaperApi(importData)
+    
+    ElMessage.success('论文已成功添加到文库')
+    detailVisible.value = false
+    
+    // 刷新推荐列表或搜索结果
+    // TODO: 根据需要刷新数据
+  } catch (err) {
+    ElMessage.error('添加论文到文库失败')
+    console.error(err)
+  }
+}
 
 /* ── 推荐模型 ── */
 </script>
@@ -124,13 +195,26 @@ const currentSortLabel = computed(() =>
       </div>
 
       <TransitionGroup name="card-enter" tag="div" class="card-list">
-        <PaperResultCard
+        <div
           v-for="item in filteredResults"
           :key="item.id"
-          :paper="item"
-        />
+          @click="handlePaperClick(item)"
+          class="paper-card-wrapper"
+        >
+          <PaperResultCard
+            :paper="item"
+          />
+        </div>
       </TransitionGroup>
     </div>
+
+    <!-- 论文详情抽屉 -->
+    <PaperDetailSimple
+      v-model="detailVisible"
+      :paper="selectedPaper"
+      @import-to-library="handleImportToLibrary"
+    />
+
   </section>
 </template>
 
@@ -142,236 +226,229 @@ const currentSortLabel = computed(() =>
   padding: 2rem 2rem 3rem;
 }
 
-/* ════════ 紧凑搜索区 ════════ */
+/* ── 搜索区 ── */
 .hero-search {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding: 0.4rem 0.6rem 0.4rem 0.85rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
-  transition: all 0.25s ease;
-}
-
-.search-bar:focus-within {
-  border-color: rgba(47, 107, 255, 0.25);
-  box-shadow: 0 4px 20px rgba(47, 107, 255, 0.08);
-  background: rgba(255, 255, 255, 0.92);
+  background-color: #f9fafb;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .bar-icon {
-  font-size: 0.95rem;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
+  margin-left: 1rem;
+  color: #94a3b8;
 }
 
 .bar-input {
   flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  outline: none;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-}
+  padding: 0.75rem 1rem;
+  border: none;
+  background-color: transparent;
+  font-size: 1rem;
+  color: #1e293b;
 
-.bar-input::placeholder {
-  color: var(--text-tertiary);
+  &:focus {
+    outline: none;
+  }
 }
 
 .bar-divider {
   width: 1px;
-  height: 18px;
-  background: rgba(148, 163, 184, 0.2);
-  flex-shrink: 0;
-  margin: 0 0.15rem;
+  height: 2rem;
+  background-color: #e2e8f0;
 }
 
 .bar-filters {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  flex-shrink: 0;
 }
 
+/* ── 下拉面板 ── */
 .pill-wrap {
   position: relative;
+  margin-left: 0.5rem;
 }
 
 .pill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.55rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 0.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background-color: #fff;
+  font-size: 0.875rem;
+  color: #1e293b;
   cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-  white-space: nowrap;
-}
 
-.pill:hover {
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--text-secondary);
-}
-
-.pill.active {
-  background: rgba(47, 107, 255, 0.07);
-  color: var(--brand-accent);
+  &.active {
+    border-color: #4f46e5;
+    color: #4f46e5;
+  }
 }
 
 .pill-cv {
-  transition: transform 0.2s ease;
-}
-.pill-cv.up {
-  transform: rotate(180deg);
+  margin-left: 0.5rem;
+  width: 8px;
+  height: 5px;
+  transition: transform 0.2s ease-in-out;
+
+  &.up {
+    transform: rotate(180deg);
+  }
 }
 
-/* ── dropdown 浮层 ── */
 .pill-dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: 100%;
   left: 0;
-  z-index: 50;
-  min-width: 120px;
-  padding: 0.25rem;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.08);
-}
+  width: 100%;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
 
-.pill-dropdown--right {
-  left: auto;
-  right: 0;
+  &--right {
+    right: 0;
+    left: auto;
+  }
 }
 
 .pill-opt {
   display: block;
-  width: 100%;
-  padding: 0.35rem 0.65rem;
-  border: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  text-align: left;
-  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: #1e293b;
   cursor: pointer;
-  transition: background 0.15s ease;
+
+  &:hover {
+    background-color: #f3f4f6;
+  }
+
+  &.sel {
+    background-color: #e0e7ff;
+    color: #4f46e5;
+  }
 }
 
-.pill-opt:hover {
-  background: rgba(47, 107, 255, 0.06);
-}
-
-.pill-opt.sel {
-  color: var(--brand-accent);
-  font-weight: 600;
-  background: rgba(47, 107, 255, 0.06);
-}
-
-/* ════════ 推荐提示 ════════ */
+/* ── 推荐提示 ── */
 .discover-hint {
-  margin: 0 0 1rem;
-  font-size: 0.82rem;
-  color: var(--text-tertiary);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
-/* ════════ 状态 ════════ */
+/* ── 加载态 ── */
 .state-message {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 4rem 1rem;
-  color: var(--text-tertiary);
-  font-size: 0.9rem;
-}
-
-.state-error {
-  color: #ef4444;
+  justify-content: center;
+  height: 20rem;
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
 .loading-dots {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
 }
 
 .loading-dots span {
-  width: 8px;
-  height: 8px;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: 0 0.25rem;
+  background-color: #94a3b8;
   border-radius: 50%;
-  background: var(--brand-accent);
-  opacity: 0.3;
-  animation: dot-bounce 1.2s ease-in-out infinite;
+  animation: loading-bounce 0.6s infinite alternate;
+
+  &:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.4s;
+  }
 }
 
-.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes loading-bounce {
+  0% {
+    transform: translateY(0);
+  }
 
-@keyframes dot-bounce {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
-  40% { opacity: 1; transform: scale(1.3); }
+  100% {
+    transform: translateY(-0.5rem);
+  }
 }
 
-/* ════════ 空状态 ════════ */
+/* ── 错误态 ── */
+.state-error {
+  color: #ef4444;
+}
+
+/* ── 结果列表 ── */
+.discover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .empty-list {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 3rem 1rem;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 0.9rem;
+  justify-content: center;
+  height: 20rem;
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
 .empty-icon-wrap {
-  opacity: 0.5;
+  margin-bottom: 1rem;
 }
 
-/* ════════ 论文卡片列表 ════════ */
 .card-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
 }
 
-/* ════════ 过渡动画 ════════ */
+.paper-card-wrapper {
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+
+  &:hover {
+    background-color: #f3f4f6;
+  }
+}
+
+/* ── 过渡效果 ── */
 .fade-drop-enter-active,
 .fade-drop-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity 0.2s ease-in-out;
 }
+
 .fade-drop-enter-from,
 .fade-drop-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
 }
 
-.card-enter-enter-active {
-  transition: all 0.3s ease;
+.card-enter-enter-active,
+.card-enter-leave-active {
+  transition: opacity 0.2s ease-in-out;
 }
-.card-enter-enter-from {
+
+.card-enter-enter-from,
+.card-enter-leave-to {
   opacity: 0;
-  transform: translateY(12px);
-}
-
-/* ════════ 响应式 ════════ */
-@media (max-width: 820px) {
-  .discover-page {
-    padding: 1rem;
-  }
-
 }
 </style>

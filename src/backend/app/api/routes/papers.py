@@ -91,6 +91,63 @@ async def list_papers(
     return success(data=data, msg="查询成功", code=0, status_code=200)
 
 
+@router.get("/{paper_id}")
+async def get_paper_detail(
+    paper_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """获取单个论文详情"""
+    # ── 1. JWT 认证检查 ──
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    # ── 2. 查询论文（预加载key_points） ──
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import select
+    from db.models import Paper
+    
+    result = await session.execute(
+        select(Paper)
+        .where(Paper.id == paper_id, Paper.user_id == user["id"])
+        .options(selectinload(Paper.key_points))
+    )
+    paper = result.scalar_one_or_none()
+    
+    if not paper:
+        return error(msg="论文不存在或无权访问", code=404, data=None, status_code=404)
+    
+    # ── 3. 格式化返回数据 ──
+    paper_data = {
+        "id": paper.id,
+        "title": paper.title,
+        "authors": paper.authors or "",
+        "year": paper.year or 0,
+        "source": paper.source or "",
+        "status": paper.status.value,
+        "created_at": paper.created_at.isoformat() if paper.created_at else None,
+    }
+    
+    # 添加四要素（如果存在）
+    if paper.key_points:
+        paper_data["keyPoints"] = {
+            "background": paper.key_points.background or "",
+            "method": paper.key_points.methodology or "",
+            "innovation": paper.key_points.innovation or "",
+            "conclusion": paper.key_points.conclusion or "",
+        }
+    else:
+        paper_data["keyPoints"] = {
+            "background": "",
+            "method": "",
+            "innovation": "",
+            "conclusion": "",
+        }
+    
+    return success(data=paper_data, msg="查询成功", code=0, status_code=200)
+
+
 @router.get("/{paper_id}/pdf-info")
 async def get_paper_pdf_info(
     paper_id: str,
