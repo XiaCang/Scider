@@ -11,6 +11,8 @@ import LibraryView from '../views/library/LibraryView.vue'
 import PaperPDFView from '../views/library/paper/PaperPDFView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import PaperList from '../views/library/PaperList.vue'
+import ProfileView from '../views/profile/ProfileView.vue'
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -80,6 +82,14 @@ const router = createRouter({
           component: DiscoverViewUpstream,
           meta: {
             title: 'Scider | 上下游',
+          },
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: ProfileView,
+          meta: {
+            title: 'Scider | 个人信息',
           },
         },
       ],
