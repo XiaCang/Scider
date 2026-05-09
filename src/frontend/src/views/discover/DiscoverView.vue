@@ -7,7 +7,6 @@ import PaperDetailSimple from '../library/paper/PaperDetailSimple.vue'
 import { yearOptions, venueOptions, sortOptions } from '../../discover/constants'
 import type { LibraryPaper } from '../../types/library'
 import { fetchPaperByIdApi } from '../../api/library'
-import { importPaperApi } from '../../api/discover'
 import { ElMessage } from 'element-plus'
 
 const {
@@ -86,34 +85,6 @@ const handlePaperClick = async (paper: any) => {
   }
   
   detailVisible.value = true
-}
-
-// 添加到文库
-const handleImportToLibrary = async (paper: any) => {
-  try {
-    // 构造导入请求数据
-    const importData = {
-      title: paper.title,
-      authors: paper.authors || null,
-      abstract: paper.abstract || null,
-      doi: paper.doi || null,
-      year: paper.year || null,
-      venue: paper.venue || null,
-      pdf_url: paper.pdf_url || null,
-    }
-    
-    // 调用导入API
-    await importPaperApi(importData)
-    
-    ElMessage.success('论文已成功添加到文库')
-    detailVisible.value = false
-    
-    // 刷新推荐列表或搜索结果
-    // TODO: 根据需要刷新数据
-  } catch (err) {
-    ElMessage.error('添加论文到文库失败')
-    console.error(err)
-  }
 }
 
 /* ── 推荐模型 ── */
