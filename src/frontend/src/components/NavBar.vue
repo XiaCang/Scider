@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, SwitchButton, User } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from './AppLogo.vue'
@@ -38,6 +38,10 @@ const handleLogout = async () => {
   authStore.logout()
   await router.replace('/login')
 }
+
+const handleProfile = async () => {
+  await router.push('/app/profile')
+}
 </script>
 
 <template>
@@ -72,8 +76,11 @@ const handleLogout = async () => {
           <el-dropdown-menu class="user-dropdown-menu">
             <div class="user-dropdown-header">
               <strong>{{ displayName }}</strong>
-              <small>个人工作区</small>
             </div>
+            <el-dropdown-item @click="handleProfile">
+              <el-icon><User /></el-icon>
+              <span>个人信息</span>
+            </el-dropdown-item>
             <el-dropdown-item divided @click="handleLogout" class="logout-item">
               <el-icon><SwitchButton /></el-icon>
               <span>退出登录</span>
