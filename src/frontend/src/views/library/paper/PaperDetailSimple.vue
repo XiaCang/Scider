@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Check } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
 import type { LibraryPaper } from '../../../types/library'
 

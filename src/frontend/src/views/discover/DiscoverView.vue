@@ -83,20 +83,6 @@ const handlePaperClick = async (paper: any) => {
   detailVisible.value = true
 }
 
-// 保存关键点
-const handleSaveKeyPoints = async (paperId: string, keyPoints: any) => {
-  // TODO: 调用API保存关键点
-  ElMessage.success('关键点已保存')
-  detailVisible.value = false
-}
-
-// 预览PDF
-const handlePreviewPdf = (paperId: string) => {
-  detailVisible.value = false
-  // TODO: 跳转到PDF预览页
-  // router.push({ name: 'paper-pdf', params: { paperId } })
-}
-
 // 添加到文库
 const handleImportToLibrary = async (paper: any) => {
   try {
