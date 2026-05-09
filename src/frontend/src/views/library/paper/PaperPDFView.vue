@@ -411,12 +411,11 @@ const formatTime = (isoString: string) => {
           <p>暂无PDF文件</p>
         </div>
         
-        <div v-else class="pdf-viewer">
+        <div v-else class="pdf-viewer" :style="{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }">
           <VuePdfEmbed
             :source="pdfUrl"
             :page="currentPage"
-            :scale="zoomLevel / 100"
-            text-layer
+            :scale="1"
             @loaded="handlePdfLoaded"
             @error="handlePdfError"
           />
@@ -541,6 +540,7 @@ const formatTime = (isoString: string) => {
 .pdf-viewer {
   max-width: 900px;
   width: 100%;
+  transition: transform 0.2s ease;
 }
 
 .pdf-viewer :deep(.vue-pdf-embed) {
@@ -549,23 +549,10 @@ const formatTime = (isoString: string) => {
   align-items: center;
 }
 
-/* canvas 尺寸完全由 :scale prop 控制，外部不覆盖 */
+/* canvas 尺寸完全由外层容器 scale 控制 */
 .pdf-viewer :deep(canvas) {
   display: block;
   max-width: 100%;
-}
-
-/* 文本层跟随 canvas 自然定位 */
-.pdf-viewer :deep(.pdf-text-layer) {
-  color: transparent !important;
-}
-
-.pdf-viewer :deep(.pdf-text-layer span) {
-  color: transparent !important;
-}
-
-.pdf-viewer :deep(.pdf-text-layer ::selection) {
-  background: rgba(59, 130, 246, 0.35);
 }
 
 .note-sidebar {
