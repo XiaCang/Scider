@@ -11,8 +11,6 @@ from utils.response import success, error
 from utils.redis_client import get_redis
 import random
 import os
-import smtplib
-from email.message import EmailMessage
 import logging
 
 logger = logging.getLogger(__name__)
@@ -87,6 +85,7 @@ async def token(form_data: OAuth2PasswordRequestForm = Depends()):
         return error(msg="邮箱或密码错误", code=401, data=None, status_code=200)
     
 
+
 @router.post("/api/user/send-code")
 async def send_code(payload: SendCodeIn):
     # generate 6-digit code and store in redis with 5-minute expiry
@@ -99,7 +98,7 @@ async def send_code(payload: SendCodeIn):
         logger.exception("failed to set verification code in redis")
         return error(msg=f"内部服务错误: {str(e)}", code=500, data=None, status_code=500)
 
-    # try send email if SMTP configured
+    # enqueue email sending as a Celery task if SMTP configured
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "0")) if os.getenv("SMTP_PORT") else None
     smtp_user = os.getenv("SMTP_USER")
@@ -110,23 +109,13 @@ async def send_code(payload: SendCodeIn):
     sent = False
     if smtp_host and smtp_port and smtp_user and smtp_pass:
         try:
-            msg = EmailMessage()
-            msg['Subject'] = subject
-            msg['From'] = smtp_user
-            msg['To'] = payload.email
-            msg.set_content(body)
-            if smtp_port == 465:
-                with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-                    server.login(smtp_user, smtp_pass)
-                    server.send_message(msg)
-            else:
-                with smtplib.SMTP(smtp_host, smtp_port) as server:
-                    server.starttls()
-                    server.login(smtp_user, smtp_pass)
-                    server.send_message(msg)
+            # lazy import to avoid circular import during app startup
+            from app.tasks.email_tasks import send_verification_email
+            # fire-and-forget: enqueue task to worker
+            send_verification_email.delay(payload.email, subject, body)
             sent = True
         except Exception:
-            logger.exception("send mail failed")
+            logger.exception("enqueue send_verification_email failed")
 
     # do not expose code in production; but return success and indicate whether email was sent
     return success(data={"email": payload.email, "sent": sent}, msg="验证码已生成并存储", code=0)
