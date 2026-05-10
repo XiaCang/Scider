@@ -220,6 +220,15 @@ def extract_key_points_task(self, paper_id: str, paper_text: str) -> dict:
             pass
         raise self.retry(exc=exc)
 
+    # Step 5: 自动投递向量化任务（即使未确认也让论文尽早入图）
+    try:
+        from app.tasks.embedding_tasks import embed_paper_task
+
+        embed_paper_task.delay(paper_id)
+        logger.info("[LLM Task] 已投递向量化任务 paper_id=%s", paper_id)
+    except Exception as exc:
+        logger.warning("[LLM Task] 投递向量化任务失败（非致命）: %s", exc)
+
     logger.info("[LLM Task] 完成 paper_id=%s", paper_id)
     return {
         "paper_id": paper_id,

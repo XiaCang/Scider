@@ -12,7 +12,7 @@ import GraphNodeDetail from './GraphNodeDetail.vue'
 import { fetchSimilarityGraphApi } from '../../api/graph'
 
 // 图谱配置常量
-const SIMILARITY_THRESHOLD = 0.4 // 相似度阈值，与后端保持一致
+const SIMILARITY_THRESHOLD = 0.55 // 相似度阈值，与后端默认值保持一致
 
 const categories = [
   { name: '论文', itemStyle: { color: '#173668' } },
@@ -35,10 +35,10 @@ const selectedNodeData = ref<GraphNode | null>(null)
 
 // 筛选器
 const filters = reactive({
-  background: false,
-  method: false,
-  innovation: false,
-  conclusion: false,
+  background: true,
+  method: true,
+  innovation: true,
+  conclusion: true,
 })
 
 // 缓存全量节点与边（由论文数据构建）
@@ -142,7 +142,11 @@ async function loadSimilarityEdges() {
     })
     const payload = res?.data
     if (payload?.links?.length) {
+      // 构建当前节点的 ID 集合，过滤掉引用不存在节点的脏边
+      const nodeIds = new Set(cachedNodes.map(n => n.id))
       for (const link of payload.links) {
+        // 跳过 source 或 target 不在当前节点列表中的边（防止脏数据）
+        if (!nodeIds.has(link.source) || !nodeIds.has(link.target)) continue
         // 提取相似度数值（从 "相似度 0.85" 格式中提取数字）
         const similarityMatch = link.label?.match(/相似度\s+([\d.]+)/)
         const similarityValue = similarityMatch ? parseFloat(similarityMatch[1]) : 0
@@ -159,7 +163,8 @@ async function loadSimilarityEdges() {
       }
       applyFilterAndRender()
     }
-  } catch {
+  } catch (e) {
+    console.warn('[GraphPanel] 加载语义相似边失败:', e)
     // 相似度边是增强性的，不阻塞主图谱渲染
   }
 }
@@ -328,10 +333,10 @@ watch(
 watch(() => folderStore.currentFolderId, () => {
   buildGraphFromPapers()
 })
-// 监听论文列表变化 → 重新构建图谱
-watch(() => paperStore.papers.length, () => {
+// 监听论文列表及内容变化（如四要素更新后触发向量化）→ 重新构建图谱
+watch(paperStore.papers, () => {
   buildGraphFromPapers()
-})
+}, { deep: true })
 
 // ---- 点击节点 ----
 const handleChartClick = (params: any) => {
