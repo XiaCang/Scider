@@ -150,7 +150,7 @@ async function loadSimilarityEdges() {
         // 提取相似度数值（从 "相似度 0.85" 格式中提取数字）
         const similarityMatch = link.label?.match(/相似度\s+([\d.]+)/)
         const similarityValue = similarityMatch ? parseFloat(similarityMatch[1]) : 0
-        
+
         // 只显示相似度 >= 阈值的边
         if (similarityValue >= SIMILARITY_THRESHOLD) {
           cachedLinks.push({
@@ -162,6 +162,14 @@ async function loadSimilarityEdges() {
         }
       }
       applyFilterAndRender()
+    } else if (payload?.meta?.reason) {
+      // 后端返回了明确的无边原因，给用户提示
+      const reasonMap: Record<string, string> = {
+        no_embeddings: '论文尚未生成向量，需要先完成四要素提取或确认',
+        need_two_or_more_for_similarity_edges: '至少需要2篇已向量的论文才能计算相似度',
+      }
+      const msg = reasonMap[payload.meta.reason as string] || `暂无语义相似边（${payload.meta.reason}）`
+      ElMessage.info(msg)
     }
   } catch (e) {
     console.warn('[GraphPanel] 加载语义相似边失败:', e)

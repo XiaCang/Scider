@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.graph_similarity import build_similarity_edges
-from db.crud_graph import list_papers_with_embeddings
+from db.crud_graph import list_papers_with_embeddings, list_papers_without_embeddings
 from db.models import PaperStatus
 from db.session import get_db
 from utils.response import error, success
@@ -182,3 +182,41 @@ async def similarity_graph(
     )
 
     return success(data=payload.model_dump(), msg="ok", code=0)
+
+
+@router.post("/embeddings/trigger-batch", response_model=None)
+async def trigger_batch_embeddings(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    对当前用户下已有四要素但尚无向量的论文，批量投递向量化任务。
+    用于首次部署向量功能后补发历史论文的向量任务。
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    papers = await list_papers_without_embeddings(session, user["id"])
+    if not papers:
+        return success(
+            data={"triggered": 0, "papers": []},
+            msg="所有论文均已生成向量，无需补发",
+            code=0,
+        )
+
+    from app.tasks.embedding_tasks import embed_paper_task
+
+    triggered: list[dict[str, str]] = []
+    for p in papers:
+        embed_paper_task.delay(p["paper_id"])
+        triggered.append({"paper_id": p["paper_id"], "title": p["title"]})
+
+    return success(
+        data={
+            "triggered": len(triggered),
+            "papers": triggered,
+        },
+        msg=f"已投递 {len(triggered)} 篇论文的向量化任务",
+        code=0,
+    )

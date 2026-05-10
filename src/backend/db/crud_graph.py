@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import KeyPoints, Paper, PaperEmbedding
+from db.models import KeyPoints, Paper, PaperEmbedding, PaperStatus
 
 
 async def list_papers_with_embeddings(
@@ -51,6 +51,34 @@ async def list_papers_with_embeddings(
                     "innovation": (kp.innovation if kp else "") or "",
                     "conclusion": (kp.conclusion if kp else "") or "",
                 },
+            }
+        )
+    return out
+
+
+async def list_papers_without_embeddings(
+    session: AsyncSession,
+    user_id: str,
+) -> list[dict[str, Any]]:
+    """
+    返回当前用户下有 KeyPoints 但尚无 embedding 的论文列表（用于批量补发向量化任务）。
+    """
+    q = (
+        select(Paper, KeyPoints)
+        .join(KeyPoints, KeyPoints.paper_id == Paper.id)
+        .outerjoin(PaperEmbedding, PaperEmbedding.paper_id == Paper.id)
+        .where(Paper.user_id == user_id)
+        .where(PaperEmbedding.paper_id.is_(None))
+    )
+    result = await session.execute(q)
+    rows = result.all()
+
+    out: list[dict[str, Any]] = []
+    for paper, kp in rows:
+        out.append(
+            {
+                "paper_id": paper.id,
+                "title": paper.title or "",
             }
         )
     return out
