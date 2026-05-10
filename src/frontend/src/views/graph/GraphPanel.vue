@@ -12,7 +12,7 @@ import GraphNodeDetail from './GraphNodeDetail.vue'
 import { fetchSimilarityGraphApi } from '../../api/graph'
 
 // 图谱配置常量
-const SIMILARITY_THRESHOLD = 0.55 // 相似度阈值，与后端默认值保持一致
+const SIMILARITY_THRESHOLD = 0.35 // 相似度阈值（可根据 embedding 模型质量调整）
 
 const categories = [
   { name: '论文', itemStyle: { color: '#173668' } },
