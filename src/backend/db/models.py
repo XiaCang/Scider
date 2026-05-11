@@ -12,6 +12,7 @@ from sqlalchemy import (
     Table,
     JSON,
     func,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -88,7 +89,7 @@ class Paper(Base):
     year = Column(Integer, nullable=True)
     source = Column(String(512), nullable=True)  # 论文出处（期刊/会议名称）
     pdf_path = Column(String(1024), nullable=True)
-    md5_hash = Column(String(64), unique=True, nullable=True)
+    md5_hash = Column(String(64), nullable=True)
     file_size = Column(Integer, nullable=True)
     user_id = Column(String(64), ForeignKey("user.id"), nullable=False)
     folder_id = Column(String(64), ForeignKey("folder.id"), nullable=True)
@@ -101,6 +102,11 @@ class Paper(Base):
     folder = relationship("Folder", back_populates="papers")
     tags = relationship("Tag", secondary=paper_tag, back_populates="papers")
     embedding_row = relationship("PaperEmbedding", uselist=False, back_populates="paper")
+
+    #联合唯一约束（user_id + md5_hash）
+    __table_args__ = (
+        UniqueConstraint("user_id", "md5_hash", name="uix_user_md5"),
+    )
 
 
 class PaperEmbedding(Base):
