@@ -12,6 +12,7 @@ import PaperPDFView from '../views/library/paper/PaperPDFView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import PaperList from '../views/library/PaperList.vue'
 import ProfileView from '../views/profile/ProfileView.vue'
+import AnalyticsView from '../views/analytics/AnalyticsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -48,7 +49,7 @@ const router = createRouter({
             title: 'Scider | 文献库',
           },  
           children: [
-            { path: '', redirect: { name: 'library-folder', params: { folderId: 'all' } } },
+            { path: '', name: 'library-default', redirect: { name: 'library-folder', params: { folderId: 'all' } } },
             { path: 'folder/:folderId', name: 'library-folder', component: PaperList },
           ]
         },
@@ -90,6 +91,14 @@ const router = createRouter({
           component: ProfileView,
           meta: {
             title: 'Scider | 个人信息',
+          },
+        },
+        {
+          path: 'analytics',
+          name: 'analytics',
+          component: AnalyticsView,
+          meta: {
+            title: 'Scider | 分析统计',
           },
         },
       ],

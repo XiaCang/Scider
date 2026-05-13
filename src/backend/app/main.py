@@ -13,6 +13,7 @@ from app.api.routes.discover import router as discover_router
 from app.api.routes.papers import router as papers_router
 from app.api.routes.folders import router as folders_router
 from app.api.routes.graph import router as graph_router
+from app.api.routes.analytics import router as analytics_router
 from app.core.config import settings
 from middleware.jwt_middleware import JWTAuthMiddleware
 from module.user.controller.auth_router import router as auth_router
@@ -27,10 +28,7 @@ app = FastAPI(
     openapi_url="/openapi.json",  # OpenAPI schema 路径
 )
 
-# ── JWT authentication middleware ──
-app.add_middleware(JWTAuthMiddleware)
-
-# ── CORS 跨域配置（最外层，确保所有响应都带上 CORS 头） ──
+# ── CORS 跨域配置（必须在最外层，确保所有响应都带上 CORS 头） ──
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,6 +36,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── JWT authentication middleware ──
+app.add_middleware(JWTAuthMiddleware)
 
 # ── 静态文件服务（用于PDF预览） ──
 UPLOAD_DIR_ABSOLUTE = str(Path(settings.UPLOAD_DIR).resolve())
@@ -55,5 +56,6 @@ app.include_router(discover_router, prefix=settings.API_PREFIX)
 app.include_router(papers_router, prefix=settings.API_PREFIX)
 app.include_router(folders_router, prefix=settings.API_PREFIX)
 app.include_router(graph_router, prefix=settings.API_PREFIX)
+app.include_router(analytics_router, prefix=settings.API_PREFIX)
 app.include_router(auth_router)
 app.include_router(user_router)

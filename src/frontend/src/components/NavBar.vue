@@ -19,6 +19,7 @@ const navigationItems: NavItem[] = [
   { label: '知识图谱', path: '/app/graph' },
   { label: '发现论文', path: '/app/discover' },
   { label: '上下游', path: '/app/discover-upstream' },
+  { label: '分析统计', path: '/app/analytics' },
 ]
 
 const activePath = computed(() => {
