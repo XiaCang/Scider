@@ -251,12 +251,12 @@ const formatFileSize = (bytes: number) => {
 
 .upload-area:hover {
   border-color: var(--brand);
-  background: rgba(79, 70, 229, 0.05);
+  background: rgba(74, 157, 154, 0.05);
 }
 
 .upload-area.is-dragging {
   border-color: var(--brand);
-  background: rgba(79, 70, 229, 0.1);
+  background: rgba(74, 157, 154, 0.1);
   transform: scale(1.02);
 }
 

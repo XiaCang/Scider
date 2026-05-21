@@ -208,9 +208,9 @@ const handlePaperClick = async (paper: any) => {
 .search-bar {
   display: flex;
   align-items: center;
-  background-color: #f9fafb;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background-color: #faf8f5;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 .bar-icon {
@@ -224,7 +224,7 @@ const handlePaperClick = async (paper: any) => {
   border: none;
   background-color: transparent;
   font-size: 1rem;
-  color: #1e293b;
+  color: #1f2937;
 
   &:focus {
     outline: none;
@@ -264,15 +264,15 @@ const handlePaperClick = async (paper: any) => {
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.2);
-    color: #4f46e5;
+    background-color: rgba(74, 157, 154, 0.08);
+    border-color: rgba(74, 157, 154, 0.2);
+    color: #4a9d9a;
   }
 
   &.active {
-    background-color: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.3);
-    color: #4f46e5;
+    background-color: rgba(74, 157, 154, 0.12);
+    border-color: rgba(74, 157, 154, 0.3);
+    color: #4a9d9a;
   }
 }
 
@@ -341,20 +341,20 @@ const handlePaperClick = async (paper: any) => {
   transition: all 0.15s ease;
 
   &:hover {
-    background-color: #f8fafc;
-    color: #4f46e5;
+    background-color: #faf8f5;
+    color: #4a9d9a;
   }
 
   &.sel {
-    background-color: rgba(99, 102, 241, 0.08);
-    color: #4f46e5;
+    background-color: rgba(74, 157, 154, 0.08);
+    color: #4a9d9a;
     font-weight: 500;
 
     &::after {
       content: '✓';
       float: right;
       margin-left: 0.5rem;
-      color: #4f46e5;
+      color: #4a9d9a;
       font-weight: 600;
     }
   }

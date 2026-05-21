@@ -111,15 +111,15 @@ const onDragStart = (paperId: string, event: DragEvent) => {
 .paper-card {
   position: relative;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 12px 16px;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .paper-card:hover {
-  background: #fafcff;
-  border-color: #cbd5e1;
+  background: #faf8f5;
+  border-color: #d1d5db;
 }
 
 .paper-card[draggable="true"] {
@@ -147,7 +147,7 @@ const onDragStart = (paperId: string, event: DragEvent) => {
   appearance: none;
   -webkit-appearance: none;
   background: white;
-  border: 1.5px solid #cbd5e1;
+  border: 1.5px solid #d1d5db;
   border-radius: 50%;
   transition: all 0.2s ease;
   display: flex;
@@ -156,18 +156,18 @@ const onDragStart = (paperId: string, event: DragEvent) => {
 }
 
 .card-checkbox input[type="checkbox"]:checked {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
+  background-color: #4a9d9a;
+  border-color: #4a9d9a;
   box-shadow: inset 0 0 0 3px white;
 }
 
 .card-checkbox input[type="checkbox"]:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px rgba(74, 157, 154, 0.2);
 }
 
 .card-checkbox input[type="checkbox"]:hover {
-  border-color: #94a3b8;
+  border-color: #9ca3af;
 }
 
 /* 卡片内容区域（点击打开详情） */
@@ -192,15 +192,15 @@ const onDragStart = (paperId: string, event: DragEvent) => {
 .paper-title {
   font-weight: 500;
   font-size: 0.95rem;
-  color: #1e293b;
+  color: #1f2937;
   line-height: 1.4;
 }
 
 .paper-authors,
-.paper-venue, 
+.paper-venue,
 .paper-year{
   font-size: 0.8rem;
-  color: #5b6e8c;
+  color: #6b7280;
 }
 
 /* 右侧状态区 */
@@ -214,29 +214,29 @@ const onDragStart = (paperId: string, event: DragEvent) => {
   font-size: 0.75rem;
   padding: 4px 12px;
   border-radius: 20px;
-  background-color: #f0f2f5;
-  color: #4b5563;
+  background-color: #f5f0ea;
+  color: #6b7280;
   white-space: nowrap;
 }
 
 .status-processing {
-  background: #fff7e5;
-  color: #d97706;
+  background: rgba(232, 184, 109, 0.12);
+  color: #b88a3e;
 }
 .status-pending {
-  background: #e6f7ff;
-  color: #0891b2;
+  background: rgba(74, 157, 154, 0.1);
+  color: #4a9d9a;
 }
 .status-confirmed {
-  background: #e6f9ed;
-  color: #059669;
+  background: rgba(74, 157, 154, 0.1);
+  color: #4a9d9a;
 }
 .status-success {
-  background: #e6f9ed;
-  color: #059669;
+  background: rgba(74, 157, 154, 0.1);
+  color: #4a9d9a;
 }
 .status-failed {
-  background: #fde0e0;
-  color: #b91c1c;
+  background: rgba(193, 119, 103, 0.12);
+  color: #c17767;
 }
 </style>

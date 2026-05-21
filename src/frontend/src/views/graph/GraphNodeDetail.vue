@@ -251,27 +251,27 @@ const handleClose = () => {
 }
 
 .node-type--paper {
-  background: #173668;
+  background: #4a9d9a;
   color: white;
 }
 
 .node-type--background {
-  background: #fef3c7;
-  color: #f59e0b;
+  background: rgba(107, 142, 142, 0.12);
+  color: #6b8e8e;
 }
 
 .node-type--method {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: rgba(232, 184, 109, 0.12);
+  color: #b88a3e;
 }
 
 .node-type--innovation {
-  background: #fef9c3;
-  color: #eab308;
+  background: rgba(193, 119, 103, 0.12);
+  color: #c17767;
 }
 
 .node-type--conclusion {
-  background: #dcfce7;
+  background: rgba(74, 157, 154, 0.12);
   color: #22c55e;
 }
 

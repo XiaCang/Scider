@@ -422,10 +422,9 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
 .list-card {
   flex: 1;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   padding: 12px 0 4px;
   overflow: hidden;
 }
@@ -464,12 +463,12 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background-color: #f1f5f9;
+  background-color: #f5f0ea;
   border-radius: 20px;
   padding: 4px 12px;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #475569;
+  color: #6b7280;
 }
 
 .clear-all-btn {
@@ -500,9 +499,9 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border: 1px solid var(--brand, #4f46e5);
+  border: 1px solid #4a9d9a;
   border-radius: 8px;
-  background: var(--brand, #4f46e5);
+  background: #4a9d9a;
   color: white;
   font-size: 0.8rem;
   font-weight: 500;
@@ -511,9 +510,9 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
 }
 
 .upload-btn:hover {
-  background: var(--brand-dark, #4338ca);
-  border-color: var(--brand-dark, #4338ca);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+  background: #3d8b88;
+  border-color: #3d8b88;
+  box-shadow: 0 2px 8px rgba(74, 157, 154, 0.3);
 }
 
 .library-search {
@@ -523,14 +522,14 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   min-width: 220px;
   padding: 4px 12px;
   border-radius: 40px;
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #faf8f5;
   transition: 0.2s;
 }
 
 .library-search:focus-within {
-  border-color: var(--text-tertiary, #8a94a6);
-  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.12);
+  border-color: #4a9d9a;
+  box-shadow: 0 0 0 2px rgba(74, 157, 154, 0.12);
 }
 
 .library-search input {
@@ -546,9 +545,9 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border: 1px solid var(--brand);
+  border: 1px solid #4a9d9a;
   border-radius: 8px;
-  background: var(--brand);
+  background: #4a9d9a;
   color: white;
   font-size: 0.8rem;
   font-weight: 500;
@@ -570,10 +569,10 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border: 1px solid var(--brand, #4f46e5);
+  border: 1px solid #4a9d9a;
   border-radius: 8px;
   background: white;
-  color: var(--brand, #4f46e5);
+  color: #4a9d9a;
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
@@ -581,9 +580,9 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
 }
 
 .copy-btn:hover:not(:disabled) {
-  background: var(--brand, #4f46e5);
+  background: #4a9d9a;
   color: white;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 2px 8px rgba(74, 157, 154, 0.3);
 }
 
 .copy-btn:disabled {
@@ -621,19 +620,19 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   gap: 6px;
   align-items: baseline;
   padding: 0 16px 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
   margin-bottom: 4px;
 }
 
 .current-folder {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #1e293b;
+  color: #1f2937;
 }
 
 .paper-count {
   font-size: 0.75rem;
-  color: #5b6e8c;
+  color: #9ca3af;
 }
 
 /* 滚动条 */
@@ -641,11 +640,11 @@ const handleUploadSuccess = (data: { paper_id: string; task_id: string; filename
   width: 6px;
 }
 .library-main::-webkit-scrollbar-track {
-  background: #e2e8f0;
+  background: #f5f0ea;
   border-radius: 8px;
 }
 .library-main::-webkit-scrollbar-thumb {
-  background: #94a3b8;
+  background: #d4cfc9;
   border-radius: 8px;
 }
 </style>

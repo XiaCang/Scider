@@ -447,13 +447,13 @@ defineExpose({
 
 .progress-trigger:hover {
   background: rgba(255, 255, 255, 1);
-  border-color: var(--brand, #4f46e5);
-  color: var(--brand, #4f46e5);
+  border-color: #4a9d9a;
+  color: #4a9d9a;
 }
 
 .progress-trigger.has-active {
-  border-color: var(--brand, #4f46e5);
-  color: var(--brand, #4f46e5);
+  border-color: #4a9d9a;
+  color: #4a9d9a;
 }
 
 .trigger-icon {
@@ -503,7 +503,7 @@ defineExpose({
 .clear-btn {
   background: none;
   border: none;
-  color: var(--brand, #4f46e5);
+  color: #4a9d9a;
   font-size: 0.75rem;
   cursor: pointer;
   padding: 2px 6px;
@@ -512,7 +512,7 @@ defineExpose({
 }
 
 .clear-btn:hover {
-  background: rgba(79, 70, 229, 0.1);
+  background: rgba(74, 157, 154, 0.1);
 }
 
 .empty-state {

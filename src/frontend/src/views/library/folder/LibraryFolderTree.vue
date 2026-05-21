@@ -192,7 +192,7 @@ const handleAddRootFolder = () => {
 }
 
 .nav-item.active {
-  background: var(--brand-soft, rgba(79, 70, 229, 0.1));
+  background: var(--brand-soft, rgba(74, 157, 154, 0.1));
   color: var(--brand);
   font-weight: 600;
 }
