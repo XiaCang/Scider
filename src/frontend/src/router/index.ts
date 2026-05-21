@@ -4,6 +4,7 @@ import MainLayout from '../layouts/MainLayout.vue'
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
 import AuthView from '../views/auth/AuthView.vue'
+import ForgotPasswordView from '../views/auth/ForgotPasswordView.vue'
 import DiscoverView from '../views/discover/DiscoverView.vue'
 import DiscoverViewUpstream from '../views/discover/DiscoverViewUpstream.vue'
 import GraphView from '../views/graph/GraphView.vue'
@@ -26,6 +27,15 @@ const router = createRouter({
       component: AuthView,
       meta: {
         title: 'Scider | 登录',
+        guestOnly: true,
+      },
+    },
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: ForgotPasswordView,
+      meta: {
+        title: 'Scider | 忘记密码',
         guestOnly: true,
       },
     },
