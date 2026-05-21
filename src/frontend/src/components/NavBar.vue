@@ -95,9 +95,9 @@ const handleProfile = async () => {
 <style scoped>
 .workspace-header {
   height: 64px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(250, 248, 245, 0.85);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -150,14 +150,14 @@ const handleProfile = async () => {
 
 /* hover 状态 */
 .header-nav__item:hover {
-  color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  color: #4a9d9a;
+  background: rgba(74, 157, 154, 0.08);
 }
 
 /* 激活状态 */
 .header-nav__item.is-active {
-  color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  color: #4a9d9a;
+  background: rgba(74, 157, 154, 0.12);
   font-weight: 600;
 }
 
@@ -178,7 +178,7 @@ const handleProfile = async () => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--brand);
+  background: #4a9d9a;
   color: white;
   display: flex;
   align-items: center;

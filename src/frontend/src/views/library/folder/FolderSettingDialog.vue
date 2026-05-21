@@ -144,7 +144,7 @@ const confirm = async () => {
 }
 
 .setting-card:focus-within {
-  border-color: var(--brand, #4f46e5);
+  border-color: #4a9d9a;
 }
 
 .card-header {
@@ -160,8 +160,8 @@ const confirm = async () => {
 }
 
 .rename-icon {
-  background: #eef2ff;
-  color: var(--brand, #4f46e5);
+  background: rgba(74, 157, 154, 0.1);
+  color: #4a9d9a;
 }
 
 .card-title {
@@ -173,7 +173,7 @@ const confirm = async () => {
 .card-label {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #1e293b;
+  color: #1f2937;
 }
 
 .card-desc {

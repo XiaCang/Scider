@@ -260,7 +260,7 @@ const handleSubmit = async () => {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-muted) 100%);
+  background: #faf8f5;
 }
 
 /* 背景装饰 */
@@ -290,12 +290,11 @@ const handleSubmit = async () => {
   width: 100%;
   max-width: 440px;
   padding: 2.5rem;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.08),
-    0 0 0 1px rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 /* Logo区域 */
@@ -316,7 +315,7 @@ const handleSubmit = async () => {
   display: inline-flex;
   padding: 0.3rem;
   border-radius: 999px;
-  background: var(--bg-muted);
+  background: #f5f0ea;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
@@ -334,14 +333,14 @@ const handleSubmit = async () => {
 }
 
 .auth-switcher__item:hover {
-  color: var(--brand);
+  color: #4a9d9a;
 }
 
 .auth-switcher__item.is-active {
   background: white;
-  color: var(--brand);
-  box-shadow: 
-    0 4px 12px rgba(47, 107, 255, 0.15),
+  color: #4a9d9a;
+  box-shadow:
+    0 4px 12px rgba(74, 157, 154, 0.15),
     0 2px 4px rgba(0, 0, 0, 0.06);
   font-weight: 600;
 }
@@ -387,11 +386,11 @@ const handleSubmit = async () => {
 }
 
 .auth-form :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px var(--brand-light) inset;
+  box-shadow: 0 0 0 1px rgba(74, 157, 154, 0.3) inset;
 }
 
 .auth-form :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px var(--brand) inset;
+  box-shadow: 0 0 0 1px #4a9d9a inset;
 }
 
 .auth-form :deep(.el-input__inner) {
@@ -412,7 +411,7 @@ const handleSubmit = async () => {
 
 .auth-form__submit:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(47, 107, 255, 0.25);
+  box-shadow: 0 8px 20px rgba(74, 157, 154, 0.25);
 }
 
 /* 响应式设计 */

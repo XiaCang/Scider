@@ -15,11 +15,11 @@ import { fetchSimilarityGraphApi } from '../../api/graph'
 const SIMILARITY_THRESHOLD = 0.35 // 相似度阈值（可根据 embedding 模型质量调整）
 
 const categories = [
-  { name: '论文', itemStyle: { color: '#173668' } },
-  { name: '研究背景', itemStyle: { color: '#a78bfa' } },
-  { name: '研究方法', itemStyle: { color: '#3b82f6' } },
-  { name: '创新点', itemStyle: { color: '#eab308' } },
-  { name: '结论', itemStyle: { color: '#22c55e' } },
+  { name: '论文', itemStyle: { color: '#4a9d9a' } },
+  { name: '研究背景', itemStyle: { color: '#6b8e8e' } },
+  { name: '研究方法', itemStyle: { color: '#e8b86d' } },
+  { name: '创新点', itemStyle: { color: '#c17767' } },
+  { name: '结论', itemStyle: { color: '#4a9d9a' } },
 ]
 
 const router = useRouter()
@@ -386,16 +386,16 @@ onUnmounted(() => {
       <div class="header-left">
         <div class="graph-filters">
           <el-checkbox v-model="filters.background" size="small" class="filter-chip">
-            <span class="filter-icon" style="background: #a78bfa" /> 研究背景
+            <span class="filter-icon" style="background: #6b8e8e" /> 研究背景
           </el-checkbox>
           <el-checkbox v-model="filters.method" size="small" class="filter-chip">
-            <span class="filter-icon" style="background: #3b82f6" /> 研究方法
+            <span class="filter-icon" style="background: #e8b86d" /> 研究方法
           </el-checkbox>
           <el-checkbox v-model="filters.innovation" size="small" class="filter-chip">
-            <span class="filter-icon" style="background: #eab308" /> 创新点
+            <span class="filter-icon" style="background: #c17767" /> 创新点
           </el-checkbox>
           <el-checkbox v-model="filters.conclusion" size="small" class="filter-chip">
-            <span class="filter-icon" style="background: #22c55e" /> 结论
+            <span class="filter-icon" style="background: #4a9d9a" /> 结论
           </el-checkbox>
         </div>
       </div>

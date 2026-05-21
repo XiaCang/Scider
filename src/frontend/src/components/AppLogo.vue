@@ -51,6 +51,6 @@ const props = defineProps({
   font-size: calc(var(--logo-size) * 0.6);
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #173668;
+  color: #4a9d9a;
 }
 </style>

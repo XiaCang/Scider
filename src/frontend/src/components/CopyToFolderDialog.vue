@@ -166,8 +166,8 @@ const confirm = () => {
 }
 
 .folder-item.selected {
-  background: #eef2ff;
-  border-left: 3px solid var(--brand, #4f46e5);
+  background: rgba(74, 157, 154, 0.08);
+  border-left: 3px solid #4a9d9a;
 }
 
 .folder-icon {
@@ -177,13 +177,13 @@ const confirm = () => {
 }
 
 .folder-item.selected .folder-icon {
-  color: var(--brand, #4f46e5);
+  color: #4a9d9a;
 }
 
 .folder-name {
   flex: 1;
   font-size: 0.9rem;
-  color: #1e293b;
+  color: #1f2937;
   font-weight: 500;
 }
 

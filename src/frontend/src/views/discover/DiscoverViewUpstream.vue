@@ -563,8 +563,8 @@ const handlePaperClick = async (paper: any) => {
 }
 
 .toggle-icon.upstream {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: rgba(74, 157, 154, 0.1);
+  color: #4a9d9a;
 }
 
 .toggle-icon.downstream {
@@ -573,7 +573,7 @@ const handlePaperClick = async (paper: any) => {
 }
 
 .toggle-btn.active .toggle-icon.upstream {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(74, 157, 154, 0.15);
 }
 
 .toggle-btn.active .toggle-icon.downstream {
