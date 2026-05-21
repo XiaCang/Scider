@@ -209,6 +209,12 @@ const handleSubmit = async () => {
               <el-icon><Lock /></el-icon>
             </template>
           </el-input>
+          <!-- 忘记密码链接（仅登录模式） -->
+          <div v-if="mode === 'login'" class="forgot-link-wrapper">
+            <button type="button" class="forgot-link" @click="router.push('/forgot-password')">
+              忘记密码？
+            </button>
+          </div>
         </el-form-item>
 
         <!-- 注册时显示验证码 -->
@@ -244,6 +250,26 @@ const handleSubmit = async () => {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+/* 忘记密码链接 */
+.forgot-link-wrapper {
+  text-align: right;
+  margin-top: 4px;
+}
+
+.forgot-link {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: #4a9d9a;
 }
 
 .captcha-wrapper .el-button {
