@@ -281,7 +281,18 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       roam: true,
       draggable: true,
       force: { repulsion: 1000, gravity: 0.03, edgeLength: [180, 350], friction: 0.65 },
-      emphasis: { /* 同原代码 */ },
+      emphasis: {
+        focus: 'none',
+        itemStyle: {
+          shadowBlur: 12,
+          shadowColor: 'rgba(0,0,0,0.15)',
+          shadowOffsetY: 3,
+        },
+        label: {
+          fontWeight: 700,
+          fontSize: 12,
+        },
+      },
       label: { 
         show: true, 
         position: 'right', 
@@ -312,6 +323,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
     }],
   }
   chartInstance.setOption(option, { notMerge: true })
+  chartInstance?.off('click', handleChartClick)
   chartInstance?.on('click', handleChartClick) 
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, SwitchButton, User } from '@element-plus/icons-vue'
+import { ArrowDown, SwitchButton, Setting } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from './AppLogo.vue'
@@ -39,8 +39,8 @@ const handleLogout = async () => {
   await router.replace('/login')
 }
 
-const handleProfile = async () => {
-  await router.push('/app/profile')
+const handleSettings = async () => {
+  await router.push('/app/settings')
 }
 </script>
 
@@ -65,7 +65,7 @@ const handleProfile = async () => {
         </nav>
       </div>
 
-      <el-dropdown trigger="click">
+      <el-dropdown trigger="click" popper-class="user-dropdown-popper" placement="bottom-end">
         <button class="workspace-user" type="button">
           <span class="workspace-user__avatar">
             {{ displayName.slice(0, 1).toUpperCase() }}
@@ -77,13 +77,13 @@ const handleProfile = async () => {
             <div class="user-dropdown-header">
               <strong>{{ displayName }}</strong>
             </div>
-            <el-dropdown-item @click="handleProfile">
-              <el-icon><User /></el-icon>
-              <span>个人信息</span>
+            <el-dropdown-item @click="handleSettings">
+              <el-icon><Setting /></el-icon>
+              <span>设置</span>
             </el-dropdown-item>
             <el-dropdown-item divided @click="handleLogout" class="logout-item">
               <el-icon><SwitchButton /></el-icon>
-              <span>退出登录</span>
+              <span>登出</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -188,16 +188,18 @@ const handleProfile = async () => {
 }
 
 .user-dropdown-header {
-  padding: 12px 16px;
+  padding: 10px 14px 8px;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.05);
-  margin-bottom: 5px;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 2px;
 }
 
 .user-dropdown-header strong {
-  font-size: 0.95rem;
-  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1f2937;
+  letter-spacing: -0.01em;
 }
 
 .user-dropdown-header small {
@@ -205,12 +207,22 @@ const handleProfile = async () => {
   color: var(--text-tertiary);
 }
 
+/* ── 退出按钮 ── */
 .logout-item {
-  color: #f56c6c !important;
+  color: #c17767 !important;
 }
 
-.logout-item:hover {
-  background-color: #fef0f0 !important;
+.logout-item .el-icon {
+  color: #c17767 !important;
+}
+
+.logout-item:not(.is-disabled):hover {
+  background: #faf8f5 !important;
+  color: #b16a5a !important;
+}
+
+.logout-item:not(.is-disabled):hover .el-icon {
+  color: #b16a5a !important;
 }
 
 /* 响应式 */
@@ -221,5 +233,70 @@ const handleProfile = async () => {
   .header-container {
     padding: 0 1rem;
   }
+}
+</style>
+
+<style>
+/* ── 非 scoped，专门覆盖 teleported 的下拉菜单 ── */
+.user-dropdown-popper {
+  border: 1px solid #f3f4f6 !important;
+  border-radius: 12px !important;
+  padding: 4px !important;
+  min-width: 160px !important;
+  background: #ffffff !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1) !important;
+}
+
+.user-dropdown-popper .el-dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1f2937 !important;
+  transition: all 0.15s ease;
+  margin: 1px 0;
+}
+
+.user-dropdown-popper .el-dropdown-menu__item .el-icon {
+  font-size: 1rem;
+  color: #9ca3af;
+  transition: color 0.15s ease;
+}
+
+/* 👇 这里是真正解决 hover 蓝色的地方 */
+.user-dropdown-popper .el-dropdown-menu__item:not(.is-disabled):hover {
+  background: #faf8f5 !important;
+  color: #1f2937 !important;
+}
+
+.user-dropdown-popper .el-dropdown-menu__item:not(.is-disabled):hover .el-icon {
+  color: #6b7280 !important;
+}
+
+/* 分隔线 */
+.user-dropdown-popper .el-dropdown-menu__item.is-divided {
+  margin-top: 4px;
+  border-top: 1px solid #f3f4f6;
+}
+
+/* 退出按钮 */
+.user-dropdown-popper .logout-item {
+  color: #c17767 !important;
+}
+
+.user-dropdown-popper .logout-item .el-icon {
+  color: #c17767 !important;
+}
+
+.user-dropdown-popper .logout-item:not(.is-disabled):hover {
+  background: #faf8f5 !important;
+  color: #b16a5a !important;
+}
+
+.user-dropdown-popper .logout-item:not(.is-disabled):hover .el-icon {
+  color: #b16a5a !important;
 }
 </style>

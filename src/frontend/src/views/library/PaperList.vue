@@ -33,13 +33,9 @@ const parsingProgressRef = ref<InstanceType<typeof ParsingProgressPopover> | nul
 let refreshTimer: number | null = null
 const REFRESH_INTERVAL = 5000 // 5秒刷新一次
 
-const RECENT_LIMIT = 10
 const currentFolderId = computed(() => route.params.folderId as string || 'all')
 
 const folderPapers = computed(() => {
-  if (currentFolderId.value === 'recent') {
-    return paperStore.papers.slice(0, RECENT_LIMIT)
-  }
   if (currentFolderId.value === 'all') return paperStore.papers
   const folder = folderStore.folders.find(f => f.id === currentFolderId.value)
   if (!folder) return []
@@ -130,7 +126,6 @@ onUnmounted(() => {
 })
 
 const currentFolderName = computed(() => {
-  if (currentFolderId.value === 'recent') return '最近论文'
   if (currentFolderId.value === 'all') return '全部论文'
   const folder = folderStore.folders.find(f => f.id === currentFolderId.value)
   return folder?.name || '未知文件夹'

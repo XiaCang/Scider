@@ -12,7 +12,7 @@ import LibraryView from '../views/library/LibraryView.vue'
 import PaperPDFView from '../views/library/paper/PaperPDFView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import PaperList from '../views/library/PaperList.vue'
-import ProfileView from '../views/profile/ProfileView.vue'
+import SettingsView from '../views/settings/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -95,11 +95,11 @@ const router = createRouter({
           },
         },
         {
-          path: 'profile',
-          name: 'profile',
-          component: ProfileView,
+          path: 'settings',
+          name: 'settings',
+          component: SettingsView,
           meta: {
-            title: 'Scider | 个人信息',
+            title: 'Scider | 设置',
           },
         },
       ],

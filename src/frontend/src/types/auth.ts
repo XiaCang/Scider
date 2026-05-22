@@ -59,3 +59,16 @@ export interface ChangePasswordResponseData {
   userId: string
   email: string
 }
+
+/** POST /api/user/change-password-by-old → payload */
+export interface ChangePasswordByOldPayload {
+  old_password: string
+  new_password: string
+}
+
+/** PUT /api/user/profile → payload */
+export interface UpdateProfilePayload {
+  username?: string
+  avatar?: string
+  bio?: string
+}
