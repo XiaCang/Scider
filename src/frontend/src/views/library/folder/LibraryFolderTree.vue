@@ -70,16 +70,8 @@ const handleAddRootFolder = () => {
       </div>
     </div>
 
-    <!-- 导航区：最近论文 / 全部论文 -->
+    <!-- 导航区 -->
     <div class="nav-list">
-      <div
-        class="nav-item"
-        :class="{ active: activeFolderId === 'recent' }"
-        @click="handleSelectFolder('recent')"
-      >
-        <span class="nav-item-icon">🕐</span>
-        <span class="nav-item-label">最近论文</span>
-      </div>
       <div
         class="nav-item"
         :class="{ active: activeFolderId === 'all' }"
