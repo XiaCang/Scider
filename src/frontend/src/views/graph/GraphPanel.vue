@@ -426,10 +426,27 @@ onMounted(async () => {
     await paperStore.loadPapers()
   }
   buildGraphFromPapers()
-  window.addEventListener('resize', () => chartInstance?.resize())
+  
+  // 监听窗口 resize 事件
+  const handleWindowResize = () => chartInstance?.resize()
+  window.addEventListener('resize', handleWindowResize)
+  
+  // 监听侧边栏折叠/展开事件
+  const handleSidebarToggle = () => chartInstance?.resize()
+  window.addEventListener('sidebar-toggle', handleSidebarToggle)
+  
+  // 保存清理函数引用（用于卸载时移除）
+  ;(chartInstance as any)._cleanupHandlers = () => {
+    window.removeEventListener('resize', handleWindowResize)
+    window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+  }
 })
+
 onUnmounted(() => {
-  window.removeEventListener('resize', () => chartInstance?.resize())
+  // 清理事件监听器
+  if ((chartInstance as any)?._cleanupHandlers) {
+    ;(chartInstance as any)._cleanupHandlers()
+  }
   chartInstance?.dispose()
 })
 </script>
