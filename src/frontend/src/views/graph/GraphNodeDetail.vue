@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Back } from '@element-plus/icons-vue'
 import type { LibraryPaper } from '../../types/library'
@@ -27,6 +27,28 @@ const drawerVisible = computed({
 
 // 内部状态：是否显示论文详情视图（用于四要素节点切换）
 const showPaperDetail = ref(false)
+
+// 响应式窗口宽度
+const windowWidth = ref(window.innerWidth)
+
+const handleResize = () => {
+  windowWidth.value = window.innerWidth
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+// 计算抽屉宽度
+const drawerSize = computed(() => {
+  if (windowWidth.value < 768) return '100%'
+  if (windowWidth.value < 1200) return '500px'
+  return '650px'
+})
 
 // 获取节点类型标签
 const getTypeLabel = (type: NodeType) => {
@@ -116,7 +138,7 @@ const handleClose = () => {
     v-model="drawerVisible"
     :title="displayNodeData ? `${getTypeLabel(displayNodeData.type)}详情` : '节点详情'"
     direction="rtl"
-    size="650px"
+    :size="drawerSize"
     @close="handleClose"
   >
     <div v-if="displayNodeData" class="node-detail">
@@ -369,5 +391,26 @@ const handleClose = () => {
   align-items: center;
   justify-content: center;
   min-height: 300px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .node-detail {
+    padding: 0 0.3rem;
+  }
+  
+  .node-name {
+    font-size: 1.1rem;
+  }
+  
+  .keypoint-content,
+  .content-text {
+    font-size: 0.85rem;
+    padding: 0.5rem;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
 }
 </style>

@@ -189,6 +189,35 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
     nodeConnCount[l.target] = (nodeConnCount[l.target] || 0) + 1
   })
 
+  // 根据节点数量动态调整力导向布局参数
+  const nodeCount = nodes.length
+  let forceConfig
+  if (nodeCount > 50) {
+    // 大规模图谱：更分散的布局
+    forceConfig = { 
+      repulsion: 1500,
+      gravity: 0.02,
+      edgeLength: [200, 400],
+      friction: 0.7
+    }
+  } else if (nodeCount < 20) {
+    // 小规模图谱：更紧凑的布局
+    forceConfig = { 
+      repulsion: 800,
+      gravity: 0.05,
+      edgeLength: [150, 250],
+      friction: 0.6
+    }
+  } else {
+    // 中等规模：默认配置
+    forceConfig = { 
+      repulsion: 1000,
+      gravity: 0.03,
+      edgeLength: [180, 350],
+      friction: 0.65
+    }
+  }
+
   const option: echarts.EChartsOption = {
     tooltip: {
       trigger: 'item',
@@ -227,6 +256,20 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           innovation: '💡 创新点',
           conclusion: '✅ 结论'
         }
+        
+        // 论文节点显示完整信息
+        if (params.data.type === 'paper' && params.data.paperInfo) {
+          const paper = params.data.paperInfo
+          return `
+            <div style="padding: 4px 0; max-width: 300px;">
+              <div style="font-weight: 600; font-size: 13px; margin-bottom: 6px; line-height: 1.4;">${params.name}</div>
+              <div style="color: #666; font-size: 11px; margin-bottom: 2px;">作者: ${paper.authors}</div>
+              <div style="color: #666; font-size: 11px; margin-bottom: 2px;">年份: ${paper.year}</div>
+              <div style="color: #666; font-size: 11px;">来源: ${paper.source}</div>
+            </div>
+          `
+        }
+        
         return `
           <div style="padding: 4px 0;">
             <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${params.name}</div>
@@ -271,7 +314,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           type: l.relationType === 'semantic' ? 'dashed' : 'solid',
           color: l.relationType === 'citation' ? 'rgba(153,153,153,0.35)' :
                  l.relationType === 'semantic' ? 'rgba(99,132,180,0.4)' : 'rgba(120,140,170,0.25)',
-          curveness: l.relationType === 'semantic' ? 0.25 : 0.08,
+          curveness: l.relationType === 'semantic' ? 0.25 : 0.05,
           width: l.relationType === 'ownership' ? 2.5 : 1.8,
           opacity: 0.7,
         },
@@ -280,12 +323,12 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       categories,
       roam: true,
       draggable: true,
-      force: { repulsion: 1000, gravity: 0.03, edgeLength: [180, 350], friction: 0.65 },
+      force: forceConfig,
       emphasis: {
-        focus: 'none',
+        focus: 'adjacency',
         itemStyle: {
-          shadowBlur: 12,
-          shadowColor: 'rgba(0,0,0,0.15)',
+          shadowBlur: 20,
+          shadowColor: 'rgba(74, 157, 154, 0.4)',
           shadowOffsetY: 3,
         },
         label: {
@@ -308,13 +351,12 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           return name.length > 10 ? name.substring(0, 10) + '…' : name
         }
       },
-      // 静默状态的样式
       blur: {
         itemStyle: {
-          opacity: 0.3
+          opacity: 0.15
         },
         lineStyle: {
-          opacity: 0.1
+          opacity: 0.05
         },
         label: {
           show: false
