@@ -719,6 +719,696 @@
         "security": []
       }
     },
+    "/api/user/avatar": {
+      "post": {
+        "summary": "头像上传",
+        "deprecated": false,
+        "description": "- 主要行为：\n  - 服务端保存到 `UPLOAD_DIR/avatars/` 下（文件名按 md5+user_id + ext 形式去重/保存）；\n  - 更新 `User.avatar_path` / `User.avatar_url` 字段；\n  - 若已有旧头像会尝试删除旧文件（若与新文件不同）。",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk3MjEzNTh9.4Ws_LXxOgtB8tU6RKlK2lCR9EDEOjVKnFHa5-l3qCIM",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "description": "要上传的头像文件（支持后缀 `.png`, `.jpg`, `.jpeg`, `.webp`，大小受 `MAX_UPLOAD_SIZE_MB` 限制）",
+                    "example": "cmMtdXBsb2FkLTE3Nzk2OTIwMzYwODQtMg==/屏幕截图 2026-05-09 143335.png",
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "avatarUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "avatarUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "上传成功",
+                  "data": {
+                    "avatarUrl": "/uploads/avatars/abc123def.png"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "头像url获取",
+        "deprecated": false,
+        "description": "返回当前登录用户的 `avatarUrl`（如果无头像，返回空或 `null`）",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "avatarUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "avatarUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "ok",
+                  "data": {
+                    "avatarUrl": "/uploads/avatars/abc123def.png"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "头像删除",
+        "deprecated": false,
+        "description": "- 方法：DELETE\n- 路径：`/api/user/avatar`\n- 权限：登录用户（只能删除自己的头像）\n- 描述：删除用户头像文件并清空 DB 中的 `avatar_path` / `avatar_url`。",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "删除成功",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/user/llm-providers": {
+      "post": {
+        "summary": "apikey添加",
+        "deprecated": false,
+        "description": "- 方法：POST\n- 路径：`/api/user/llm-providers`\n- 权限：登录用户\n- Body（JSON）：",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk3MjQ5ODl9.a-pyhBnjZxDzXmh-kJasW6Nb8WAmlWOs5Udic7oFCcc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "base_url": {
+                    "type": "string"
+                  },
+                  "api_key": {
+                    "type": "string",
+                    "description": "存加密后的apikey"
+                  },
+                  "default_model": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "provider",
+                  "base_url",
+                  "api_key",
+                  "default_model",
+                  "enabled"
+                ]
+              },
+              "example": {
+                "name": "OpenAI",
+                "provider": "openai",
+                "base_url": "https://.openai.com",
+                "api_key": "sk-xxdddfx",
+                "default_model": "gpt-5",
+                "enabled": true
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "api_key_masked": {
+                          "type": "string"
+                        },
+                        "default_model": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "api_key_masked",
+                        "default_model",
+                        "enabled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "created",
+                  "data": {
+                    "id": 2,
+                    "name": "OpenAI",
+                    "api_key_masked": "sk_****xxx",
+                    "default_model": "gpt-4",
+                    "enabled": true
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "全部apikey获取",
+        "deprecated": false,
+        "description": "权限：当前登录用户\n列出当前用户所持有的所有apikey",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmMyZDBiYTUxYjI0M2EyYTZkODAyMjI1ZDcyM2JkZiIsImVtYWlsIjoiMzQ5MzczNTgzOEBxcS5jb20iLCJleHAiOjE3Nzk3MzI5MjF9.XfrMap0_m_dWXg-lkceU4qrfo2xNILo9B_JV5O37JXs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "base_url": {
+                            "type": "string"
+                          },
+                          "api_key_masked": {
+                            "type": "string"
+                          },
+                          "default_model": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "user_id": {
+                            "type": "null"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "ok",
+                      "data": [
+                        {
+                          "id": 1,
+                          "name": "OpenAI",
+                          "provider": "openai",
+                          "base_url": "https://api.openai.com",
+                          "api_key_masked": "sk_****abcd",
+                          "default_model": "gpt-4",
+                          "enabled": true,
+                          "user_id": null,
+                          "created_at": "2026-05-01T12:00:00Z"
+                        }
+                      ]
+                    }
+                  },
+                  "2": {
+                    "summary": "成功示例 2",
+                    "value": {
+                      "code": 0,
+                      "msg": "查询成功",
+                      "data": [
+                        {
+                          "id": "53440878ff9d495f841b74e56eba13a1",
+                          "name": "OpenAI",
+                          "provider": "openai",
+                          "base_url": "https://.openai.com",
+                          "default_model": "gpt-5",
+                          "enabled": true,
+                          "api_key_masked": "******ddfx",
+                          "user_id": "08c5449bd77d42adb03b3d0bc302cbf1"
+                        },
+                        {
+                          "id": "bef918035d5f4f9fb49116f0d766b9a0",
+                          "name": "OpenAI",
+                          "provider": "openai",
+                          "base_url": "https://api.openai.com",
+                          "default_model": "gpt-4",
+                          "enabled": true,
+                          "api_key_masked": "**-xxx",
+                          "user_id": "08c5449bd77d42adb03b3d0bc302cbf1"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/user/llm-providers/{id}": {
+      "patch": {
+        "summary": "apikey更新",
+        "deprecated": false,
+        "description": "- 方法：PATCH\n- 路径：`/api/user/llm-providers/{id}`\n- 权限：登录用户（只能更新自己创建或有权限的 Provider）\n\n这里apikey更新包括1.更新内容 2.更新唯一选中启用的apikey，一个key的enabled被设为true的话，自动将该用户其他key的enabled设为false",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "bef918035d5f4f9fb49116f0d766b9a0",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmMyZDBiYTUxYjI0M2EyYTZkODAyMjI1ZDcyM2JkZiIsImVtYWlsIjoiMzQ5MzczNTgzOEBxcS5jb20iLCJleHAiOjE3Nzk3MzI5MjF9.XfrMap0_m_dWXg-lkceU4qrfo2xNILo9B_JV5O37JXs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "base_url": {
+                    "type": "string"
+                  },
+                  "api_key": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "更新唯一选中启用的apikey，一个key的enabled被设为true的话，自动将该用户其他key的enabled设为false"
+                  }
+                },
+                "required": [
+                  "name",
+                  "base_url",
+                  "api_key",
+                  "enabled"
+                ]
+              },
+              "example": {
+                "name": "OpenAI Updated-old22222",
+                "base_url": "https://api.openai.com/v2",
+                "api_key": "sk-new",
+                "enabled": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "更新成功",
+                      "data": {
+                        "id": "53440878ff9d495f841b74e56eba13a1"
+                      }
+                    }
+                  },
+                  "2": {
+                    "summary": "修改失败（无权限）",
+                    "value": {
+                      "code": 403,
+                      "msg": "无权限修改该 provider",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "apikey删除",
+        "deprecated": false,
+        "description": "- 方法：DELETE\n- 路径：`/api/user/llm-providers/{id}`\n- 权限：登录用户（只能删除自己有权限的 Provider）",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "这里的id指的是apikey的id",
+            "required": true,
+            "example": "bef918035d5f4f9fb49116f0d766b9a0",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmMyZDBiYTUxYjI0M2EyYTZkODAyMjI1ZDcyM2JkZiIsImVtYWlsIjoiMzQ5MzczNTgzOEBxcS5jb20iLCJleHAiOjE3Nzk3MzI5MjF9.XfrMap0_m_dWXg-lkceU4qrfo2xNILo9B_JV5O37JXs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "deleted",
+                      "data": null
+                    }
+                  },
+                  "2": {
+                    "summary": "删除失败（无权限）",
+                    "value": {
+                      "code": 403,
+                      "msg": "无权限删除该 provider",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
     "/api/tasks/ping": {
       "post": {
         "summary": "Submit Ping Task",

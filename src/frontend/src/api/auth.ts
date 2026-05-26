@@ -10,6 +10,7 @@ import type {
   ChangePasswordResponseData,
   ChangePasswordByOldPayload,
   UpdateProfilePayload,
+  AvatarResponseData,
 } from '../types/auth'
 
 /** POST /api/user/login — 登录 */
@@ -39,3 +40,20 @@ export const changePasswordByOldApi = (payload: ChangePasswordByOldPayload) =>
 /** PUT /api/user/profile — 更新个人信息 */
 export const updateProfileApi = (payload: UpdateProfilePayload) =>
   request.put<ApiResponse<ProfileResponseData>>('/user/profile', payload)
+
+/** POST /api/user/avatar — 上传头像 */
+export const uploadAvatarApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ApiResponse<AvatarResponseData>>('/user/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+/** GET /api/user/avatar — 获取头像 URL */
+export const getAvatarApi = () =>
+  request.get<ApiResponse<AvatarResponseData>>('/user/avatar')
+
+/** DELETE /api/user/avatar — 删除头像 */
+export const deleteAvatarApi = () =>
+  request.delete<ApiResponse<null>>('/user/avatar')

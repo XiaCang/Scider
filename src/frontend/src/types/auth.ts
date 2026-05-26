@@ -72,3 +72,8 @@ export interface UpdateProfilePayload {
   avatar?: string
   bio?: string
 }
+
+/** GET /api/user/avatar → data */
+export interface AvatarResponseData {
+  avatarUrl: string | null
+}

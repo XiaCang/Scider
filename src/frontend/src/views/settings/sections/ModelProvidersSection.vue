@@ -9,14 +9,34 @@ const loading = ref(true)
 const providers = ref<ModelProvider[]>([])
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
+const editingMaskedKey = ref('')
 const dialogLoading = ref(false)
 const dialogFormRef = ref<FormInstance>()
 
-const dialogForm = reactive<CreateProviderPayload>({
+const dialogForm = reactive({
   name: '',
-  api_key: '',
+  provider: 'openai',
   base_url: '',
+  api_key: '',
+  default_model: '',
+  enabled: true,
 })
+
+const PROVIDER_OPTIONS = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Google', value: 'google' },
+  { label: 'Azure', value: 'azure' },
+  { label: '自定义', value: 'custom' },
+]
+
+const PROVIDER_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com',
+  anthropic: 'https://api.anthropic.com',
+  google: 'https://generativelanguage.googleapis.com',
+  azure: '',
+  custom: '',
+}
 
 const isEditing = computed(() => editingId.value !== null)
 
@@ -28,12 +48,17 @@ const dialogRules: FormRules = {
   name: [
     { required: true, message: '请输入提供商名称', trigger: 'blur' },
   ],
+  provider: [
+    { required: true, message: '请选择提供商类型', trigger: 'change' },
+  ],
   api_key: [
     { required: true, message: '请输入 API Key', trigger: 'blur' },
   ],
   base_url: [
     { required: true, message: '请输入 API 地址', trigger: 'blur' },
-    { type: 'url', message: '请输入正确的 URL 格式', trigger: 'blur' },
+  ],
+  default_model: [
+    { required: true, message: '请输入默认模型', trigger: 'blur' },
   ],
 }
 
@@ -50,21 +75,43 @@ const fetchProviders = async () => {
   }
 }
 
+const handleProviderChange = (val: string) => {
+  const url = PROVIDER_BASE_URLS[val]
+  if (url && !dialogForm.base_url) {
+    dialogForm.base_url = url
+  }
+  // 根据提供商类型给出默认模型建议
+  const modelHints: Record<string, string> = {
+    openai: 'gpt-4o',
+    anthropic: 'claude-sonnet-4-6',
+    google: 'gemini-2.0-flash',
+  }
+  if (modelHints[val] && !dialogForm.default_model) {
+    dialogForm.default_model = modelHints[val]
+  }
+}
+
 const openAddDialog = () => {
   editingId.value = null
+  editingMaskedKey.value = ''
   dialogForm.name = ''
+  dialogForm.provider = 'openai'
+  dialogForm.base_url = PROVIDER_BASE_URLS['openai']
   dialogForm.api_key = ''
-  dialogForm.base_url = ''
-  dialogForm.models = undefined
+  dialogForm.default_model = 'gpt-4o'
+  dialogForm.enabled = true
   dialogVisible.value = true
 }
 
 const openEditDialog = (provider: ModelProvider) => {
   editingId.value = provider.id
+  editingMaskedKey.value = provider.api_key_masked
   dialogForm.name = provider.name
-  dialogForm.api_key = provider.api_key
+  dialogForm.provider = provider.provider
   dialogForm.base_url = provider.base_url
-  dialogForm.models = provider.models
+  dialogForm.api_key = ''
+  dialogForm.default_model = provider.default_model
+  dialogForm.enabled = provider.enabled
   dialogVisible.value = true
 }
 
@@ -78,18 +125,21 @@ const handleDialogSubmit = async () => {
       if (isEditing.value) {
         await updateProviderApi(editingId.value!, {
           name: dialogForm.name,
-          api_key: dialogForm.api_key,
           base_url: dialogForm.base_url,
-          models: dialogForm.models,
+          api_key: dialogForm.api_key || undefined,
+          enabled: dialogForm.enabled,
         })
         ElMessage.success('提供商已更新')
       } else {
-        await createProviderApi({
+        const payload: CreateProviderPayload = {
           name: dialogForm.name,
-          api_key: dialogForm.api_key,
+          provider: dialogForm.provider,
           base_url: dialogForm.base_url,
-          models: dialogForm.models,
-        })
+          api_key: dialogForm.api_key,
+          default_model: dialogForm.default_model,
+          enabled: dialogForm.enabled,
+        }
+        await createProviderApi(payload)
         ElMessage.success('提供商已添加')
       }
       dialogVisible.value = false
@@ -100,6 +150,17 @@ const handleDialogSubmit = async () => {
       dialogLoading.value = false
     }
   })
+}
+
+const toggleEnabled = async (provider: ModelProvider) => {
+  try {
+    await updateProviderApi(provider.id, {
+      enabled: !provider.enabled,
+    })
+    await fetchProviders()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
+  }
 }
 
 const handleDelete = async (provider: ModelProvider) => {
@@ -124,12 +185,10 @@ const handleDelete = async (provider: ModelProvider) => {
   }
 }
 
-/** 掩码显示 API Key：只显示最后 6 位 */
+/** 掩码显示 API Key */
 const maskApiKey = (key: string): string => {
-  if (!key || key.length <= 8) return '••••••••'
-  const prefix = key.slice(0, 3)
-  const suffix = key.slice(-6)
-  return `${prefix}••••••${suffix}`
+  if (!key) return '••••••••'
+  return key
 }
 
 onMounted(() => {
@@ -175,27 +234,37 @@ onMounted(() => {
                 <h4 class="provider-name">{{ provider.name }}</h4>
                 <span
                   class="provider-status"
-                  :class="provider.is_active !== false ? 'is-active' : 'is-inactive'"
+                  :class="provider.enabled ? 'is-active' : 'is-inactive'"
                 >
-                  {{ provider.is_active !== false ? '启用' : '停用' }}
+                  {{ provider.enabled ? '启用' : '停用' }}
                 </span>
               </div>
               <div class="provider-meta">
+                <div class="meta-item">
+                  <span class="meta-label">提供商</span>
+                  <span class="meta-value">{{ provider.provider }}</span>
+                </div>
                 <div class="meta-item">
                   <span class="meta-label">API 地址</span>
                   <span class="meta-value">{{ provider.base_url }}</span>
                 </div>
                 <div class="meta-item">
                   <span class="meta-label">API Key</span>
-                  <span class="meta-value mono">{{ maskApiKey(provider.api_key) }}</span>
+                  <span class="meta-value mono">{{ maskApiKey(provider.api_key_masked) }}</span>
                 </div>
-                <div v-if="provider.models && provider.models.length" class="meta-item">
-                  <span class="meta-label">模型列表</span>
-                  <span class="meta-value">{{ provider.models.join(', ') }}</span>
+                <div class="meta-item">
+                  <span class="meta-label">默认模型</span>
+                  <span class="meta-value">{{ provider.default_model }}</span>
                 </div>
               </div>
             </div>
             <div class="provider-actions">
+              <el-switch
+                :model-value="provider.enabled"
+                :loading="loading"
+                size="small"
+                @click="toggleEnabled(provider)"
+              />
               <el-button
                 size="small"
                 circle
@@ -219,7 +288,7 @@ onMounted(() => {
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="480px"
+      width="520px"
       :close-on-click-modal="false"
       class="provider-dialog"
     >
@@ -233,17 +302,24 @@ onMounted(() => {
         <el-form-item label="提供商名称" prop="name">
           <el-input
             v-model="dialogForm.name"
-            placeholder="例：OpenAI、Anthropic、自定义"
+            placeholder="例：我的 OpenAI 服务"
           />
         </el-form-item>
 
-        <el-form-item label="API Key" prop="api_key">
-          <el-input
-            v-model="dialogForm.api_key"
-            placeholder="sk-..."
-            type="password"
-            show-password
-          />
+        <el-form-item label="提供商类型" prop="provider">
+          <el-select
+            v-model="dialogForm.provider"
+            placeholder="请选择类型"
+            style="width: 100%"
+            @change="handleProviderChange"
+          >
+            <el-option
+              v-for="opt in PROVIDER_OPTIONS"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item label="API 地址" prop="base_url">
@@ -251,6 +327,26 @@ onMounted(() => {
             v-model="dialogForm.base_url"
             placeholder="https://api.openai.com"
           />
+        </el-form-item>
+
+        <el-form-item label="API Key" prop="api_key">
+          <el-input
+            v-model="dialogForm.api_key"
+            :placeholder="isEditing ? (editingMaskedKey || '输入新的 API Key（留空不修改）') : 'sk-...'"
+            type="password"
+            show-password
+          />
+        </el-form-item>
+
+        <el-form-item label="默认模型" prop="default_model" v-if="!isEditing">
+          <el-input
+            v-model="dialogForm.default_model"
+            placeholder="例：gpt-4o, claude-sonnet-4-6"
+          />
+        </el-form-item>
+
+        <el-form-item label="启用状态">
+          <el-switch v-model="dialogForm.enabled" />
         </el-form-item>
       </el-form>
 
@@ -435,7 +531,8 @@ onMounted(() => {
 
 .provider-actions {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 
