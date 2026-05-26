@@ -91,7 +91,7 @@
       </div>
 
       <!-- PDF连续滚动区域 -->
-      <div class="pdf-content" ref="pagesContainer">
+      <div class="pdf-content" ref="pagesContainer" v-once>
         <div v-if="pdfLoading" class="pdf-loading">
           <el-icon class="is-loading" :size="48"><Document /></el-icon>
           <p>正在加载PDF...</p>
