@@ -130,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
