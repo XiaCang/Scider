@@ -30,8 +30,14 @@ Copy-Item .env.example .env
 
 ```bash
 cd src/backend
-docker compose up -d
+docker compose up -d mysql redis
 ```
+
+> ⚠️ **注意事项**：
+> 1. 请仅启动 `mysql` 和 `redis` 服务，不要直接使用 `docker compose up -d`（不带服务名），否则会尝试拉取 `backend` 和 `worker` 的私有镜像并报错 `denied`。
+> 2. 如果启动时提示 `ports are not available: listen tcp 0.0.0.0:3306: bind: Only one usage of each socket address...`，说明本机的 **3306 端口已被占用**（通常是本地已安装的 MySQL 服务）。解决方案：
+>    - **方案 A（推荐）**：停止本机 MySQL 服务，释放 3306 端口 — 以管理员身份打开 PowerShell，执行 `net stop MySQL80`
+>    - **方案 B**：修改 `docker-compose.yml` 中 MySQL 的端口映射（如 `"3307:3306"`），并同步更新 `.env` 中的 `DATABASE_URL`
 
 确认服务已就绪：
 
