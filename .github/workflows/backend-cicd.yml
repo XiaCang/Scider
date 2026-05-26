@@ -197,15 +197,20 @@ jobs:
             echo "Logging in to GHCR..."
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            # Pull latest images
-            docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
+            # Try to pull cached layers from GHCR (optional, speeds up build)
+            echo "Pulling latest images from GHCR (if available)..."
+            docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker || echo "Pull failed, will build locally."
+
+            # Build images locally
+            echo "Building images..."
+            docker compose -f ${{ env.COMPOSE_FILE }} build backend worker
 
             # Apply DB migrations before restarting
             echo "Running database migrations..."
             docker compose -f ${{ env.COMPOSE_FILE }} run --rm backend \
               sh -c "cd db && alembic upgrade head"
 
-            # Restart services
+            # Restart services with freshly built images
             docker compose -f ${{ env.COMPOSE_FILE }} up -d backend worker
 
             # Clean up stale images
