@@ -138,7 +138,7 @@ jobs:
           context: src/backend
           push: true
           platforms: linux/amd64
-          file: Dockerfile.worker
+          file: src/backend/Dockerfile.worker
           build-args: |
             PIP_INDEX_URL=https://pypi.org/simple/
           tags: |
