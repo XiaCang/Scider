@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 
 import aiofiles
@@ -12,6 +13,8 @@ from db.crud_note import get_notes_by_paper, create_note, update_note
 from db.crud_keypoints import save_confirmed_key_points
 from db.session import get_db
 from utils.response import success, error
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
@@ -563,3 +566,161 @@ async def get_pdf_file(
         filename=filename,
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
+
+
+# ─── PDF 全文搜索接口 ──────────────────────────────────────────────────────────
+
+
+class SearchRequest(BaseModel):
+    """搜索请求模型"""
+    keyword: str = Field(..., min_length=1, max_length=100, description="搜索关键词")
+    page_number: int = Field(None, ge=1, description="限定页码（可选）")
+    limit: int = Field(50, ge=1, le=200, description="返回结果数量上限")
+
+
+@router.post("/{paper_id}/search")
+async def search_in_paper(
+    paper_id: str,
+    request: Request,
+    body: SearchRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    在指定论文中搜索关键词（基于 MySQL FULLTEXT + ngram）
+    
+    - 支持中文/英文混合搜索
+    - 返回匹配片段和高亮标记
+    - 可限定特定页码搜索
+    """
+    import re
+    
+    # 1. JWT 认证
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+    
+    # 2. 验证论文归属
+    from sqlalchemy import select
+    from db.models import Paper
+    
+    result = await session.execute(
+        select(Paper).where(Paper.id == paper_id, Paper.user_id == user["id"])
+    )
+    paper = result.scalar_one_or_none()
+    if not paper:
+        return error(msg="论文不存在或无权访问", code=404, data=None, status_code=404)
+    
+    # 3. 检查是否有全文数据
+    if not paper.full_text:
+        return error(msg="论文尚未完成解析，请稍后再试", code=400, data=None, status_code=200)
+    
+    keyword = body.keyword.strip()
+    if not keyword:
+        return error(msg="搜索关键词不能为空", code=400, data=None, status_code=200)
+    
+    # 4. 执行 FULLTEXT 搜索
+    try:
+        from sqlalchemy import text
+        
+        # 使用 NATURAL LANGUAGE MODE 进行自然语言搜索
+        query = text("""
+            SELECT 
+                MATCH(full_text) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AS score
+            FROM paper
+            WHERE id = :paper_id
+              AND MATCH(full_text) AGAINST (:keyword IN NATURAL LANGUAGE MODE)
+            LIMIT 1
+        """)
+        
+        search_result = await session.execute(
+            query,
+            {"paper_id": paper_id, "keyword": keyword}
+        )
+        row = search_result.fetchone()
+        
+        if not row or row.score == 0:
+            return success(
+                data={
+                    "keyword": keyword,
+                    "total_results": 0,
+                    "results": []
+                },
+                msg="未找到匹配结果",
+                code=0,
+                status_code=200
+            )
+        
+        # 5. 提取匹配片段并高亮
+        full_text = paper.full_text
+        
+        # 查找所有匹配的上下文片段
+        highlighted_results = _extract_highlights(full_text, keyword, body.limit)
+        
+        return success(
+            data={
+                "keyword": keyword,
+                "total_results": len(highlighted_results),
+                "results": highlighted_results
+            },
+            msg="搜索成功",
+            code=0,
+            status_code=200
+        )
+    
+    except Exception as e:
+        logger.error(f"搜索失败: {str(e)}")
+        return error(msg="搜索服务异常", code=500, data=None, status_code=200)
+
+
+def _extract_highlights(full_text: str, keyword: str, limit: int = 50) -> list:
+    """
+    从全文中提取关键词的上下文片段并高亮
+    
+    Args:
+        full_text: 完整文本
+        keyword: 搜索关键词
+        limit: 最大返回片段数
+    
+    Returns:
+        高亮片段列表
+    """
+    import re
+    
+    results = []
+    context_length = 150  # 每个片段前后各取 150 字符作为上下文
+    
+    # 转义特殊字符，构建不区分大小写的正则
+    escaped_keyword = re.escape(keyword)
+    pattern = re.compile(escaped_keyword, re.IGNORECASE | re.UNICODE)
+    
+    # 查找所有匹配位置
+    matches = list(pattern.finditer(full_text))
+    
+    for match in matches[:limit]:
+        start_pos = max(0, match.start() - context_length)
+        end_pos = min(len(full_text), match.end() + context_length)
+        
+        # 提取上下文
+        context = full_text[start_pos:end_pos]
+        
+        # 在上下文中高亮关键词
+        highlighted = pattern.sub(
+            r'<em class="search-highlight">\g<0></em>', 
+            context
+        )
+        
+        # 如果截断了开头或结尾，添加省略号
+        prefix = "..." if start_pos > 0 else ""
+        suffix = "..." if end_pos < len(full_text) else ""
+        
+        # 估算页码（简单按每页 3000 字符估算）
+        estimated_page = (match.start() // 3000) + 1
+        
+        results.append({
+            "page_number": estimated_page,
+            "content": context,
+            "score": 1.0,  # MySQL FULLTEXT 不提供精确分数，统一设为 1.0
+            "highlights": [f"{prefix}{highlighted}{suffix}"]
+        })
+    
+    return results

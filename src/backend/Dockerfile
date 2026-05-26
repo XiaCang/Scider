@@ -2,11 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# 可通过 --build-arg PIP_INDEX_URL=... 切换镜像源
+# 默认官方 PyPI（GitHub Actions 中快）；本地推荐使用清华源：
+#   docker build --build-arg PIP_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple ...
+ARG PIP_INDEX_URL=https://pypi.org/simple/
+
 # Copy dependencies first for better layer caching
 COPY requirements.txt .
-RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple && \
-    pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --index-url "$PIP_INDEX_URL" -r requirements.txt
 
 # Copy application code
 COPY . .

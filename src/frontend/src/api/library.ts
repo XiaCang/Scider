@@ -188,3 +188,37 @@ export const uploadPaperApi = (file: File) => {
     }
   )
 }
+
+// ==================== PDF全文搜索相关接口 ====================
+
+/**
+ * 搜索结果项
+ */
+export interface SearchResultItem {
+  page_number: number
+  content: string
+  score: number
+  highlights: string[]
+}
+
+/**
+ * 搜索结果
+ */
+export interface SearchResponse {
+  keyword: string
+  total_results: number
+  results: SearchResultItem[]
+}
+
+/**
+ * 在论文中搜索关键词
+ */
+export const searchInPaperApi = (
+  paperId: string,
+  data: {
+    keyword: string
+    page_number?: number
+    limit?: number
+  }
+) =>
+  request.post<ApiResponse<SearchResponse>>(`/papers/${paperId}/search`, data)

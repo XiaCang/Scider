@@ -17,6 +17,8 @@ from app.core.config import settings
 from middleware.jwt_middleware import JWTAuthMiddleware
 from module.user.controller.auth_router import router as auth_router
 from module.user.controller.user_router import router as user_router
+from module.user.controller.avatar_router import router as avatar_router
+from module.user.controller.llm_provider_router import router as llm_provider_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -57,3 +59,5 @@ app.include_router(folders_router, prefix=settings.API_PREFIX)
 app.include_router(graph_router, prefix=settings.API_PREFIX)
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(avatar_router)
+app.include_router(llm_provider_router)

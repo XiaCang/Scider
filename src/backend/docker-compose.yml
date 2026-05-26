@@ -7,10 +7,15 @@ services:
       MYSQL_ROOT_PASSWORD: 218218wcj
       MYSQL_DATABASE: db
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --ngram_token_size=2
+      --innodb_ft_min_token_size=2
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p218218wcj"]
       interval: 5s
@@ -27,7 +32,10 @@ services:
 
   backend:
     image: ghcr.io/xiacang/software-scider/backend:dev
-    build: .
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
     container_name: scider-backend
     restart: unless-stopped
     ports:
@@ -53,6 +61,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+      args:
+        PIP_INDEX_URL: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
     container_name: scider-worker
     restart: unless-stopped
     env_file:

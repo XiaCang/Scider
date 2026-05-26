@@ -134,6 +134,10 @@ const handleUpload = async () => {
   } catch (error: any) {
     console.error('Upload error:', error)
     ElMessage.error(error instanceof Error ? error.message : '上传失败，请稍后重试')
+    // 清理状态并关闭对话框（如重复上传等场景）
+    selectedFile.value = null
+    uploadProgress.value = 0
+    isVisible.value = false
   } finally {
     isUploading.value = false
   }

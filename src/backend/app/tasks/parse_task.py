@@ -81,6 +81,22 @@ async def _set_paper_failed(paper_id: str) -> None:
                 paper.status = PaperStatus.FAILED
 
 
+async def _save_full_text(paper_id: str, full_text: str) -> None:
+    """保存 PDF 全文到数据库（用于全文搜索）。"""
+    from sqlalchemy import select, update
+    from db.session import get_session
+    from db.models import Paper
+
+    async with get_session() as session:
+        async with session.begin():
+            await session.execute(
+                update(Paper)
+                .where(Paper.id == paper_id)
+                .values(full_text=full_text)
+            )
+    logger.info("[Parse Task] 全文已保存 paper_id=%s, chars=%d", paper_id, len(full_text))
+
+
 # ─── Celery Task ──────────────────────────────────────────────────────────────
 
 
@@ -133,13 +149,21 @@ def parse_pdf_task(self, paper_id: str, pdf_path: str) -> dict:
             pass
         raise self.retry(exc=ValueError("PDF extracted text is empty"))
 
+    # ★ 新增：保存完整文本到数据库（不截断，用于全文搜索）
+    try:
+        asyncio.run(_save_full_text(paper_id, paper_text))
+    except Exception as exc:
+        logger.warning("保存全文失败（非致命，不影响后续流程）: %s", exc)
+
     # 截断至 LLM 输入上限（取开头最有价值的部分）
     if len(paper_text) > LLM_MAX_CHARS:
         logger.info(
             "[Parse Task] 文本超出上限 %d chars，截断至 %d chars paper_id=%s",
             len(paper_text), LLM_MAX_CHARS, paper_id,
         )
-        paper_text = paper_text[:LLM_MAX_CHARS]
+        paper_text_for_llm = paper_text[:LLM_MAX_CHARS]
+    else:
+        paper_text_for_llm = paper_text
 
     logger.info("[Parse Task] 清洗后文本 paper_id=%s, chars=%d", paper_id, len(paper_text))
 
@@ -149,10 +173,10 @@ def parse_pdf_task(self, paper_id: str, pdf_path: str) -> dict:
     except Exception as exc:
         logger.warning("更新 PENDING_EXTRACTION 状态失败（非致命）: %s", exc)
 
-    # Step 5: 派发 LLM 提取任务
+    # Step 5: 派发 LLM 提取任务（使用截断后的文本）
     from app.tasks.llm_tasks import extract_key_points_task
 
-    extract_key_points_task.delay(paper_id, paper_text)
+    extract_key_points_task.delay(paper_id, paper_text_for_llm)
 
     logger.info(
         "[Parse Task] 解析完成并触发 LLM 提取 paper_id=%s, chars=%d",

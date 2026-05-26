@@ -63,6 +63,10 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
+    # Avatar fields: store disk path and a URL path mounted under /uploads
+    avatar_path = Column(String(1024), nullable=True)
+    avatar_url = Column(String(1024), nullable=True)
+
     papers = relationship("Paper", back_populates="user")
 
 
@@ -91,6 +95,7 @@ class Paper(Base):
     pdf_path = Column(String(1024), nullable=True)
     md5_hash = Column(String(64), nullable=True)
     file_size = Column(Integer, nullable=True)
+    full_text = Column(Text, nullable=True)  # PDF 完整文本内容（用于全文搜索）
     user_id = Column(String(64), ForeignKey("user.id"), nullable=False)
     folder_id = Column(String(64), ForeignKey("folder.id"), nullable=True)
     status = Column(SAEnum(PaperStatus), nullable=False, server_default=PaperStatus.PENDING_PARSING.value)
@@ -146,6 +151,25 @@ class Tag(Base):
     name = Column(String(255), nullable=False)
 
     papers = relationship("Paper", secondary=paper_tag, back_populates="tags")
+
+
+class LLMProvider(Base):
+    """LLM 提供商配置：支持全局或用户级别的模型配置存储。"""
+
+    __tablename__ = "llm_provider"
+
+    id = Column(String(64), primary_key=True, default=gen_id)
+    name = Column(String(128), nullable=False)
+    provider = Column(String(64), nullable=False)
+    base_url = Column(String(512), nullable=True)
+    api_key = Column(String(1024), nullable=True)
+    default_model = Column(String(128), nullable=True)
+    enabled = Column(Boolean, nullable=False, server_default="1")
+    user_id = Column(String(64), ForeignKey("user.id"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    owner = relationship("User")
 
 
 class Task(Base):
