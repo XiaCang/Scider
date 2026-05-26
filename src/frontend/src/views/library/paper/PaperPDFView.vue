@@ -1,3 +1,411 @@
+<script setup lang="ts">
+import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import * as pdfjsLib from 'pdfjs-dist'
+
+// 配置 PDF.js worker - 使用 CDN 上的 ES module worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
+
+import type { PaperNote, PaperPdfInfo } from '../../../types/library'
+import {
+  fetchPaperPdfInfoApi,
+  fetchPaperPdfFileApi,
+  fetchPaperNotesApi,
+  createNoteApi,
+  updateNoteApi
+} from '../../../api/library'
+import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
+
+const route = useRoute()
+const router = useRouter()
+const paperId = computed(() => route.params.paperId as string)
+
+// PDF 信息
+const paperTitle = ref('')
+const pdfUrl = ref('')
+const pageCount = ref(0)
+
+// 连续滚动相关 - 使用 shallowRef 避免 Vue 对 PDF 文档对象进行深度响应式代理
+const pdfDoc = shallowRef<any>(null)
+const pagesContainer = ref<HTMLElement | null>(null)
+const totalPages = ref(0)
+let isScrolling = false
+let rafId: number | null = null
+
+// 缩放比例
+const zoomScale = ref(1.0)
+const zoomLevel = computed({
+  get: () => Math.round(zoomScale.value * 100),
+  set: (val) => { zoomScale.value = val / 100 }
+})
+
+const currentPage = ref(1)
+const jumpPageInput = ref('')
+
+// 笔记相关
+const note = ref<PaperNote | null>(null)
+const noteContent = ref('')
+const notePage = ref(1)
+
+// UI 状态
+const isMobile = ref(window.innerWidth < 900)
+const showNoteDrawer = ref(true)
+const pdfLoading = ref(true)
+const pdfError = ref('')
+let pdfObjectUrl = ''
+
+const showSearchInline = ref(false)
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 900
+}
+
+// ---------- 滚动时计算当前页码（使用 requestAnimationFrame 节流）----------
+const updateCurrentPageFromScroll = () => {
+  if (!pagesContainer.value) return
+  const containerRect = pagesContainer.value.getBoundingClientRect()
+  const containerCenter = containerRect.top + containerRect.height / 2
+  let minDistance = Infinity
+  let closestPage = 1
+  const wrappers = pagesContainer.value.querySelectorAll('.pdf-page-wrapper')
+  wrappers.forEach((wrapper, idx) => {
+    const rect = wrapper.getBoundingClientRect()
+    const pageCenter = rect.top + rect.height / 2
+    const distance = Math.abs(containerCenter - pageCenter)
+    if (distance < minDistance) {
+      minDistance = distance
+      closestPage = idx + 1
+    }
+  })
+  if (closestPage !== currentPage.value) {
+    currentPage.value = closestPage
+  }
+}
+
+const handleScroll = () => {
+  if (isScrolling) return
+  if (rafId !== null) cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(() => {
+    updateCurrentPageFromScroll()
+    rafId = null
+  })
+}
+
+// ---------- 超采样渲染：保证缩小后依然清晰 ----------
+// 目标缩放比例为 targetScale（用户期望的缩放值），实际渲染精度至少为 1 倍
+const renderAllPagesWithScale = async (targetScale: number) => {
+  const doc = pdfDoc.value;
+  if (!doc || !pagesContainer.value || totalPages.value === 0) return;
+
+  // 实际渲染精度：不低于 1 倍，防止缩小时丢失像素
+  const renderScale = Math.max(1, targetScale);
+  
+  // 确保包装器存在（首次加载或 page 数量不变时复用）
+  const existingWrappers = pagesContainer.value.querySelectorAll('.pdf-page-wrapper');
+  if (existingWrappers.length !== totalPages.value) {
+    // 清空并重建结构
+    pagesContainer.value.innerHTML = '';
+    for (let i = 1; i <= totalPages.value; i++) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'pdf-page-wrapper';
+      wrapper.setAttribute('data-page-num', String(i));
+      pagesContainer.value.appendChild(wrapper);
+    }
+  }
+
+  // 遍历所有页面进行渲染
+  for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const originalViewport = page.getViewport({ scale: 1 });
+    const originalWidth = originalViewport.width;
+    const originalHeight = originalViewport.height;
+
+    // 渲染用视口（高精度）
+    const renderViewport = page.getViewport({ scale: renderScale });
+    // CSS 显示尺寸 = 原始尺寸 * 用户期望缩放
+    const displayWidth = originalWidth * targetScale;
+    const displayHeight = originalHeight * targetScale;
+
+    const wrapper = pagesContainer.value.querySelector(`.pdf-page-wrapper[data-page-num="${pageNum}"]`) as HTMLElement;
+    let canvas = wrapper.querySelector('canvas');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      wrapper.appendChild(canvas);
+    }
+
+    const context = canvas.getContext('2d')!;
+    canvas.width = renderViewport.width;
+    canvas.height = renderViewport.height;
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
+    canvas.style.display = 'block';
+    canvas.style.margin = '0 auto';
+    canvas.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)';
+    canvas.style.marginBottom = '16px';
+
+    await page.render({
+      canvasContext: context,
+      viewport: renderViewport,
+    }).promise;
+  }
+};
+
+// 跳转到指定页面并居中
+const scrollToPage = async (pageNum: number, behavior: ScrollBehavior = 'smooth') => {
+  if (!pagesContainer.value) return
+  const targetWrapper = pagesContainer.value.querySelector(`.pdf-page-wrapper[data-page-num="${pageNum}"]`)
+  if (targetWrapper) {
+    isScrolling = true
+    targetWrapper.scrollIntoView({
+      behavior,
+      block: 'center',
+      inline: 'center'
+    })
+    setTimeout(() => { isScrolling = false }, 500)
+    currentPage.value = pageNum
+  }
+}
+
+const handleJumpToPage = () => {
+  const page = parseInt(jumpPageInput.value)
+  if (!isNaN(page) && page >= 1 && page <= totalPages.value) {
+    scrollToPage(page)
+    jumpPageInput.value = ''
+  } else {
+    ElMessage.warning(`请输入 1-${totalPages.value} 之间的页码`)
+  }
+}
+
+const goToPrevPage = () => {
+  if (currentPage.value > 1) scrollToPage(currentPage.value - 1)
+}
+const goToNextPage = () => {
+  if (currentPage.value < totalPages.value) scrollToPage(currentPage.value + 1)
+}
+
+// 缩放控制
+const handleZoomIn = () => {
+  if (zoomScale.value < 3) {
+    zoomScale.value += 0.1
+    applyZoom()
+  }
+}
+const handleZoomOut = () => {
+  if (zoomScale.value > 0.25) {
+    zoomScale.value -= 0.1
+    applyZoom()
+  }
+}
+const handleResetZoom = () => {
+  zoomScale.value = 1.0
+  applyZoom()
+}
+
+const applyZoom = async () => {
+  const currentPageBefore = currentPage.value;
+  await renderAllPagesWithScale(zoomScale.value);
+  await nextTick();
+  scrollToPage(currentPageBefore, 'auto');
+};
+
+const handleFitWidth = async () => {
+  if (!pagesContainer.value || !pdfDoc.value) return;
+  const firstPage = await pdfDoc.value.getPage(1);
+  const originalWidth = firstPage.getViewport({ scale: 1 }).width;
+  const containerWidth = pagesContainer.value.clientWidth - 40;
+  let newScale = containerWidth / originalWidth;
+  newScale = Math.min(3, Math.max(0.25, newScale));
+  zoomScale.value = newScale;
+  await applyZoom();
+};
+
+const handleFitHeight = async () => {
+  if (!pagesContainer.value || !pdfDoc.value) return;
+  const firstPage = await pdfDoc.value.getPage(1);
+  const originalHeight = firstPage.getViewport({ scale: 1 }).height;
+  const containerHeight = pagesContainer.value.clientHeight - 100;
+  let newScale = containerHeight / originalHeight;
+  newScale = Math.min(3, Math.max(0.25, newScale));
+  zoomScale.value = newScale;
+  await applyZoom();
+};
+
+const handleWheelZoom = (event: WheelEvent) => {
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault()
+    if (event.deltaY < 0) handleZoomIn()
+    else handleZoomOut()
+  }
+}
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+    event.preventDefault()
+    toggleSearchInline()
+  }
+  if (event.key === 'Escape' && showSearchInline.value) {
+    showSearchInline.value = false
+    event.preventDefault()
+  }
+  if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
+    event.preventDefault()
+    handleZoomIn()
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key === '-') {
+    event.preventDefault()
+    handleZoomOut()
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key === '0') {
+    event.preventDefault()
+    handleResetZoom()
+  }
+}
+
+const toggleSearchInline = () => {
+  showSearchInline.value = !showSearchInline.value
+}
+
+const jumpToPage = (pageNumber: number) => {
+  if (pageNumber >= 1 && pageNumber <= totalPages.value) {
+    scrollToPage(pageNumber)
+    showSearchInline.value = false
+  }
+}
+
+const loadPdfDocument = async () => {
+  pdfLoading.value = true
+  pdfError.value = ''
+  try {
+    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
+    const doc = await loadingTask.promise
+    pdfDoc.value = markRaw(doc)
+    totalPages.value = pdfDoc.value.numPages
+    pageCount.value = totalPages.value
+
+    // 使用超采样渲染（默认缩放 1.0）
+    await renderAllPagesWithScale(zoomScale.value)
+
+    if (pagesContainer.value) {
+      pagesContainer.value.addEventListener('scroll', handleScroll)
+      pagesContainer.value.addEventListener('wheel', handleWheelZoom, { passive: false })
+    }
+
+    // 可选：自动适应宽度
+    await handleFitWidth()
+  } catch (err) {
+    console.error('PDF 加载失败:', err)
+    pdfError.value = 'PDF 文件加载失败，请检查文件是否有效'
+  } finally {
+    pdfLoading.value = false
+  }
+}
+
+const loadPaperData = async () => {
+  pdfLoading.value = true
+  pdfError.value = ''
+  try {
+    const response = await fetchPaperPdfInfoApi(paperId.value)
+    let pdfInfo: PaperPdfInfo
+    if ('code' in response && 'data' in response) {
+      const fullResponse = response as any
+      if (fullResponse.code !== 0) throw new Error(fullResponse.msg || '请求失败')
+      pdfInfo = fullResponse.data as PaperPdfInfo
+    } else {
+      pdfInfo = response as unknown as PaperPdfInfo
+    }
+    if (!pdfInfo || !pdfInfo.pdfUrl) throw new Error('PDF信息不完整')
+    paperTitle.value = pdfInfo.title || '未命名论文'
+    try {
+      if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
+      const pdfBlob = await fetchPaperPdfFileApi(paperId.value)
+      const pdfBlobTyped = new Blob([pdfBlob], { type: 'application/pdf' })
+      pdfObjectUrl = URL.createObjectURL(pdfBlobTyped)
+      pdfUrl.value = pdfObjectUrl
+    } catch (err) {
+      console.error('PDF文件流加载失败:', err)
+      pdfError.value = 'PDF文件加载失败'
+      pdfLoading.value = false
+      return
+    }
+    const notesResponse = await fetchPaperNotesApi(paperId.value)
+    let notesList: PaperNote[]
+    if ('code' in notesResponse && 'data' in notesResponse) {
+      const fullResponse = notesResponse as any
+      notesList = fullResponse.code === 0 ? fullResponse.data : []
+    } else {
+      notesList = notesResponse as unknown as PaperNote[]
+    }
+    note.value = notesList.length > 0 ? notesList[0] : null
+    if (note.value) {
+      noteContent.value = note.value.content
+      notePage.value = note.value.pageNumber || 1
+    }
+    await loadPdfDocument()
+  } catch (error) {
+    pdfError.value = error instanceof Error ? error.message : '加载失败'
+    ElMessage.error('加载论文失败: ' + pdfError.value)
+    console.error(error)
+  } finally {
+    pdfLoading.value = false
+  }
+}
+
+const handleBack = () => router.back()
+
+const autoSaveNote = async () => {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
+    if (!noteContent.value.trim()) return
+    try {
+      if (note.value) {
+        await updateNoteApi(paperId.value, note.value.id, { content: noteContent.value })
+        note.value.content = noteContent.value
+        note.value.updatedAt = new Date().toISOString()
+      } else {
+        const response = await createNoteApi(paperId.value, {
+          content: noteContent.value,
+          pageNumber: notePage.value,
+        })
+        note.value = response as unknown as PaperNote
+      }
+    } catch (error) {
+      ElMessage.error('自动保存失败')
+      console.error(error)
+    }
+  }, 500)
+}
+watch(noteContent, () => autoSaveNote())
+
+const formatTime = (isoString: string) => {
+  const date = new Date(isoString)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleKeyDown)
+  loadPaperData()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeyDown)
+  if (pagesContainer.value) {
+    pagesContainer.value.removeEventListener('scroll', handleScroll)
+    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
+  }
+  if (pdfDoc.value) pdfDoc.value.destroy()
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
+  if (rafId !== null) cancelAnimationFrame(rafId)
+})
+</script>
+
 <template>
   <div class="pdf-viewer-container">
     <!-- 中间 PDF 查看区 -->
@@ -129,385 +537,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import * as pdfjsLib from 'pdfjs-dist'
-
-// 配置 PDF.js worker - 使用 CDN 上的 ES module worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
-
-import type { PaperNote, PaperPdfInfo } from '../../../types/library'
-import {
-  fetchPaperPdfInfoApi,
-  fetchPaperPdfFileApi,
-  fetchPaperNotesApi,
-  createNoteApi,
-  updateNoteApi
-} from '../../../api/library'
-import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
-
-const route = useRoute()
-const router = useRouter()
-const paperId = computed(() => route.params.paperId as string)
-
-// PDF 信息
-const paperTitle = ref('')
-const pdfUrl = ref('')
-const pageCount = ref(0)
-
-// 连续滚动相关 - 使用 shallowRef 避免 Vue 对 PDF 文档对象进行深度响应式代理
-const pdfDoc = shallowRef<any>(null)
-const pagesContainer = ref<HTMLElement | null>(null)
-const totalPages = ref(0)
-let isScrolling = false
-let rafId: number | null = null
-
-// 缩放比例
-const zoomScale = ref(1.0)
-const zoomLevel = computed({
-  get: () => Math.round(zoomScale.value * 100),
-  set: (val) => { zoomScale.value = val / 100 }
-})
-
-const currentPage = ref(1)
-const jumpPageInput = ref('')
-
-// 笔记相关
-const note = ref<PaperNote | null>(null)
-const noteContent = ref('')
-const notePage = ref(1)
-
-// UI 状态
-const isMobile = ref(window.innerWidth < 900)
-const showNoteDrawer = ref(true)
-const pdfLoading = ref(true)
-const pdfError = ref('')
-let pdfObjectUrl = ''
-
-const showSearchInline = ref(false)
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-const handleResize = () => {
-  isMobile.value = window.innerWidth < 900
-}
-
-// ---------- 滚动时计算当前页码（使用 requestAnimationFrame 节流）----------
-const updateCurrentPageFromScroll = () => {
-  if (!pagesContainer.value) return
-  const containerRect = pagesContainer.value.getBoundingClientRect()
-  const containerCenter = containerRect.top + containerRect.height / 2
-  let minDistance = Infinity
-  let closestPage = 1
-  const wrappers = pagesContainer.value.querySelectorAll('.pdf-page-wrapper')
-  wrappers.forEach((wrapper, idx) => {
-    const rect = wrapper.getBoundingClientRect()
-    const pageCenter = rect.top + rect.height / 2
-    const distance = Math.abs(containerCenter - pageCenter)
-    if (distance < minDistance) {
-      minDistance = distance
-      closestPage = idx + 1
-    }
-  })
-  if (closestPage !== currentPage.value) {
-    currentPage.value = closestPage
-  }
-}
-
-const handleScroll = () => {
-  if (isScrolling) return
-  if (rafId !== null) cancelAnimationFrame(rafId)
-  rafId = requestAnimationFrame(() => {
-    updateCurrentPageFromScroll()
-    rafId = null
-  })
-}
-
-// ---------- 渲染所有页面 ----------
-const renderAllPages = async () => {
-  const doc = pdfDoc.value
-  if (!doc || !pagesContainer.value) return
-
-  pagesContainer.value.innerHTML = ''
-  
-  for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
-    const page = await doc.getPage(pageNum)
-    const viewport = page.getViewport({ scale: zoomScale.value })
-    const canvas = document.createElement('canvas')
-    const context = canvas.getContext('2d')
-    canvas.height = viewport.height
-    canvas.width = viewport.width
-    canvas.style.display = 'block'
-    canvas.style.margin = '0 auto'
-    canvas.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)'
-    canvas.style.marginBottom = '16px'
-    canvas.style.maxWidth = '100%'
-    canvas.style.height = 'auto'
-
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport
-    }
-    await page.render(renderContext).promise
-
-    const pageWrapper = document.createElement('div')
-    pageWrapper.className = 'pdf-page-wrapper'
-    pageWrapper.setAttribute('data-page-num', String(pageNum))
-    pageWrapper.appendChild(canvas)
-    pagesContainer.value.appendChild(pageWrapper)
-  }
-}
-
-// 跳转到指定页面并居中
-const scrollToPage = async (pageNum: number, behavior: ScrollBehavior = 'smooth') => {
-  if (!pagesContainer.value) return
-  const targetWrapper = pagesContainer.value.querySelector(`.pdf-page-wrapper[data-page-num="${pageNum}"]`)
-  if (targetWrapper) {
-    isScrolling = true
-    targetWrapper.scrollIntoView({
-      behavior,
-      block: 'center',
-      inline: 'center'
-    })
-    setTimeout(() => { isScrolling = false }, 500)
-    currentPage.value = pageNum
-  }
-}
-
-const handleJumpToPage = () => {
-  const page = parseInt(jumpPageInput.value)
-  if (!isNaN(page) && page >= 1 && page <= totalPages.value) {
-    scrollToPage(page)
-    jumpPageInput.value = ''
-  } else {
-    ElMessage.warning(`请输入 1-${totalPages.value} 之间的页码`)
-  }
-}
-
-const goToPrevPage = () => {
-  if (currentPage.value > 1) scrollToPage(currentPage.value - 1)
-}
-const goToNextPage = () => {
-  if (currentPage.value < totalPages.value) scrollToPage(currentPage.value + 1)
-}
-
-// 缩放控制
-const handleZoomIn = () => {
-  if (zoomScale.value < 3) {
-    zoomScale.value += 0.1
-    applyZoom()
-  }
-}
-const handleZoomOut = () => {
-  if (zoomScale.value > 0.25) {
-    zoomScale.value -= 0.1
-    applyZoom()
-  }
-}
-const handleResetZoom = () => {
-  zoomScale.value = 1.0
-  applyZoom()
-}
-
-const applyZoom = async () => {
-  const currentPageBefore = currentPage.value
-  await renderAllPages()
-  await nextTick()
-  scrollToPage(currentPageBefore, 'auto')
-}
-
-const handleFitWidth = async () => {
-  if (!pagesContainer.value || !pdfDoc.value) return
-  const firstPage = await pdfDoc.value.getPage(1)
-  const originalWidth = firstPage.getViewport({ scale: 1 }).width
-  const containerWidth = pagesContainer.value.clientWidth - 40
-  let newScale = containerWidth / originalWidth
-  newScale = Math.min(3, Math.max(0.25, newScale))
-  zoomScale.value = newScale
-  await applyZoom()
-}
-
-const handleFitHeight = async () => {
-  if (!pagesContainer.value || !pdfDoc.value) return
-  const firstPage = await pdfDoc.value.getPage(1)
-  const originalHeight = firstPage.getViewport({ scale: 1 }).height
-  const containerHeight = pagesContainer.value.clientHeight - 100
-  let newScale = containerHeight / originalHeight
-  newScale = Math.min(3, Math.max(0.25, newScale))
-  zoomScale.value = newScale
-  await applyZoom()
-}
-
-const handleWheelZoom = (event: WheelEvent) => {
-  if (event.ctrlKey || event.metaKey) {
-    event.preventDefault()
-    if (event.deltaY < 0) handleZoomIn()
-    else handleZoomOut()
-  }
-}
-
-const handleKeyDown = (event: KeyboardEvent) => {
-  if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
-    event.preventDefault()
-    toggleSearchInline()
-  }
-  if (event.key === 'Escape' && showSearchInline.value) {
-    showSearchInline.value = false
-    event.preventDefault()
-  }
-  if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
-    event.preventDefault()
-    handleZoomIn()
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key === '-') {
-    event.preventDefault()
-    handleZoomOut()
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key === '0') {
-    event.preventDefault()
-    handleResetZoom()
-  }
-}
-
-const toggleSearchInline = () => {
-  showSearchInline.value = !showSearchInline.value
-}
-
-const jumpToPage = (pageNumber: number) => {
-  if (pageNumber >= 1 && pageNumber <= totalPages.value) {
-    scrollToPage(pageNumber)
-    showSearchInline.value = false
-  }
-}
-
-const loadPdfDocument = async () => {
-  pdfLoading.value = true
-  pdfError.value = ''
-  try {
-    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
-    const doc = await loadingTask.promise
-    pdfDoc.value = markRaw(doc)
-    totalPages.value = pdfDoc.value.numPages
-    pageCount.value = totalPages.value
-
-    await renderAllPages()
-    if (pagesContainer.value) {
-      pagesContainer.value.addEventListener('scroll', handleScroll)
-      pagesContainer.value.addEventListener('wheel', handleWheelZoom, { passive: false })
-    }
-    await handleFitWidth()
-  } catch (err) {
-    console.error('PDF 加载失败:', err)
-    pdfError.value = 'PDF 文件加载失败，请检查文件是否有效'
-  } finally {
-    pdfLoading.value = false
-  }
-}
-
-const loadPaperData = async () => {
-  pdfLoading.value = true
-  pdfError.value = ''
-  try {
-    const response = await fetchPaperPdfInfoApi(paperId.value)
-    let pdfInfo: PaperPdfInfo
-    if ('code' in response && 'data' in response) {
-      const fullResponse = response as any
-      if (fullResponse.code !== 0) throw new Error(fullResponse.msg || '请求失败')
-      pdfInfo = fullResponse.data as PaperPdfInfo
-    } else {
-      pdfInfo = response as unknown as PaperPdfInfo
-    }
-    if (!pdfInfo || !pdfInfo.pdfUrl) throw new Error('PDF信息不完整')
-    paperTitle.value = pdfInfo.title || '未命名论文'
-    try {
-      if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
-      const pdfBlob = await fetchPaperPdfFileApi(paperId.value)
-      const pdfBlobTyped = new Blob([pdfBlob], { type: 'application/pdf' })
-      pdfObjectUrl = URL.createObjectURL(pdfBlobTyped)
-      pdfUrl.value = pdfObjectUrl
-    } catch (err) {
-      console.error('PDF文件流加载失败:', err)
-      pdfError.value = 'PDF文件加载失败'
-      pdfLoading.value = false
-      return
-    }
-    const notesResponse = await fetchPaperNotesApi(paperId.value)
-    let notesList: PaperNote[]
-    if ('code' in notesResponse && 'data' in notesResponse) {
-      const fullResponse = notesResponse as any
-      notesList = fullResponse.code === 0 ? fullResponse.data : []
-    } else {
-      notesList = notesResponse as unknown as PaperNote[]
-    }
-    note.value = notesList.length > 0 ? notesList[0] : null
-    if (note.value) {
-      noteContent.value = note.value.content
-      notePage.value = note.value.pageNumber || 1
-    }
-    await loadPdfDocument()
-  } catch (error) {
-    pdfError.value = error instanceof Error ? error.message : '加载失败'
-    ElMessage.error('加载论文失败: ' + pdfError.value)
-    console.error(error)
-  } finally {
-    pdfLoading.value = false
-  }
-}
-
-const handleBack = () => router.back()
-
-const autoSaveNote = async () => {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    if (!noteContent.value.trim()) return
-    try {
-      if (note.value) {
-        await updateNoteApi(paperId.value, note.value.id, { content: noteContent.value })
-        note.value.content = noteContent.value
-        note.value.updatedAt = new Date().toISOString()
-      } else {
-        const response = await createNoteApi(paperId.value, {
-          content: noteContent.value,
-          pageNumber: notePage.value,
-        })
-        note.value = response as unknown as PaperNote
-      }
-    } catch (error) {
-      ElMessage.error('自动保存失败')
-      console.error(error)
-    }
-  }, 500)
-}
-watch(noteContent, () => autoSaveNote())
-
-const formatTime = (isoString: string) => {
-  const date = new Date(isoString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
-
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  window.addEventListener('keydown', handleKeyDown)
-  loadPaperData()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  window.removeEventListener('keydown', handleKeyDown)
-  if (pagesContainer.value) {
-    pagesContainer.value.removeEventListener('scroll', handleScroll)
-    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
-  }
-  if (pdfDoc.value) pdfDoc.value.destroy()
-  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
-  if (rafId !== null) cancelAnimationFrame(rafId)
-})
-</script>
 
 <style scoped>
 .pdf-viewer-container {
