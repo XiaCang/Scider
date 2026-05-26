@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import VuePdfEmbed from 'vue-pdf-embed'
+import * as pdfjsLib from 'pdfjs-dist'
+import 'pdfjs-dist/build/pdf.worker.mjs'
 
 import type { PaperNote, PaperPdfInfo } from '../../../types/library'
 import {
@@ -24,6 +26,7 @@ const paperId = computed(() => route.params.paperId as string)
 const paperTitle = ref('')
 const pdfUrl = ref('')
 const pageCount = ref(0)
+const textLayerRef = ref<HTMLElement | null>(null)// key: 页码, value: DOM元素
 
 // 笔记相关
 const note = ref<PaperNote | null>(null)
@@ -184,6 +187,12 @@ const handlePdfLoaded = (pdfDoc: any) => {
     // 首次加载自动适应宽度
     handleFitWidth()
   }, 500)
+
+  // 触发第一页的文本层渲染
+  // nextTick 确保 DOM 更新
+  nextTick(() => {
+    renderTextLayer(currentPage.value)
+  })
 }
 
 // PDF加载失败回调
@@ -254,6 +263,37 @@ const toggleSearchInline = () => {
   showSearchInline.value = !showSearchInline.value
 }
 
+// pdf文本渲染
+const renderTextLayer = async (pageNumber: number) => {
+  if (!pdfUrl.value || !textLayerRef.value) return
+
+  try {
+    // 1. 获取页面文本内容
+    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
+    const pdf = await loadingTask.promise
+    const page = await pdf.getPage(pageNumber)
+    const textContent = await page.getTextContent()
+
+    // 2. 清空旧内容
+    textLayerRef.value.innerHTML = ''
+
+    // 3. 配置并渲染文本图层
+    // 注意：viewport 需要与 VuePdfEmbed 渲染的 Canvas 尺寸一致
+    const viewport = page.getViewport({ scale: zoomLevel.value / 100 })
+    
+    const pdfB = pdfjsLib as any;
+    await pdfB.renderTextLayer({
+      textContentSource: textContent,
+      container: textLayerRef.value,
+      viewport: viewport,
+      // textDivs: [], // 如果需要自定义样式可传入
+    })
+  } catch (err) {
+    console.warn(`渲染第 ${pageNumber} 页文本层失败:`, err)
+  }
+}
+
+
 // 键盘快捷键
 const handleKeyDown = (event: KeyboardEvent) => {
   // Ctrl/Cmd + F 切换内联搜索框
@@ -300,10 +340,32 @@ const goToNextPage = () => {
 const jumpToPage = (pageNumber: number) => {
   if (pageNumber >= 1 && pageNumber <= pageCount.value) {
     currentPage.value = pageNumber
+
+    // 切换页面后渲染文本层
+    nextTick(() => {
+      renderTextLayer(pageNumber)
+    })
+
     // 关闭搜索面板
     showSearchInline.value = false
   }
 }
+
+// 监听 zoomLevel 变化：缩放时重新渲染当前页文本层（因为位置变了）
+watch(zoomLevel, () => {
+  nextTick(() => {
+    renderTextLayer(currentPage.value)
+  })
+})
+
+// 获取当前选中的文本（用于复制提示或日志）
+const handleMouseUp = () => {
+  const selection = window.getSelection()
+  if (selection && selection.toString().length > 0) {
+    console.log('选中的文本:', selection.toString())
+  }
+}
+
 
 // 自动保存笔记（防抖）
 const autoSaveNote = async () => {
@@ -432,41 +494,47 @@ const formatTime = (isoString: string) => {
         />
       </div>
 
-      <!-- PDF显示区域 -->
-      <div class="pdf-content" ref="pdfViewerRef">
-        <div 
-          v-if="pdfLoading" 
-          class="pdf-loading"
-        >
+      <!-- PDF 显示区域 -->
+      <div class="pdf-content" ref="pdfViewerRef" @mouseup="handleMouseUp">
+        <!-- 加载/错误状态 (保持不变) -->
+        <div v-if="pdfLoading" class="pdf-loading">
           <el-icon class="is-loading" :size="48"><Document /></el-icon>
           <p>正在加载PDF...</p>
         </div>
-        
-        <div 
-          v-else-if="pdfError" 
-          class="pdf-error"
-        >
+        <div v-else-if="pdfError" class="pdf-error">
           <el-icon :size="48"><Document /></el-icon>
           <p>{{ pdfError }}</p>
           <el-button type="primary" @click="loadPaperData">重试</el-button>
         </div>
-        
-        <div 
-          v-else-if="!pdfUrl" 
-          class="pdf-empty"
-        >
+        <div v-else-if="!pdfUrl" class="pdf-empty">
           <el-icon :size="48"><Document /></el-icon>
           <p>暂无PDF文件</p>
         </div>
-        
-        <div v-else class="pdf-viewer" :style="{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }">
-          <VuePdfEmbed
-            :source="pdfUrl"
-            :page="currentPage"
-            :scale="1"
-            @loaded="handlePdfLoaded"
-            @error="handlePdfError"
-          />
+
+        <!-- ★ 核心修改：PDF 查看器容器 ★ -->
+        <div v-else class="pdf-viewer-wrapper">
+          <!-- 外层 wrapper 负责布局居中，内层 viewer 负责缩放 -->
+          <div 
+            class="pdf-viewer" 
+            :style="{ 
+              transform: `scale(${zoomLevel / 100})`, 
+              transformOrigin: 'top center' 
+            }"
+          >
+            <!-- 页面容器 -->
+            <div class="page-container">
+              <!-- Canvas 由 VuePdfEmbed 渲染 -->
+              <VuePdfEmbed 
+                :source="pdfUrl" 
+                :page="currentPage" 
+                :scale="1" 
+                @loaded="handlePdfLoaded" 
+                @error="handlePdfError" 
+              />
+              <!-- 文本图层容器 (透明覆盖层) -->
+              <div class="text-layer" ref="textLayerRef" v-show="!pdfLoading"></div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -495,6 +563,7 @@ const formatTime = (isoString: string) => {
 </template>
 
 <style scoped>
+
 .pdf-viewer-container {
   display: flex;
   height: calc(100vh - 60px);
@@ -542,6 +611,26 @@ const formatTime = (isoString: string) => {
   color: var(--text-secondary);
 }
 
+.page-container {
+  position: relative;
+  display: inline-block; 
+  margin: 0 auto; 
+}
+
+.text-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;    /* 改为 width，配合父容器居中 */
+  height: 100%;
+  pointer-events: none;
+  cursor: text;
+  color: transparent;
+  line-height: 1;
+  font-family: sans-serif;
+}
+
+
 .nav-buttons {
   display: flex;
   gap: 0.25rem;
@@ -585,6 +674,17 @@ const formatTime = (isoString: string) => {
   word-break: break-word;
 }
 
+.pdf-viewer-wrapper {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center; /* 核心：水平居中 */
+  align-items: flex-start;  /* 顶部对齐，配合滚动 */
+  padding: 1.25rem 0;      /* 保持上下内边距，左右由居中自动控制 */
+  background-color: #f5f5f5;
+  box-sizing: border-box;
+}
+
 .pdf-viewer {
   max-width: 900px;
   width: 100%;
@@ -592,15 +692,42 @@ const formatTime = (isoString: string) => {
 }
 
 .pdf-viewer :deep(.vue-pdf-embed) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: flex !important;      
+  justify-content: center !important;   
+  width: 100% !important;     
+  margin: 0 auto !important;
 }
 
-/* canvas 尺寸完全由外层容器 scale 控制 */
 .pdf-viewer :deep(canvas) {
-  display: block;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: crisp-edges;
   max-width: 100%;
+  height: auto;
+}
+
+.pdf-viewer :deep(.textLayer) {
+  position: absolute !important;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2; /* 微调透明度，让用户隐约看到有字，但不干扰阅读 */
+}
+
+.pdf-viewer :deep(.textLayer span) {
+  color: transparent !important; /* 强制文字透明 */
+  background-color: transparent !important; /* 清除可能的背景色 */
+  cursor: text !important;
+}
+
+/* 
+  当用户选中文字时，显示浏览器默认的选中高亮色
+  如果你想自定义选中颜色，可以在这里修改
+*/
+.pdf-viewer :deep(.textLayer ::selection) {
+  background: rgba(150, 150, 255, 0.3); 
 }
 
 .note-sidebar {
