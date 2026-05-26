@@ -27,7 +27,10 @@ services:
 
   backend:
     image: ghcr.io/xiacang/software-scider/backend:dev
-    build: .
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
     container_name: scider-backend
     restart: unless-stopped
     ports:
@@ -53,6 +56,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+      args:
+        PIP_INDEX_URL: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
     container_name: scider-worker
     restart: unless-stopped
     env_file:

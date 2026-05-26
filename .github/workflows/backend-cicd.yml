@@ -22,9 +22,60 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────
+  # Test (runs on every push/PR)
+  # ──────────────────────────────────────────────
+  test:
+    if: |
+      always() &&
+      (github.event_name == 'pull_request' ||
+       (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')))
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 218218wcj
+          MYSQL_DATABASE: db
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uroot -p218218wcj"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 3306:3306
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: src/backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v --timeout=60
+        env:
+          DATABASE_URL: mysql+asyncmy://root:218218wcj@127.0.0.1:3306/db?charset=utf8mb4
+          REDIS_BROKER_URL: redis://127.0.0.1:6379/0
+          REDIS_RESULT_BACKEND: redis://127.0.0.1:6379/1
+
+  # ──────────────────────────────────────────────
   # Build & Push Docker Images
   # ──────────────────────────────────────────────
   build-and-push:
+    needs: test
     if: |
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
@@ -72,6 +123,8 @@ jobs:
           context: src/backend
           push: true
           platforms: linux/amd64
+          build-args: |
+            PIP_INDEX_URL=https://pypi.org/simple/
           tags: |
             ghcr.io/${{ env.REPO_LOWER }}/backend:${{ env.TAG_BACKEND }}
             ghcr.io/${{ env.REPO_LOWER }}/backend:sha-${{ env.SHA_TAG }}
@@ -85,7 +138,9 @@ jobs:
           context: src/backend
           push: true
           platforms: linux/amd64
-          file: src/backend/Dockerfile.worker
+          file: Dockerfile.worker
+          build-args: |
+            PIP_INDEX_URL=https://pypi.org/simple/
           tags: |
             ghcr.io/${{ env.REPO_LOWER }}/worker:${{ env.TAG_WORKER }}
             ghcr.io/${{ env.REPO_LOWER }}/worker:sha-${{ env.SHA_TAG }}
