@@ -40,8 +40,8 @@ const pdfError = ref('')
 const pdfViewerRef = ref<HTMLElement | null>(null)
 let pdfObjectUrl = ''  // 用于清理 Blob URL
 
-// ★ 搜索面板状态
-const showSearchPanel = ref(false)
+// 搜索
+const showSearchInline = ref(false)
 
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -249,19 +249,23 @@ const handleWheelZoom = (event: WheelEvent) => {
   }
 }
 
+// 搜索框显示切换逻辑
+const toggleSearchInline = () => {
+  showSearchInline.value = !showSearchInline.value
+}
+
 // 键盘快捷键
 const handleKeyDown = (event: KeyboardEvent) => {
-  // ★ Ctrl/Cmd + F 打开/关闭搜索面板
+  // Ctrl/Cmd + F 切换内联搜索框
   if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
     event.preventDefault()
-    showSearchPanel.value = !showSearchPanel.value
-    return
+    toggleSearchInline()
   }
   
-  // Escape 关闭搜索面板
-  if (event.key === 'Escape' && showSearchPanel.value) {
-    showSearchPanel.value = false
-    return
+  // Escape 键关闭搜索框
+  if (event.key === 'Escape' && showSearchInline.value) {
+    showSearchInline.value = false
+    event.preventDefault()
   }
   
   // Ctrl/Cmd + '+' 放大
@@ -292,12 +296,12 @@ const goToNextPage = () => {
   if (currentPage.value < pageCount.value) currentPage.value++
 }
 
-// ★ 跳转到指定页（从搜索结果调用）
+// 跳转到指定页（从搜索结果调用）
 const jumpToPage = (pageNumber: number) => {
   if (pageNumber >= 1 && pageNumber <= pageCount.value) {
     currentPage.value = pageNumber
-    // 关闭搜索面板（可选）
-    // showSearchPanel.value = false
+    // 关闭搜索面板
+    showSearchInline.value = false
   }
 }
 
@@ -402,12 +406,11 @@ const formatTime = (isoString: string) => {
         </div>
 
         <div class="toolbar-right">
-          <!-- ★ 搜索按钮 -->
           <el-tooltip content="搜索 (Ctrl + F)" placement="bottom">
             <el-button 
               size="small" 
-              :type="showSearchPanel ? 'primary' : ''"
-              @click="showSearchPanel = !showSearchPanel"
+              :type="showSearchInline ? 'primary' : ''" 
+              @click="toggleSearchInline"
             >
               <el-icon><Search /></el-icon>
             </el-button>
@@ -420,6 +423,14 @@ const formatTime = (isoString: string) => {
           </el-tooltip>
         </div>
       </header>
+
+      <!-- 内联搜索栏 -->
+      <div class="search-inline-bar" v-show="showSearchInline">
+        <PdfSearchPanel 
+          :paper-id="paperId" 
+          @jump-to-page="jumpToPage" 
+        />
+      </div>
 
       <!-- PDF显示区域 -->
       <div class="pdf-content" ref="pdfViewerRef">
@@ -459,22 +470,6 @@ const formatTime = (isoString: string) => {
         </div>
       </div>
     </main>
-
-    <!-- ★ 搜索面板（右侧抽屉） -->
-    <transition name="slide-right">
-      <aside v-if="showSearchPanel" class="search-drawer">
-        <div class="drawer-header">
-          <h3>搜索结果</h3>
-          <el-button text @click="showSearchPanel = false">
-            <el-icon><Close /></el-icon>
-          </el-button>
-        </div>
-        <PdfSearchPanel 
-          :paper-id="paperId"
-          @jump-to-page="jumpToPage"
-        />
-      </aside>
-    </transition>
 
     <!-- 右侧笔记栏 -->
     <aside class="note-sidebar" :class="{ mobile: isMobile, visible: showNoteDrawer }">
@@ -670,47 +665,16 @@ const formatTime = (isoString: string) => {
   transform: translateX(0);
 }
 
-/* ★ 搜索面板抽屉样式 */
-.search-drawer {
-  width: 380px;
-  background: #fff;
-  border-left: 1px solid var(--line-soft);
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+/* 内联搜索栏的基础样式 */
+.search-inline-bar {
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  z-index: 100;
-  flex-shrink: 0;
-}
-
-.drawer-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--line-soft);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.drawer-header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* 滑入动画 */
-.slide-right-enter-active,
-.slide-right-leave-active {
-  transition: transform 0.3s ease;
-}
-
-.slide-right-enter-from,
-.slide-right-leave-to {
-  transform: translateX(100%);
-}
-
-.slide-right-enter-to,
-.slide-right-leave-from {
-  transform: translateX(0);
+  justify-content: center; /* 让搜索框居中显示 */
+  padding: 8px 0;
+  background-color: #fff; /* 根据你的主题色调整背景 */
+  border-bottom: 1px solid var(--line-soft); /* 增加一条底部分割线 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* 轻微阴影提升层次感 */
+  z-index: 10;
 }
 
 /* 响应式：移动端调整宽度 */
