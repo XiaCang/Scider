@@ -2,25 +2,27 @@
 export interface ModelProvider {
   id: string
   name: string
-  api_key: string
+  provider: string
   base_url: string
-  models?: string[]
-  is_active?: boolean
+  api_key_masked: string
+  default_model: string
+  enabled: boolean
+  user_id: string | null
   created_at?: string
-  updated_at?: string
 }
 
 export interface CreateProviderPayload {
   name: string
-  api_key: string
+  provider: string
   base_url: string
-  models?: string[]
+  api_key: string
+  default_model: string
+  enabled: boolean
 }
 
 export interface UpdateProviderPayload {
   name?: string
-  api_key?: string
   base_url?: string
-  models?: string[]
-  is_active?: boolean
+  api_key?: string
+  enabled?: boolean
 }

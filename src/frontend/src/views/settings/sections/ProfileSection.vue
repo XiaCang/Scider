@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
-import { getProfileApi, updateProfileApi } from '../../../api/auth'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { Plus, Delete } from '@element-plus/icons-vue'
+import { getProfileApi, updateProfileApi, uploadAvatarApi, getAvatarApi, deleteAvatarApi } from '../../../api/auth'
 import { useAuthStore } from '../../../store/auth'
 import type { ProfileResponseData } from '../../../types/auth'
 
@@ -28,12 +28,34 @@ const rules: FormRules = {
 const avatarUrl = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement>()
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
+/** 将后端返回的相对路径拼成完整 URL
+ * 后端在 /api 下提供 API，但静态文件挂载在 /uploads/ 下，
+ * 所以需要从 API_BASE 中提取 origin（协议+主机）来拼接 */
+const resolveAvatarUrl = (path: string | null): string | null => {
+  if (!path) return null
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  try {
+    const origin = new URL(API_BASE).origin
+    return `${origin}${path}`
+  } catch {
+    return API_BASE ? `${API_BASE.replace(/\/+$/, '')}${path}` : path
+  }
+}
+
 const fetchProfile = async () => {
   initialLoading.value = true
   try {
-    const response = await getProfileApi()
-    profile.value = response.data
-    form.username = response.data.user.name
+    const [profileRes, avatarRes] = await Promise.all([
+      getProfileApi(),
+      getAvatarApi().catch(() => null),
+    ])
+    profile.value = profileRes.data
+    form.username = profileRes.data.user.name
+    if (avatarRes?.data?.avatarUrl) {
+      avatarUrl.value = resolveAvatarUrl(avatarRes.data.avatarUrl)
+    }
   } catch (error) {
     ElMessage.error('获取用户信息失败')
   } finally {
@@ -41,7 +63,7 @@ const fetchProfile = async () => {
   }
 }
 
-const handleAvatarChange = (e: Event) => {
+const handleAvatarChange = async (e: Event) => {
   const target = e.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
@@ -53,16 +75,45 @@ const handleAvatarChange = (e: Event) => {
   }
   reader.readAsDataURL(file)
 
-  // 实际场景中应上传到服务器
   uploading.value = true
-  // 模拟上传延迟
-  setTimeout(() => {
-    uploading.value = false
+  try {
+    const res = await uploadAvatarApi(file)
+    if (res.data?.avatarUrl) {
+      avatarUrl.value = resolveAvatarUrl(res.data.avatarUrl)
+    }
     ElMessage.success('头像已更新')
-  }, 500)
+  } catch (error) {
+    // 上传失败，回退到之前的头像
+    ElMessage.error(error instanceof Error ? error.message : '头像上传失败')
+    await fetchProfile()
+  } finally {
+    uploading.value = false
+  }
 
   // 清空 input 以便重复选择同一文件
   target.value = ''
+}
+
+const handleDeleteAvatar = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除当前头像吗？',
+      '确认删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+    await deleteAvatarApi()
+    avatarUrl.value = null
+    ElMessage.success('头像已删除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '删除失败')
+    }
+  }
 }
 
 const triggerFileInput = () => {
@@ -121,15 +172,25 @@ onMounted(() => {
             </div>
           </div>
           <div class="avatar-info">
-            <button class="upload-btn" @click="triggerFileInput">
-              {{ uploading ? '上传中...' : '更换头像' }}
-            </button>
-            <p class="avatar-hint">支持 JPG、PNG 格式，建议 200×200px</p>
+            <div class="avatar-actions">
+              <button class="upload-btn" @click="triggerFileInput">
+                {{ uploading ? '上传中...' : '更换头像' }}
+              </button>
+              <button
+                v-if="avatarUrl"
+                class="delete-btn"
+                @click="handleDeleteAvatar"
+              >
+                <el-icon :size="14"><Delete /></el-icon>
+                删除
+              </button>
+            </div>
+            <p class="avatar-hint">支持 JPG、PNG、WebP 格式</p>
           </div>
           <input
             ref="fileInput"
             type="file"
-            accept="image/png,image/jpeg,image/jpg"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
             class="file-input-hidden"
             @change="handleAvatarChange"
           />
@@ -263,6 +324,12 @@ onMounted(() => {
   gap: 4px;
 }
 
+.avatar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .upload-btn {
   display: inline-flex;
   align-items: center;
@@ -281,6 +348,26 @@ onMounted(() => {
   border-color: var(--brand);
   color: var(--brand);
   background: rgba(74, 157, 154, 0.06);
+}
+
+.delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-page);
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.delete-btn:hover {
+  border-color: var(--danger);
+  background: rgba(245, 108, 108, 0.06);
 }
 
 .avatar-hint {
