@@ -91,6 +91,7 @@ class Paper(Base):
     pdf_path = Column(String(1024), nullable=True)
     md5_hash = Column(String(64), nullable=True)
     file_size = Column(Integer, nullable=True)
+    full_text = Column(Text, nullable=True)  # PDF 完整文本内容（用于全文搜索）
     user_id = Column(String(64), ForeignKey("user.id"), nullable=False)
     folder_id = Column(String(64), ForeignKey("folder.id"), nullable=True)
     status = Column(SAEnum(PaperStatus), nullable=False, server_default=PaperStatus.PENDING_PARSING.value)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -13,6 +13,7 @@ import {
   createNoteApi,
   updateNoteApi
 } from '../../../api/library'
+import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +39,9 @@ const pdfLoading = ref(true)
 const pdfError = ref('')
 const pdfViewerRef = ref<HTMLElement | null>(null)
 let pdfObjectUrl = ''  // 用于清理 Blob URL
+
+// ★ 搜索面板状态
+const showSearchPanel = ref(false)
 
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -247,6 +251,19 @@ const handleWheelZoom = (event: WheelEvent) => {
 
 // 键盘快捷键
 const handleKeyDown = (event: KeyboardEvent) => {
+  // ★ Ctrl/Cmd + F 打开/关闭搜索面板
+  if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+    event.preventDefault()
+    showSearchPanel.value = !showSearchPanel.value
+    return
+  }
+  
+  // Escape 关闭搜索面板
+  if (event.key === 'Escape' && showSearchPanel.value) {
+    showSearchPanel.value = false
+    return
+  }
+  
   // Ctrl/Cmd + '+' 放大
   if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
     event.preventDefault()
@@ -273,6 +290,15 @@ const goToPrevPage = () => {
 
 const goToNextPage = () => {
   if (currentPage.value < pageCount.value) currentPage.value++
+}
+
+// ★ 跳转到指定页（从搜索结果调用）
+const jumpToPage = (pageNumber: number) => {
+  if (pageNumber >= 1 && pageNumber <= pageCount.value) {
+    currentPage.value = pageNumber
+    // 关闭搜索面板（可选）
+    // showSearchPanel.value = false
+  }
 }
 
 // 自动保存笔记（防抖）
@@ -376,6 +402,17 @@ const formatTime = (isoString: string) => {
         </div>
 
         <div class="toolbar-right">
+          <!-- ★ 搜索按钮 -->
+          <el-tooltip content="搜索 (Ctrl + F)" placement="bottom">
+            <el-button 
+              size="small" 
+              :type="showSearchPanel ? 'primary' : ''"
+              @click="showSearchPanel = !showSearchPanel"
+            >
+              <el-icon><Search /></el-icon>
+            </el-button>
+          </el-tooltip>
+          
           <el-tooltip content="提示：按住 Ctrl + 滚轮可快速缩放" placement="bottom">
             <el-button size="small" text>
               <el-icon><Edit /></el-icon>
@@ -422,6 +459,22 @@ const formatTime = (isoString: string) => {
         </div>
       </div>
     </main>
+
+    <!-- ★ 搜索面板（右侧抽屉） -->
+    <transition name="slide-right">
+      <aside v-if="showSearchPanel" class="search-drawer">
+        <div class="drawer-header">
+          <h3>搜索结果</h3>
+          <el-button text @click="showSearchPanel = false">
+            <el-icon><Close /></el-icon>
+          </el-button>
+        </div>
+        <PdfSearchPanel 
+          :paper-id="paperId"
+          @jump-to-page="jumpToPage"
+        />
+      </aside>
+    </transition>
 
     <!-- 右侧笔记栏 -->
     <aside class="note-sidebar" :class="{ mobile: isMobile, visible: showNoteDrawer }">
@@ -615,6 +668,62 @@ const formatTime = (isoString: string) => {
 
 .note-sidebar.mobile.visible {
   transform: translateX(0);
+}
+
+/* ★ 搜索面板抽屉样式 */
+.search-drawer {
+  width: 380px;
+  background: #fff;
+  border-left: 1px solid var(--line-soft);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.drawer-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 滑入动画 */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-right-enter-from,
+.slide-right-leave-to {
+  transform: translateX(100%);
+}
+
+.slide-right-enter-to,
+.slide-right-leave-from {
+  transform: translateX(0);
+}
+
+/* 响应式：移动端调整宽度 */
+@media (max-width: 768px) {
+  .search-drawer {
+    width: 100%;
+    max-width: 100vw;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: 100vh;
+  }
 }
 
 @media (max-width: 1200px) {
