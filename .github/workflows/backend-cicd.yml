@@ -156,6 +156,9 @@ jobs:
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - uses: actions/checkout@v4
@@ -185,9 +188,14 @@ jobs:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GHCR_USER,GHCR_PAT
           script: |
             set -e
             cd /opt/scider
+
+            # Login to GHCR so we can pull private images
+            echo "Logging in to GHCR..."
+            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             # Pull latest images
             docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
@@ -204,3 +212,6 @@ jobs:
             docker image prune -af --filter "until=24h"
 
             echo "Deploy to ${{ env.DEPLOY_ENV }} complete."
+        env:
+          GHCR_USER: ${{ github.repository_owner }}
+          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
