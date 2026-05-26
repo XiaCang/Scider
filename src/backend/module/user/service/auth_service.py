@@ -83,7 +83,14 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, str]]:
         user = res.scalars().first()
         if not user:
             return None
-        return {"id": user.id, "email": user.email, "name": user.name}
+        # 包含头像相关字段，确保中间件注入的 request.state.user 有最新 avatar_url
+        return {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "avatar_url": user.avatar_url,
+            "avatar_path": user.avatar_path,
+        }
 
 
 async def update_user_name(user_id: str, name: str) -> Optional[Dict[str, str]]:
