@@ -187,10 +187,11 @@ jobs:
             docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
 
             # Apply DB migrations before restarting
-            docker compose -f ${{ env.COMPOSE_FILE }} run --rm backend \
-              sh -c "cd db && alembic upgrade head"
+            # Skip entrypoint to avoid double migration (entrypoint also runs alembic)
+            docker compose -f ${{ env.COMPOSE_FILE }} run --rm --entrypoint "" backend \
+              sh -c "cd /app/db && alembic upgrade 0006_add_uix_user_md5"
 
-            # Restart services
+            # Restart services (entrypoint will see no pending migrations)
             docker compose -f ${{ env.COMPOSE_FILE }} up -d backend worker
 
             # Clean up stale images
