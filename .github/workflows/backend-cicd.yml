@@ -16,10 +16,6 @@ defaults:
   run:
     working-directory: src/backend
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   # ──────────────────────────────────────────────
   # Test (runs on every push/PR)
@@ -87,11 +83,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lowercase repository
-        run: echo "REPO_LOWER=${REPO,,}" >> $GITHUB_ENV
-        env:
-          REPO: ${{ github.repository }}
-
       - name: Set image tags per branch
         run: |
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
@@ -126,8 +117,8 @@ jobs:
           build-args: |
             PIP_INDEX_URL=https://pypi.org/simple/
           tags: |
-            ghcr.io/${{ env.REPO_LOWER }}/backend:${{ env.TAG_BACKEND }}
-            ghcr.io/${{ env.REPO_LOWER }}/backend:sha-${{ env.SHA_TAG }}
+            ghcr.io/xiacang/software-scider/backend:${{ env.TAG_BACKEND }}
+            ghcr.io/xiacang/software-scider/backend:sha-${{ env.SHA_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -142,8 +133,8 @@ jobs:
           build-args: |
             PIP_INDEX_URL=https://pypi.org/simple/
           tags: |
-            ghcr.io/${{ env.REPO_LOWER }}/worker:${{ env.TAG_WORKER }}
-            ghcr.io/${{ env.REPO_LOWER }}/worker:sha-${{ env.SHA_TAG }}
+            ghcr.io/xiacang/software-scider/worker:${{ env.TAG_WORKER }}
+            ghcr.io/xiacang/software-scider/worker:sha-${{ env.SHA_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -162,11 +153,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Lowercase repository
-        run: echo "REPO_LOWER=${REPO,,}" >> $GITHUB_ENV
-        env:
-          REPO: ${{ github.repository }}
 
       - name: Determine deploy env & compose file
         run: |
