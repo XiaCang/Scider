@@ -189,29 +189,22 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: GHCR_USER,GHCR_PAT
-          command_timeout: 30m
+          command_timeout: 5m
           script: |
             set -e
             cd /opt/scider
 
             # Login to GHCR so we can pull private images
-            echo "Logging in to GHCR..."
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            # Try to pull cached layers from GHCR (optional, speeds up build)
-            echo "Pulling latest images from GHCR (if available)..."
-            docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker || echo "Pull failed, will build locally."
-
-            # Build images locally
-            echo "Building images..."
-            docker compose -f ${{ env.COMPOSE_FILE }} build backend worker
+            # Pull latest images (built & pushed by build-and-push job)
+            docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
 
             # Apply DB migrations before restarting
-            echo "Running database migrations..."
             docker compose -f ${{ env.COMPOSE_FILE }} run --rm backend \
               sh -c "cd db && alembic upgrade head"
 
-            # Restart services with freshly built images
+            # Restart services
             docker compose -f ${{ env.COMPOSE_FILE }} up -d backend worker
 
             # Clean up stale images
