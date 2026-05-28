@@ -92,8 +92,6 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener('mouseup', onMouseUp)
 }
 
-const showSearchInline = ref(false)
-
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
