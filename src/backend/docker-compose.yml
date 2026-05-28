@@ -82,4 +82,6 @@ services:
 
 volumes:
   mysql_data:
+    name: scider_mysql_data
   uploads_data:
+    name: scider_uploads_data
