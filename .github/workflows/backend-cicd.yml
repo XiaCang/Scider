@@ -158,12 +158,12 @@ jobs:
         run: |
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "DEPLOY_ENV=production" >> $GITHUB_ENV
-            echo "COMPOSE_FILE=docker-compose.prod.yml" >> $GITHUB_ENV
+            echo "COMPOSE_FILE=src/backend/docker-compose.prod.yml" >> $GITHUB_ENV
             echo "SSH_HOST=${{ secrets.PROD_SERVER_IP }}" >> $GITHUB_ENV
             echo "SSH_USER=${{ secrets.PROD_SERVER_USER }}" >> $GITHUB_ENV
           else
             echo "DEPLOY_ENV=dev" >> $GITHUB_ENV
-            echo "COMPOSE_FILE=docker-compose.yml" >> $GITHUB_ENV
+            echo "COMPOSE_FILE=src/backend/docker-compose.yml" >> $GITHUB_ENV
             echo "SSH_HOST=${{ secrets.SERVER_IP }}" >> $GITHUB_ENV
             echo "SSH_USER=${{ secrets.SERVER_USER }}" >> $GITHUB_ENV
           fi
@@ -189,7 +189,7 @@ jobs:
             # Apply DB migrations before restarting
             # Skip entrypoint to avoid double migration (entrypoint also runs alembic)
             docker compose -f ${{ env.COMPOSE_FILE }} run --rm --entrypoint "" backend \
-              sh -c "cd /app/db && alembic upgrade 0006_add_uix_user_md5"
+              sh -c "cd /app/db && alembic upgrade head"
 
             # Restart services (entrypoint will see no pending migrations)
             docker compose -f ${{ env.COMPOSE_FILE }} up -d backend worker
@@ -198,6 +198,9 @@ jobs:
             docker image prune -af --filter "until=24h"
 
             echo "Deploy to ${{ env.DEPLOY_ENV }} complete."
+        env:
+          GHCR_USER: ${{ github.repository_owner }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
         env:
           GHCR_USER: ${{ github.repository_owner }}
           GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
