@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Download, Search } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, ChatDotSquare, Plus, Delete as DeleteIcon } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -8,17 +8,19 @@ import * as pdfjsLib from 'pdfjs-dist'
 // 配置 PDF.js worker - 使用 CDN 上的 ES module worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
 
-import { marked } from 'marked'
 import MarkdownEditor from '../../../components/MarkdownEditor.vue'
-import type { PaperNote, PaperPdfInfo } from '../../../types/library'
+import type { PaperNote, NoteListItem, PaperPdfInfo } from '../../../types/library'
 import {
   fetchPaperPdfInfoApi,
   fetchPaperPdfFileApi,
   fetchPaperNotesApi,
   createNoteApi,
-  updateNoteApi
+  updateNoteApi,
+  fetchNoteDetailApi,
 } from '../../../api/library'
 import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
+import AiChatPanel from '../../../components/AiChatPanel.vue'
+import PdfContextMenu from '../../../components/PdfContextMenu.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,7 +31,7 @@ const paperTitle = ref('')
 const pdfUrl = ref('')
 const pageCount = ref(0)
 
-// 连续滚动相关 - 使用 shallowRef 避免 Vue 对 PDF 文档对象进行深度响应式代理
+// 连续滚动相关
 const pdfDoc = shallowRef<any>(null)
 const pagesContainer = ref<HTMLElement | null>(null)
 const totalPages = ref(0)
@@ -46,14 +48,21 @@ const zoomLevel = computed({
 const currentPage = ref(1)
 const jumpPageInput = ref('')
 
-// 笔记相关
-const note = ref<PaperNote | null>(null)
+// ============ 多笔记支持 ============
+const noteList = ref<NoteListItem[]>([])
+const activeNoteId = ref<string | null>(null)
+const activeNote = ref<PaperNote | null>(null)
 const noteContent = ref('')
-const notePage = ref(1)
+const noteTitle = ref('')
+const noteSaving = ref(false)
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+// ============ 侧栏显隐 ============
+const showNoteSidebar = ref(true)
+const showAiSidebar = ref(false)
 
 // UI 状态
 const isMobile = ref(window.innerWidth < 900)
-const showNoteDrawer = ref(true)
 const pdfLoading = ref(true)
 const pdfError = ref('')
 const showSearchInline = ref(false)
@@ -65,6 +74,52 @@ const NOTE_SIDEBAR_MAX_WIDTH = 600
 const noteSidebarWidth = ref(270)
 const isResizing = ref(false)
 
+// AI 侧栏宽度调整
+const AI_SIDEBAR_MIN_WIDTH = 240
+const AI_SIDEBAR_MAX_WIDTH = 600
+const aiSidebarWidth = ref(320)
+const isAiResizing = ref(false)
+let aiResizeRaf: number | null = null
+
+const startAiResize = (e: MouseEvent) => {
+  e.preventDefault()
+  isAiResizing.value = true
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  const startX = e.clientX
+  const startWidth = aiSidebarWidth.value
+
+  const onMouseMove = (ev: MouseEvent) => {
+    if (aiResizeRaf !== null) cancelAnimationFrame(aiResizeRaf)
+    aiResizeRaf = requestAnimationFrame(() => {
+      const delta = ev.clientX - startX
+      aiSidebarWidth.value = Math.min(
+        AI_SIDEBAR_MAX_WIDTH,
+        Math.max(AI_SIDEBAR_MIN_WIDTH, startWidth + delta)
+      )
+      aiResizeRaf = null
+    })
+  }
+
+  const onMouseUp = () => {
+    isAiResizing.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    if (aiResizeRaf !== null) cancelAnimationFrame(aiResizeRaf)
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
+// 右键菜单
+const contextMenu = ref({ visible: false, x: 0, y: 0, text: '' })
+const aiChatRef = ref<InstanceType<typeof AiChatPanel> | null>(null)
+
+// ============ 笔记栏拖拽调整宽度 ============
 const startResize = (e: MouseEvent) => {
   e.preventDefault()
   isResizing.value = true
@@ -92,32 +147,166 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener('mouseup', onMouseUp)
 }
 
-// 自动保存定时器
-let saveTimer: ReturnType<typeof setTimeout> | null = null
+// ============ 笔记操作 ============
+const loadNotes = async () => {
+  try {
+    const resp = await fetchPaperNotesApi(paperId.value)
+    const data = ('data' in resp ? (resp as any).data : resp) as any
+    noteList.value = data.items || []
+    if (noteList.value.length > 0) {
+      await selectNote(noteList.value[0].id)
+    } else {
+      activeNoteId.value = null
+      activeNote.value = null
+      noteContent.value = ''
+      noteTitle.value = ''
+    }
+  } catch (e) {
+    console.error('加载笔记列表失败:', e)
+  }
+}
 
+const selectNote = async (noteId: string) => {
+  activeNoteId.value = noteId
+  try {
+    const resp = await fetchNoteDetailApi(noteId)
+    const data = ('data' in resp ? (resp as any).data : resp) as any
+    const note = data.data || data
+    activeNote.value = note
+    noteContent.value = note.contentHtml || ''
+    noteTitle.value = note.title || ''
+  } catch (e) {
+    console.error('加载笔记详情失败:', e)
+    // 降级：从 noteList 中获取 excerpt
+    const item = noteList.value.find(n => n.id === noteId)
+    if (item) {
+      noteContent.value = item.excerpt || ''
+      noteTitle.value = item.title || ''
+    }
+  }
+}
+
+const createNote = async () => {
+  try {
+    const resp = await createNoteApi({
+      paperId: paperId.value,
+      title: '新笔记',
+      contentHtml: '',
+      contentFormat: 'markdown',
+    })
+    const data = ('data' in resp ? (resp as any).data : resp) as any
+    const newNote = data.data || data
+    noteList.value.unshift({
+      id: newNote.id,
+      paperId: paperId.value,
+      title: newNote.title || '新笔记',
+      excerpt: '',
+      firstImageUrl: null,
+      updatedAt: newNote.updatedAt || new Date().toISOString(),
+    })
+    await selectNote(newNote.id)
+    ElMessage.success('已创建新笔记')
+  } catch (e) {
+    ElMessage.error('创建笔记失败')
+    console.error(e)
+  }
+}
+
+const deleteNote = async (noteId: string) => {
+  try {
+    await ElMessageBox.confirm('确定删除此笔记？', '确认删除', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+    // API 暂未提供删除接口，前端先移除
+    noteList.value = noteList.value.filter(n => n.id !== noteId)
+    if (activeNoteId.value === noteId) {
+      if (noteList.value.length > 0) {
+        await selectNote(noteList.value[0].id)
+      } else {
+        activeNoteId.value = null
+        activeNote.value = null
+        noteContent.value = ''
+        noteTitle.value = ''
+      }
+    }
+    ElMessage.success('笔记已删除')
+  } catch {
+    // 用户取消
+  }
+}
+
+const autoSaveNote = async () => {
+  if (!activeNoteId.value || !noteContent.value.trim()) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
+    noteSaving.value = true
+    try {
+      await updateNoteApi(activeNoteId.value!, {
+        title: noteTitle.value || '笔记',
+        contentHtml: noteContent.value,
+        contentFormat: 'markdown',
+      })
+      // 更新 noteList 中的标题和摘录
+      const item = noteList.value.find(n => n.id === activeNoteId.value)
+      if (item) {
+        item.title = noteTitle.value || '笔记'
+        item.excerpt = noteContent.value.slice(0, 100)
+        item.updatedAt = new Date().toISOString()
+      }
+    } catch (e) {
+      ElMessage.error('自动保存失败')
+      console.error(e)
+    } finally {
+      noteSaving.value = false
+    }
+  }, 500)
+}
+watch(noteContent, () => autoSaveNote())
+watch(noteTitle, () => autoSaveNote())
+
+// ============ 侧栏切换 ============
+const toggleNoteSidebar = () => {
+  showNoteSidebar.value = !showNoteSidebar.value
+}
+const toggleAiSidebar = () => {
+  showAiSidebar.value = !showAiSidebar.value
+}
+
+// ============ 右键菜单 ============
+const handlePdfContextMenu = (e: MouseEvent) => {
+  // 检查是否选中了文字
+  const selection = window.getSelection()
+  const text = selection?.toString().trim() || ''
+  if (text) {
+    contextMenu.value = {
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      text,
+    }
+    e.preventDefault()
+  }
+}
+
+const handleAskAiFromContext = (text: string) => {
+  // 打开 AI 侧栏并发送文本
+  showAiSidebar.value = true
+  nextTick(() => {
+    aiChatRef.value?.askWithContext(text)
+  })
+}
+
+const closeContextMenu = () => {
+  contextMenu.value.visible = false
+}
+
+// ============ 原有功能（缩放、滚动、渲染等保持不变）============
 const handleResize = () => {
   isMobile.value = window.innerWidth < 900
 }
 
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  window.addEventListener('keydown', handleKeyDown)
-  loadPaperData()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  window.removeEventListener('keydown', handleKeyDown)
-  if (pagesContainer.value) {
-    pagesContainer.value.removeEventListener('scroll', handleScroll)
-    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
-  }
-  if (pdfDoc.value) pdfDoc.value.destroy()
-  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
-  if (rafId !== null) cancelAnimationFrame(rafId)
-})
-
-// ---------- 滚动时计算当前页码（使用 requestAnimationFrame 节流）----------
 const updateCurrentPageFromScroll = () => {
   if (!pagesContainer.value) return
   const containerRect = pagesContainer.value.getBoundingClientRect()
@@ -148,76 +337,112 @@ const handleScroll = () => {
   })
 }
 
-// 超采样渲染
-// 目标缩放比例为 targetScale（用户期望的缩放值），实际渲染精度至少为 1 倍
+// ============ 渲染任务管理 ============
+let renderGeneration = 0
+
 const renderAllPagesWithScale = async (targetScale: number) => {
-  const doc = pdfDoc.value;
-  if (!doc || !pagesContainer.value || totalPages.value === 0) return;
+  const doc = pdfDoc.value
+  if (!doc || !pagesContainer.value || totalPages.value === 0) return
 
-  // 实际渲染精度：不低于 1 倍，防止缩小时丢失像素
-  const renderScale = Math.max(1, targetScale);
-  
-  // 确保包装器存在（首次加载或 page 数量不变时复用）
-  const existingWrappers = pagesContainer.value.querySelectorAll('.pdf-page-wrapper');
+  const gen = ++renderGeneration
+  const renderScale = Math.max(1, targetScale)
+
+  const existingWrappers = pagesContainer.value.querySelectorAll('.pdf-page-wrapper')
   if (existingWrappers.length !== totalPages.value) {
-    // 清空并重建结构
-    pagesContainer.value.innerHTML = '';
+    pagesContainer.value.innerHTML = ''
     for (let i = 1; i <= totalPages.value; i++) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'pdf-page-wrapper';
-      wrapper.setAttribute('data-page-num', String(i));
-      pagesContainer.value.appendChild(wrapper);
+      const wrapper = document.createElement('div')
+      wrapper.className = 'pdf-page-wrapper'
+      wrapper.setAttribute('data-page-num', String(i))
+      wrapper.style.display = 'flex'
+      wrapper.style.justifyContent = 'center'
+      wrapper.style.marginBottom = '24px'
+      pagesContainer.value.appendChild(wrapper)
     }
+  } else {
+    pagesContainer.value.querySelectorAll('.pdf-page-inner').forEach(el => el.remove())
   }
 
-  // 遍历所有页面进行渲染
   for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
-    const page = await doc.getPage(pageNum);
-    const originalViewport = page.getViewport({ scale: 1 });
-    const originalWidth = originalViewport.width;
-    const originalHeight = originalViewport.height;
+    if (gen !== renderGeneration) return
 
-    // 渲染用视口（高精度）
-    const renderViewport = page.getViewport({ scale: renderScale });
-    // CSS 显示尺寸 = 原始尺寸 * 用户期望缩放
-    const displayWidth = originalWidth * targetScale;
-    const displayHeight = originalHeight * targetScale;
+    const page = await doc.getPage(pageNum)
+    if (gen !== renderGeneration) { page.cleanup(); return }
 
-    const wrapper = pagesContainer.value.querySelector(`.pdf-page-wrapper[data-page-num="${pageNum}"]`) as HTMLElement;
-    let canvas = wrapper.querySelector('canvas');
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      wrapper.appendChild(canvas);
+    const orig = page.getViewport({ scale: 1 })
+    const displayW = orig.width * targetScale
+    const displayH = orig.height * targetScale
+    const renderVP = page.getViewport({ scale: renderScale })
+    const displayVP = page.getViewport({ scale: targetScale })
+
+    const wrapper = pagesContainer.value.querySelector(
+      `.pdf-page-wrapper[data-page-num="${pageNum}"]`
+    ) as HTMLElement
+
+    const container = document.createElement('div')
+    container.className = 'pdf-page-inner'
+    container.style.width = `${displayW}px`
+    container.style.height = `${displayH}px`
+    container.style.position = 'relative'
+    container.style.overflow = 'hidden'
+    container.style.boxShadow = '0 2px 12px rgba(0,0,0,0.1)'
+    container.style.background = 'white'
+    container.style.borderRadius = '2px'
+    container.style.setProperty('--scale-factor', String(targetScale))
+    // 自定义属性记录页码，供右键菜单使用
+    container.dataset.pageNum = String(pageNum)
+    wrapper.appendChild(container)
+
+    const canvas = document.createElement('canvas')
+    canvas.width = renderVP.width
+    canvas.height = renderVP.height
+    canvas.style.width = `${displayW}px`
+    canvas.style.height = `${displayH}px`
+    canvas.style.display = 'block'
+    container.appendChild(canvas)
+
+    const ctx = canvas.getContext('2d')!
+
+    try {
+      await page.render({ canvasContext: ctx, viewport: renderVP }).promise
+    } catch (err: any) {
+      if (err?.name === 'RenderingCancelledException' || gen !== renderGeneration) {
+        page.cleanup()
+        return
+      }
+      console.warn(`Page ${pageNum} canvas failed:`, err)
+      page.cleanup()
+      continue
     }
 
-    const context = canvas.getContext('2d')!;
-    canvas.width = renderViewport.width;
-    canvas.height = renderViewport.height;
-    canvas.style.width = `${displayWidth}px`;
-    canvas.style.height = `${displayHeight}px`;
-    canvas.style.display = 'block';
-    canvas.style.margin = '0 auto';
-    canvas.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)';
-    canvas.style.marginBottom = '16px';
+    if (gen !== renderGeneration) { page.cleanup(); return }
 
-    await page.render({
-      canvasContext: context,
-      viewport: renderViewport,
-    }).promise;
+    try {
+      const textContent = await page.getTextContent()
+      page.cleanup()
+
+      const textDiv = document.createElement('div')
+      textDiv.className = 'textLayer'
+      container.appendChild(textDiv)
+
+      const textLayer = new pdfjsLib.TextLayer({
+        textContentSource: textContent,
+        container: textDiv,
+        viewport: displayVP,
+      })
+      await textLayer.render()
+    } catch (e) {
+      page.cleanup()
+    }
   }
-};
+}
 
-// 跳转到指定页面并居中
 const scrollToPage = async (pageNum: number, behavior: ScrollBehavior = 'smooth') => {
   if (!pagesContainer.value) return
   const targetWrapper = pagesContainer.value.querySelector(`.pdf-page-wrapper[data-page-num="${pageNum}"]`)
   if (targetWrapper) {
     isScrolling = true
-    targetWrapper.scrollIntoView({
-      behavior,
-      block: 'center',
-      inline: 'center'
-    })
+    targetWrapper.scrollIntoView({ behavior, block: 'center', inline: 'center' })
     setTimeout(() => { isScrolling = false }, 500)
     currentPage.value = pageNum
   }
@@ -240,30 +465,36 @@ const goToNextPage = () => {
   if (currentPage.value < totalPages.value) scrollToPage(currentPage.value + 1)
 }
 
-// 缩放控制
-const handleZoomIn = () => {
-  if (zoomScale.value < 3) {
-    zoomScale.value += 0.1
-    applyZoom()
+// ============ 缩放控制 ============
+let zoomTimer: ReturnType<typeof setTimeout> | null = null
+
+const applyZoom = (immediate = false) => {
+  if (zoomTimer) clearTimeout(zoomTimer)
+  if (immediate) {
+    zoomTimer = null
+    doRender()
+  } else {
+    zoomTimer = setTimeout(doRender, 100)
   }
-}
-const handleZoomOut = () => {
-  if (zoomScale.value > 0.25) {
-    zoomScale.value -= 0.1
-    applyZoom()
-  }
-}
-const handleResetZoom = () => {
-  zoomScale.value = 1.0
-  applyZoom()
 }
 
-const applyZoom = async () => {
-  const currentPageBefore = currentPage.value;
-  await renderAllPagesWithScale(zoomScale.value);
-  await nextTick();
-  scrollToPage(currentPageBefore, 'auto');
-};
+const doRender = async () => {
+  zoomTimer = null
+  const pageBefore = currentPage.value
+  await renderAllPagesWithScale(zoomScale.value)
+  await nextTick()
+  scrollToPage(pageBefore, 'auto')
+}
+
+const handleZoomIn = () => {
+  if (zoomScale.value < 3) { zoomScale.value += 0.1; applyZoom() }
+}
+const handleZoomOut = () => {
+  if (zoomScale.value > 0.25) { zoomScale.value -= 0.1; applyZoom() }
+}
+const handleResetZoom = () => {
+  zoomScale.value = 1.0; applyZoom(true)
+}
 
 const handleFitWidth = async () => {
   if (!pagesContainer.value || !pdfDoc.value) return;
@@ -273,7 +504,7 @@ const handleFitWidth = async () => {
   let newScale = containerWidth / originalWidth;
   newScale = Math.min(3, Math.max(0.25, newScale));
   zoomScale.value = newScale;
-  await applyZoom();
+  applyZoom(true);
 };
 
 const handleFitHeight = async () => {
@@ -284,7 +515,7 @@ const handleFitHeight = async () => {
   let newScale = containerHeight / originalHeight;
   newScale = Math.min(3, Math.max(0.25, newScale));
   zoomScale.value = newScale;
-  await applyZoom();
+  applyZoom(true);
 };
 
 const handleWheelZoom = (event: WheelEvent) => {
@@ -297,30 +528,25 @@ const handleWheelZoom = (event: WheelEvent) => {
 
 const handleKeyDown = (event: KeyboardEvent) => {
   if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
-    event.preventDefault()
-    toggleSearchInline()
+    event.preventDefault(); toggleSearchInline()
   }
-  if (event.key === 'Escape' && showSearchInline.value) {
+  if (event.key === 'Escape') {
     showSearchInline.value = false
+    contextMenu.value.visible = false
     event.preventDefault()
   }
   if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
-    event.preventDefault()
-    handleZoomIn()
+    event.preventDefault(); handleZoomIn()
   }
   if ((event.ctrlKey || event.metaKey) && event.key === '-') {
-    event.preventDefault()
-    handleZoomOut()
+    event.preventDefault(); handleZoomOut()
   }
   if ((event.ctrlKey || event.metaKey) && event.key === '0') {
-    event.preventDefault()
-    handleResetZoom()
+    event.preventDefault(); handleResetZoom()
   }
 }
 
-const toggleSearchInline = () => {
-  showSearchInline.value = !showSearchInline.value
-}
+const toggleSearchInline = () => { showSearchInline.value = !showSearchInline.value }
 
 const jumpToPage = (pageNumber: number) => {
   if (pageNumber >= 1 && pageNumber <= totalPages.value) {
@@ -333,22 +559,28 @@ const loadPdfDocument = async () => {
   pdfLoading.value = true
   pdfError.value = ''
   try {
-    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
+    const loadingTask = pdfjsLib.getDocument({url:pdfUrl.value,useSystemFonts:false})
     const doc = await loadingTask.promise
     pdfDoc.value = markRaw(doc)
     totalPages.value = pdfDoc.value.numPages
     pageCount.value = totalPages.value
 
-    // 使用超采样渲染（默认缩放 1.0）
+    const firstPage = await doc.getPage(1)
+    const origWidth = firstPage.getViewport({ scale: 1 }).width
+    const containerWidth = (pagesContainer.value?.clientWidth ?? 800) - 40
+    let fitScale = containerWidth / origWidth
+    fitScale = Math.min(3, Math.max(0.25, fitScale))
+    zoomScale.value = fitScale
+    firstPage.cleanup()
+
     await renderAllPagesWithScale(zoomScale.value)
 
     if (pagesContainer.value) {
       pagesContainer.value.addEventListener('scroll', handleScroll)
       pagesContainer.value.addEventListener('wheel', handleWheelZoom, { passive: false })
+      // 右键菜单
+      pagesContainer.value.addEventListener('contextmenu', handlePdfContextMenu)
     }
-
-    // 可选：自动适应宽度
-    await handleFitWidth()
   } catch (err) {
     console.error('PDF 加载失败:', err)
     pdfError.value = 'PDF 文件加载失败，请检查文件是否有效'
@@ -384,20 +616,9 @@ const loadPaperData = async () => {
       pdfLoading.value = false
       return
     }
-    const notesResponse = await fetchPaperNotesApi(paperId.value)
-    let notesList: PaperNote[]
-    if ('code' in notesResponse && 'data' in notesResponse) {
-      const fullResponse = notesResponse as any
-      notesList = fullResponse.code === 0 ? fullResponse.data : []
-    } else {
-      notesList = notesResponse as unknown as PaperNote[]
-    }
-    note.value = notesList.length > 0 ? notesList[0] : null
-    if (note.value) {
-      noteContent.value = note.value.content
-      notePage.value = note.value.pageNumber || 1
-    }
     await loadPdfDocument()
+    // 加载笔记列表
+    await loadNotes()
   } catch (error) {
     pdfError.value = error instanceof Error ? error.message : '加载失败'
     ElMessage.error('加载论文失败: ' + pdfError.value)
@@ -408,30 +629,6 @@ const loadPaperData = async () => {
 }
 
 const handleBack = () => router.back()
-
-const autoSaveNote = async () => {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    if (!noteContent.value.trim()) return
-    try {
-      if (note.value) {
-        await updateNoteApi(paperId.value, note.value.id, { content: noteContent.value })
-        note.value.content = noteContent.value
-        note.value.updatedAt = new Date().toISOString()
-      } else {
-        const response = await createNoteApi(paperId.value, {
-          content: noteContent.value,
-          pageNumber: notePage.value,
-        })
-        note.value = response as unknown as PaperNote
-      }
-    } catch (error) {
-      ElMessage.error('自动保存失败')
-      console.error(error)
-    }
-  }, 500)
-}
-watch(noteContent, () => autoSaveNote())
 
 const formatTime = (isoString: string) => {
   const date = new Date(isoString)
@@ -453,80 +650,48 @@ onUnmounted(() => {
   if (pagesContainer.value) {
     pagesContainer.value.removeEventListener('scroll', handleScroll)
     pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
+    pagesContainer.value.removeEventListener('contextmenu', handlePdfContextMenu)
   }
   if (pdfDoc.value) pdfDoc.value.destroy()
   if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
   if (rafId !== null) cancelAnimationFrame(rafId)
 })
 
-/** 触发文件下载 */
-const downloadFile = (content: string, filename: string, mime: string) => {
-  const blob = new Blob([content], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-/** 导出笔记为 Markdown */
-const exportMarkdown = () => {
-  if (!noteContent.value.trim()) {
-    ElMessage.warning('笔记内容为空，无法导出')
-    return
-  }
-  const safeName = paperTitle.value?.replace(/[/\\?%*:|"<>]/g, '_') || '笔记'
-  downloadFile(noteContent.value, `${safeName}.md`, 'text/markdown;charset=utf-8')
-  ElMessage.success('笔记已导出为 Markdown')
-}
-
-/** 导出笔记为 HTML */
-const exportHtml = () => {
-  if (!noteContent.value.trim()) {
-    ElMessage.warning('笔记内容为空，无法导出')
-    return
-  }
-  const safeName = paperTitle.value?.replace(/[/\\?%*:|"<>]/g, '_') || '笔记'
-  const bodyHtml = marked.parse(noteContent.value, { breaks: true }) as string
-  const fullHtml = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${paperTitle.value} - 笔记</title>
-<style>
-body { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.8; color: #333; }
-img { max-width: 100%; }
-pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
-pre code { background: none; padding: 0; }
-blockquote { border-left: 3px solid #4a9d9a; margin: 1em 0; padding: 0.5em 1em; color: #666; background: #f9fbfb; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-th { background: #f5f5f5; }
-</style>
-</head>
-<body>${bodyHtml}</body>
-</html>`
-  downloadFile(fullHtml, `${safeName}.html`, 'text/html;charset=utf-8')
-  ElMessage.success('笔记已导出为 HTML')
-}
 </script>
 
 <template>
   <div class="pdf-viewer-container">
+    <!-- 左侧 AI 对话栏 -->
+    <aside
+      v-if="showAiSidebar"
+      class="ai-sidebar"
+      :class="{ 'is-resizing': isAiResizing }"
+      :style="{ width: aiSidebarWidth + 'px' }"
+    >
+      <AiChatPanel
+        ref="aiChatRef"
+        :paper-id="paperId"
+      />
+    </aside>
+
+    <!-- AI 侧栏拖拽分隔条 -->
+    <div
+      v-if="showAiSidebar"
+      class="ai-resizer"
+      :class="{ 'is-active': isAiResizing }"
+      @mousedown="startAiResize"
+    />
+
     <!-- 中间 PDF 查看区 -->
     <main class="pdf-main">
-      <!-- 工具栏（保持一行，超出滚动） -->
+      <!-- 工具栏 -->
       <header class="pdf-toolbar">
-        <!-- 左侧：返回 + 页码信息 + 翻页 + 快速跳转 -->
         <div class="toolbar-left">
           <el-button text @click="handleBack">
             <el-icon><ArrowLeft /></el-icon>
             返回
           </el-button>
-          
+
           <div class="page-nav-group" v-if="totalPages > 0">
             <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
             <div class="nav-buttons">
@@ -546,7 +711,6 @@ th { background: #f5f5f5; }
           </div>
         </div>
 
-        <!-- 中间：缩放与视图适配 -->
         <div class="toolbar-center">
           <el-button-group>
             <el-tooltip content="缩小 (Ctrl + -)" placement="bottom">
@@ -565,9 +729,9 @@ th { background: #f5f5f5; }
               </el-button>
             </el-tooltip>
           </el-button-group>
-          
+
           <div class="divider"></div>
-          
+
           <el-button-group>
             <el-tooltip content="适应宽度" placement="bottom">
               <el-button size="small" @click="handleFitWidth">
@@ -584,25 +748,44 @@ th { background: #f5f5f5; }
           </el-button-group>
         </div>
 
-        <!-- 右侧：仅搜索按钮 -->
         <div class="toolbar-right">
           <el-tooltip content="搜索 (Ctrl + F)" placement="bottom">
-            <el-button 
-              size="small" 
-              :type="showSearchInline ? 'primary' : ''" 
+            <el-button
+              size="small"
+              :type="showSearchInline ? 'primary' : ''"
               @click="toggleSearchInline"
             >
               <el-icon><Search /></el-icon>
             </el-button>
           </el-tooltip>
+          <el-tooltip content="AI 对话" placement="bottom">
+            <el-button
+              size="small"
+              :type="showAiSidebar ? 'primary' : ''"
+              @click="toggleAiSidebar"
+            >
+              <el-icon><ChatDotSquare /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="笔记" placement="bottom">
+            <el-button
+              size="small"
+              :type="showNoteSidebar ? 'primary' : ''"
+              @click="toggleNoteSidebar"
+            >
+              <el-icon><Edit /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
       </header>
 
-      <!-- 内联搜索栏 -->
-      <div class="search-inline-bar" v-show="showSearchInline">
-        <PdfSearchPanel 
-          :paper-id="paperId" 
-          @jump-to-page="jumpToPage" 
+      <!-- 浮动搜索浮层（不占布局空间） -->
+      <div v-if="showSearchInline" class="pdf-search-float">
+        <PdfSearchPanel
+          ref="searchPanelRef"
+          :paper-id="paperId"
+          @jump-to-page="jumpToPage"
+          @close="showSearchInline = false"
         />
       </div>
 
@@ -624,9 +807,8 @@ th { background: #f5f5f5; }
       </div>
     </main>
 
-    <!-- 拖拽分隔条 -->
+    <!-- 笔记栏拖拽分隔条 -->
     <div
-      v-if="!isMobile"
       class="resizer"
       :class="{ 'is-active': isResizing }"
       @mousedown="startResize"
@@ -634,41 +816,74 @@ th { background: #f5f5f5; }
 
     <!-- 右侧笔记栏 -->
     <aside
+      v-if="showNoteSidebar"
       class="note-sidebar"
-      :class="{ mobile: isMobile, visible: showNoteDrawer, 'is-resizing': isResizing }"
-      :style="{ width: isMobile ? '' : noteSidebarWidth + 'px' }"
+      :class="{ 'is-resizing': isResizing }"
+      :style="{ width: noteSidebarWidth + 'px' }"
     >
       <div class="note-header">
-        <h3 class="note-section-title">我的笔记</h3>
+        <h3 class="note-section-title">笔记</h3>
         <div class="note-header-actions">
-          <span v-if="note" class="save-status">已自动保存</span>
-          <el-dropdown
-            v-if="noteContent.trim()"
-            trigger="click"
-            @command="(cmd: string) => cmd === 'md' ? exportMarkdown() : exportHtml()"
-          >
-            <el-button size="small" text class="export-btn">
-              <el-icon :size="14"><Download /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="md">导出 Markdown (.md)</el-dropdown-item>
-                <el-dropdown-item command="html">导出 HTML (.html)</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <span v-if="noteSaving" class="save-status">保存中...</span>
+          <span v-else-if="activeNoteId" class="save-status">已保存</span>
+          <el-button size="small" text @click="createNote">
+            <el-icon :size="14"><Plus /></el-icon>
+            新建
+          </el-button>
         </div>
       </div>
-      <div class="note-input-area">
+
+      <!-- 笔记列表 -->
+      <div class="note-list" v-if="noteList.length > 0">
+        <div
+          v-for="item in noteList"
+          :key="item.id"
+          class="note-list-item"
+          :class="{ active: item.id === activeNoteId }"
+          @click="selectNote(item.id)"
+        >
+          <div class="note-list-item-title">{{ item.title || '无标题' }}</div>
+          <div class="note-list-item-excerpt">{{ item.excerpt || '空笔记' }}</div>
+          <div class="note-list-item-meta">
+            <span>{{ formatTime(item.updatedAt) }}</span>
+            <el-button
+              size="small"
+              text
+              @click.stop="deleteNote(item.id)"
+            >
+              <el-icon :size="12"><DeleteIcon /></el-icon>
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 当前笔记编辑器 -->
+      <div v-if="activeNoteId" class="note-input-area">
+        <el-input
+          v-model="noteTitle"
+          size="small"
+          placeholder="笔记标题"
+          class="note-title-input"
+        />
         <MarkdownEditor
           v-model="noteContent"
           placeholder="记录你对这篇论文的想法...（支持 Markdown，内容会自动保存）"
         />
-        <div v-if="note" class="note-info">
-          <span class="info-text">最后更新：{{ formatTime(note.updatedAt) }}</span>
-        </div>
+      </div>
+      <div v-else class="note-input-area note-empty">
+        <p>暂无笔记，点击"新建"创建</p>
       </div>
     </aside>
+
+    <!-- 右键上下文菜单 -->
+    <PdfContextMenu
+      :visible="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :selected-text="contextMenu.text"
+      @ask-ai="handleAskAiFromContext"
+      @close="closeContextMenu"
+    />
   </div>
 </template>
 
@@ -676,7 +891,7 @@ th { background: #f5f5f5; }
 <style scoped>
 .pdf-viewer-container {
   display: flex;
-  height: calc(100vh - 60px);
+  height: calc(100vh - 64px);
   background-color: var(--bg-primary);
   overflow: hidden;
 }
@@ -685,7 +900,20 @@ th { background: #f5f5f5; }
   display: flex;
   flex-direction: column;
   min-width: 600px;
+  min-height: 0;
+  position: relative;
   background-color: var(--bg-primary);
+}
+
+.pdf-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 1rem;
+  background-color: #f5f5f5;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #c0c4cc #e9ecef;
 }
 
 /* 工具栏样式优化：强制一行，超出滚动 */
@@ -760,16 +988,6 @@ th { background: #f5f5f5; }
   gap: 0.5rem;
 }
 
-/* 滚动容器样式 */
-.pdf-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1rem;
-  background-color: #f5f5f5;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  scrollbar-color: #c0c4cc #e9ecef;
-}
 .pdf-content::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -787,19 +1005,8 @@ th { background: #f5f5f5; }
   background: #909399;
 }
 
-.pdf-page-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 1.5rem;
-}
-.pdf-page-wrapper canvas {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  background: white;
-  border-radius: 2px;
-  max-width: 100%;
-  height: auto !important;
-  display: block;
-}
+/* 动态创建的 DOM 元素样式见 renderAllPagesWithScale 中的 inline style */
+/* (Vue scoped CSS 不作用于动态创建的 DOM 元素) */
 
 /* 加载/错误状态 */
 .pdf-loading,
@@ -855,12 +1062,110 @@ th { background: #f5f5f5; }
   background: var(--brand);
 }
 
+/* ── AI 侧栏拖拽分隔条 ── */
+.ai-resizer {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  transition: background 0.15s ease;
+}
+
+.ai-resizer:hover,
+.ai-resizer.is-active {
+  background: var(--brand);
+}
+
+.ai-sidebar.is-resizing {
+  transition: none;
+}
+
+/* ── AI 侧栏 ── */
+.ai-sidebar {
+  background: white;
+  border-right: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ── 笔记列表 ── */
+.note-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+
+.note-list-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.12s;
+}
+
+.note-list-item:hover {
+  background: #f5f7fa;
+}
+
+.note-list-item.active {
+  background: #ecf5ff;
+  border-left: 3px solid var(--brand);
+  padding-left: 9px;
+}
+
+.note-list-item-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-list-item-excerpt {
+  font-size: 0.72rem;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-list-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: #ccc;
+  margin-top: 2px;
+}
+
+.note-title-input {
+  margin-bottom: 6px;
+}
+
+.note-title-input :deep(.el-input__inner) {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.note-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bbb;
+  font-size: 0.82rem;
+}
+
 .note-sidebar {
   background-color: var(--bg-secondary);
   border-left: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease;
 }
 
 .note-sidebar.is-resizing {
@@ -956,15 +1261,12 @@ th { background: #f5f5f5; }
   transform: translateX(0);
 }
 
-.search-inline-bar {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  padding: 8px 0;
-  background-color: #fff;
-  border-bottom: 1px solid var(--line-soft);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  z-index: 10;
+/* 浮动搜索浮层 */
+.pdf-search-float {
+  position: absolute;
+  top: 52px;
+  right: 12px;
+  z-index: 100;
 }
 
 /* 响应式：小屏幕时仅让工具栏可滚动，内部不再换行 */
@@ -982,15 +1284,44 @@ th { background: #f5f5f5; }
     width: 240px;
   }
 }
-@media (max-width: 768px) {
-  .search-drawer {
-    width: 100%;
-    max-width: 100vw;
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    height: 100vh;
-  }
+</style>
+
+<style>
+/* PDF.js 文字选择层 — 全局样式（动态创建的元素） */
+.textLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  z-index: 2;
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent !important;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer .highlight {
+  margin: -1px;
+  padding: 1px;
+  background-color: rgba(180, 0, 170, 0.3);
+  border-radius: 4px;
+}
+
+.textLayer .highlight.selected {
+  background-color: rgba(0, 100, 0, 0.3);
+}
+
+/* 选择高亮 */
+.textLayer ::selection {
+  background-color: rgba(0, 0, 255, 0.2);
 }
 </style>

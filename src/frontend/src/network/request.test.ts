@@ -32,7 +32,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  window.location = originalLocation as any
 })
 
 describe('request 拦截器逻辑（直接测试拦截器函数）', () => {
@@ -98,12 +98,12 @@ describe('request 拦截器逻辑（直接测试拦截器函数）', () => {
         {} as any,
         {} as any,
         {
-          status: status ?? 500,
+          status: status ?? null,
           data,
           statusText: 'Error',
           headers: new AxiosHeaders(),
           config: {} as any,
-        },
+        } as any,
       )
       return error
     }

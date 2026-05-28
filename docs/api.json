@@ -548,6 +548,64 @@
             "jwt": []
           }
         ]
+      },
+      "patch": {
+        "summary": "用户名修改",
+        "deprecated": false,
+        "description": "用户名修改",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk4NjgwMTF9.EOUWFxEaOWfpZZ_20LXmfUVhSm_Z_l7VZtWeGu5uNYA",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "example": {
+                "name": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
       }
     },
     "/api/user/send-code": {
@@ -2341,6 +2399,1052 @@
           }
         },
         "security": []
+      }
+    },
+    "/api/notes/uploads": {
+      "post": {
+        "summary": "笔记图片上传",
+        "deprecated": false,
+        "description": "上传图片，返回url给前端，前端将url插入到富文本中\n填写paperId和noteId，在数据库中备份图片的归属关系",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "paperId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "f1e2d3c4b5a697887766554433221100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "3c2a6c13c815421bb1a862891a59ed14",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjIzMzF9.nMSrtob8xyfBbYEEzErqVFe0Fn0WilENVXiof9WFC-8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "example": "cmMtdXBsb2FkLTE3Nzk4NjQwMTYzMjEtMTI=/屏幕截图 2026-05-10 163838.png",
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "noteId": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "size": {
+                          "type": "integer"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "noteId",
+                        "url",
+                        "filename",
+                        "mimeType",
+                        "size",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "上传成功",
+                      "data": {
+                        "url": "/uploads/notes/tmp/3f5a9e...png",
+                        "filename": "photo.png",
+                        "mimeType": "image/png",
+                        "size": 12345
+                      }
+                    }
+                  },
+                  "2": {
+                    "summary": "示例 2",
+                    "value": {
+                      "code": 0,
+                      "msg": "上传成功",
+                      "data": {
+                        "id": "28780001276f4eb18fffe52c968e6d2c",
+                        "noteId": "3c2a6c13c815421bb1a862891a59ed14",
+                        "url": "/uploads/notes/3c2a6c13c815421bb1a862891a59ed14/82b3b28c3e064a6db14b0b61c6e41871.png",
+                        "filename": "屏幕截图 2026-05-14 015310.png",
+                        "mimeType": "image/png",
+                        "size": 36436,
+                        "createdAt": "2026-05-28T09:01:36"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/": {
+      "post": {
+        "summary": "创建笔记",
+        "deprecated": false,
+        "description": "创建笔记",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NTcyNzB9.ug7lduqlilv_i0RSyMZ9vSHpzij3kuKSKJXw_duzYd8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "paperId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "笔记标题"
+                  },
+                  "contentHtml": {
+                    "type": "string",
+                    "description": "笔记文本"
+                  },
+                  "contentFormat": {
+                    "type": "string",
+                    "description": "格式html或者markdown等等，前端可以自己确定类型"
+                  }
+                },
+                "required": [
+                  "paperId",
+                  "title",
+                  "contentHtml",
+                  "contentFormat"
+                ]
+              },
+              "example": {
+                "paperId": "f1e2d3c4b5a697887766554433221100",
+                "title": "笔记4",
+                "contentHtml": "机器学习",
+                "contentFormat": "html"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "paperId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "contentHtml": {
+                          "type": "string"
+                        },
+                        "contentFormat": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "paperId",
+                        "title",
+                        "contentHtml",
+                        "contentFormat",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "创建成功",
+                  "data": {
+                    "id": "note_hex_id",
+                    "paperId": "abc123",
+                    "title": "我的笔记标题",
+                    "contentHtml": "<p>看这里 <img src=\"/uploads/notes/note_hex_id/3f5a9e.png\"/></p>",
+                    "contentFormat": "html",
+                    "createdAt": "2026-05-28T08:00:00",
+                    "updatedAt": "2026-05-28T08:00:00"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "展示论文的笔记列表",
+        "deprecated": false,
+        "description": "展示当前论文下的所有笔记列表",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "paperId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "f1e2d3c4b5a697887766554433221100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码。默认1",
+            "required": false,
+            "example": 1,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页条数，默认20",
+            "required": false,
+            "example": 20,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjIzMzF9.nMSrtob8xyfBbYEEzErqVFe0Fn0WilENVXiof9WFC-8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "description": "笔记id"
+                              },
+                              "paperId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string",
+                                "description": "标题"
+                              },
+                              "excerpt": {
+                                "type": "string",
+                                "description": "内容"
+                              },
+                              "firstImageUrl": {
+                                "type": "string",
+                                "description": "方便扩展，暂时没用",
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "description": "更新时间"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "paperId",
+                              "title",
+                              "excerpt",
+                              "firstImageUrl",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "total": 2,
+                    "items": [
+                      {
+                        "id": "note1",
+                        "paperId": "abc123",
+                        "title": "笔记 A",
+                        "excerpt": "这是笔记的纯文本摘录...",
+                        "firstImageUrl": "/uploads/notes/note1/img1.png",
+                        "updatedAt": "2026-05-28T08:10:00"
+                      },
+                      {
+                        "id": "note2",
+                        "paperId": "abc123",
+                        "title": "笔记 B",
+                        "excerpt": "",
+                        "firstImageUrl": null,
+                        "updatedAt": "2026-05-27T12:00:00"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/{note_id}": {
+      "get": {
+        "summary": "获取单个笔记",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "paperId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "contentHtml": {
+                          "type": "string"
+                        },
+                        "contentFormat": {
+                          "type": "string"
+                        },
+                        "contentText": {
+                          "type": "string"
+                        },
+                        "images": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "orderIndex": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "paperId",
+                        "title",
+                        "contentHtml",
+                        "contentFormat",
+                        "contentText",
+                        "images",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "id": "note_hex_id",
+                    "paperId": "abc123",
+                    "title": "我的笔记标题",
+                    "contentHtml": "<p>内容带图片 <img src=\"/uploads/notes/note_hex_id/3f5a9e.png\"/></p>",
+                    "contentFormat": "html",
+                    "contentText": "内容带图片 ...",
+                    "images": [
+                      {
+                        "id": "imgid1",
+                        "url": "/uploads/notes/note_hex_id/3f5a9e.png",
+                        "orderIndex": 0
+                      }
+                    ],
+                    "createdAt": "2026-05-28T08:00:00",
+                    "updatedAt": "2026-05-28T08:00:00"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "修改笔记",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "contentHtml": {
+                    "type": "string"
+                  },
+                  "contentFormat": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "contentHtml",
+                  "contentFormat"
+                ]
+              },
+              "example": {
+                "title": "string",
+                "contentHtml": "string",
+                "contentFormat": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "更新成功",
+                  "data": {
+                    "id": "note_hex_id"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "删除笔记",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "删除成功",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/search": {
+      "get": {
+        "summary": "关键词搜索笔记",
+        "deprecated": false,
+        "description": "根据关键词搜索，支持在标题包含或者文本包含关键词",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "关键词",
+            "required": false,
+            "example": "笔记",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paperId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "f1e2d3c4b5a697887766554433221100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "1",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "20",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjEyOTl9.fC_sXYtaIxHYWlTptnHkCKuSMI-mddh8wuzamve3r74",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "note_id": {
+                                "type": "string"
+                              },
+                              "note_title": {
+                                "type": "string"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "content_text": {
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "note_id",
+                              "note_title",
+                              "content_text",
+                              "updated_at",
+                              "score"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "搜索完成",
+                  "data": {
+                    "total": 3,
+                    "items": [
+                      {
+                        "note_id": "125e64c45ec14c80bc9a884c4b7f021c",
+                        "note_title": "笔记4",
+                        "score": 0.3624762296676636,
+                        "content_text": "笔记",
+                        "updated_at": "2026-05-28T08:01:00"
+                      },
+                      {
+                        "note_id": "3c2a6c13c815421bb1a862891a59ed14",
+                        "note_title": "笔记4",
+                        "content_text": "机器学习",
+                        "updated_at": "2026-05-28T08:14:43",
+                        "score": 0
+                      },
+                      {
+                        "note_id": "d3f53e7749754dd998f689f8ee5d9f60",
+                        "note_title": "笔记3",
+                        "content_text": "string",
+                        "updated_at": "2026-05-28T07:42:55",
+                        "score": 0
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/{note_id}/images": {
+      "get": {
+        "summary": "获取某个笔记下所有图片的url",
+        "deprecated": false,
+        "description": "获取某个笔记下所有图片的url",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "3c2a6c13c815421bb1a862891a59ed14",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjIzMzF9.nMSrtob8xyfBbYEEzErqVFe0Fn0WilENVXiof9WFC-8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "orderIndex": {
+                                "type": "integer"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "filename",
+                              "orderIndex",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "total": 2,
+                    "items": [
+                      {
+                        "id": "28780001276f4eb18fffe52c968e6d2c",
+                        "url": "/uploads/notes/3c2a6c13c815421bb1a862891a59ed14/82b3b28c3e064a6db14b0b61c6e41871.png",
+                        "filename": "屏幕截图 2026-05-14 015310.png",
+                        "orderIndex": 0,
+                        "createdAt": "2026-05-28T09:01:36"
+                      },
+                      {
+                        "id": "dabb904e88954beaa355ac8173b63c02",
+                        "url": "/uploads/notes/3c2a6c13c815421bb1a862891a59ed14/06257c19e61e43d9aaf4623a9b885abb.png",
+                        "filename": "屏幕截图 2026-05-10 163838.png",
+                        "orderIndex": 0,
+                        "createdAt": "2026-05-28T09:10:53"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
       }
     },
     "/health": {
