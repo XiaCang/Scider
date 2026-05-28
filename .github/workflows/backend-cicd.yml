@@ -183,8 +183,9 @@ jobs:
             # Login to GHCR so we can pull private images
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            # Stop & remove old containers (data volumes preserved)
-            docker compose -f ${{ env.COMPOSE_FILE }} down
+            # Remove old containers forcefully (data volumes preserved)
+            docker compose -f ${{ env.COMPOSE_FILE }} down --remove-orphans
+            docker rm -f scider-mysql scider-redis scider-backend scider-worker 2>/dev/null || true
 
             # Pull latest images (built & pushed by build-and-push job)
             docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
@@ -194,8 +195,8 @@ jobs:
             docker compose -f ${{ env.COMPOSE_FILE }} run --rm --entrypoint "" backend \
               sh -c "cd /app/db && alembic upgrade head"
 
-            # Restart services (entrypoint will see no pending migrations)
-            docker compose -f ${{ env.COMPOSE_FILE }} up -d backend worker
+            # Restart all services
+            docker compose -f ${{ env.COMPOSE_FILE }} up -d
 
             # Clean up stale images
             docker image prune -af --filter "until=24h"
