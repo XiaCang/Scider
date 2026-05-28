@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Download, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -56,6 +56,7 @@ const isMobile = ref(window.innerWidth < 900)
 const showNoteDrawer = ref(true)
 const pdfLoading = ref(true)
 const pdfError = ref('')
+const showSearchInline = ref(false)
 let pdfObjectUrl = ''
 
 // 笔记栏宽度调整
@@ -97,6 +98,24 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 const handleResize = () => {
   isMobile.value = window.innerWidth < 900
 }
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleKeyDown)
+  loadPaperData()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeyDown)
+  if (pagesContainer.value) {
+    pagesContainer.value.removeEventListener('scroll', handleScroll)
+    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
+  }
+  if (pdfDoc.value) pdfDoc.value.destroy()
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
+  if (rafId !== null) cancelAnimationFrame(rafId)
+})
 
 // ---------- 滚动时计算当前页码（使用 requestAnimationFrame 节流）----------
 const updateCurrentPageFromScroll = () => {
