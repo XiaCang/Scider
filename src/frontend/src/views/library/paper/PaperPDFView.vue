@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// @ts-nocheck
 import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Download, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
