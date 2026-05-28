@@ -192,10 +192,44 @@ class PaperNote(Base):
 
     id = Column(String(64), primary_key=True, default=gen_id)
     paper_id = Column(String(64), ForeignKey("paper.id"), nullable=False)
-    content = Column(Text, nullable=False)
+    # 兼容旧字段：保留 `content`（可选），推荐使用 `content_html` 存储富文本
+    content = Column(Text, nullable=True)
+    # 新增富文本与标题字段
+    title = Column(String(255), nullable=True)
+    content_html = Column(Text, nullable=True)
+    content_format = Column(String(20), nullable=False, server_default='html')
+    # 抽取的纯文本，用于搜索索引或生成 note_search
+    content_text = Column(Text, nullable=True)
     page_number = Column(Integer, nullable=True)  # 笔记关联的页码
     selected_text = Column(Text, nullable=True)  # 选中的文本片段
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     paper = relationship("Paper", backref="notes")
+    images = relationship("NoteImage", back_populates="note", order_by="NoteImage.order_index")
+
+
+class NoteImage(Base):
+    __tablename__ = 'note_image'
+
+    id = Column(String(64), primary_key=True, default=gen_id)
+    note_id = Column(String(64), ForeignKey('paper_note.id'), nullable=False, index=True)
+    url = Column(String(1024), nullable=False)
+    mime_type = Column(String(50), nullable=True)
+    filename = Column(String(255), nullable=True)
+    size = Column(Integer, nullable=True)
+    order_index = Column(Integer, nullable=False, server_default='0')
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    note = relationship('PaperNote', back_populates='images')
+
+
+class NoteSearch(Base):
+    __tablename__ = 'note_search'
+
+    note_id = Column(String(64), ForeignKey('paper_note.id'), primary_key=True)
+    paper_id = Column(String(64), nullable=False, index=True)
+    note_title = Column(String(255), nullable=True)
+    paper_title = Column(String(1024), nullable=True)
+    content_text = Column(Text, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
