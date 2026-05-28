@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { useFolderTreeFilter } from './useFolderTreeFilter'
 import type { Folder } from '../types/folder'
-import { nextTick } from 'vue'
 
 function createFolders(): Folder[] {
   return [

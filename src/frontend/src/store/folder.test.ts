@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useFolderStore } from './folder'
-import { usePaperStore } from './paper'
 import * as libraryApi from '../api/library'
 
 vi.mock('../api/library', () => ({
