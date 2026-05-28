@@ -99,9 +99,10 @@
 | `SERVER_IP` | **dev** 服务器公网 IP | `39.107.252.200` |
 | `SERVER_USER` | **dev** 服务器 SSH 用户名 | `root` |
 | `SSH_PRIVATE_KEY` | 服务器的 SSH 私钥（**不要泄露！**） | `-----BEGIN OPENSSH PRIVATE KEY-----\n...` |
-| `GHCR_PAT` | GitHub Personal Access Token（用于服务器拉取镜像） | `ghp_xxxxxxxxxxxx` |
 | `PROD_SERVER_IP` | **生产**服务器公网 IP（可选） | `1.2.3.4` |
 | `PROD_SERVER_USER` | **生产**服务器 SSH 用户名（可选） | `root` |
+
+> 💡 不需要配置 `GHCR_PAT`。Workflow 使用 GitHub Actions 自动生成的 `GITHUB_TOKEN` 登录 GHCR 拉取镜像，无需额外设置。
 
 ### SSH 密钥对生成方法
 
@@ -120,17 +121,6 @@ cat ~/.ssh/github-actions
 ```
 
 > ⚠️ `SSH_PRIVATE_KEY` 是**私钥文件**（没有 `.pub` 后缀），内容以 `-----BEGIN` 开头、`-----END` 结尾，复制时不要漏掉任何字符。
-
-### GHCR PAT 获取方法
-
-1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens**
-2. 点击 **Generate new token**
-3. 设置：
-   - **Token name**: `ghcr-deploy`
-   - **Expiration**: 根据需要选择
-   - **Repository access**: 选择你的仓库
-   - **Permissions** → **Container repositories**: `Read`
-4. 生成后将 token 值填入 `GHCR_PAT`
 
 ---
 
@@ -288,7 +278,11 @@ docker compose -f /opt/scider/src/backend/docker-compose.yml run --rm --entrypoi
 
 ### Q3：镜像拉取失败（权限问题）
 
-确认 `GHCR_PAT` 有效且有 `read:packages` 权限，以及服务器上执行了 `docker login ghcr.io`。
+Workflow 中使用 GitHub Actions 自动生成的 `GITHUB_TOKEN`（已授予 `packages: read` 权限）登录 GHCR。如果镜像拉取失败，检查：
+
+1. `.github/workflows/backend-cicd.yml` 中 `deploy` job 是否有 `permissions: packages: read`
+2. 镜像是否已成功推送到 GHCR（在 Actions 的 build-and-push job 中查看）
+3. 如果是本地运行 `deploy.sh`，则需要设置 `export GHCR_PAT="你的token"`
 
 ### Q4：如何回滚到旧版本
 

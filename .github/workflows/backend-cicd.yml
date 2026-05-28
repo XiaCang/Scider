@@ -200,4 +200,4 @@ jobs:
             echo "Deploy to ${{ env.DEPLOY_ENV }} complete."
         env:
           GHCR_USER: ${{ github.repository_owner }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
