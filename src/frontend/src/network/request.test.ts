@@ -30,7 +30,8 @@ beforeEach(() => {
     pathname: '/app/library',
   })
 })
-
+// window.location.href 模拟
+const originalLocation = window.location
 afterEach(() => {
   window.location = originalLocation as any
 })
