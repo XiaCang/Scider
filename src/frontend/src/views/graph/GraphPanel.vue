@@ -9,18 +9,22 @@ import type { Folder } from '../../types/folder'
 import type { PaperKeyPoints } from '../../types/library'
 import type { GraphLink, GraphNode, NodeType } from '../../types/graph'
 import GraphNodeDetail from './GraphNodeDetail.vue'
-import { fetchSimilarityGraphApi } from '../../api/graph'
+import { fetchSimilarityGraphApi, fetchLLMGraphApi } from '../../api/graph'
 
 // 图谱配置常量
 const SIMILARITY_THRESHOLD = 0.35 // 相似度阈值（可根据 embedding 模型质量调整）
 
-const categories = [
+// 默认分类（用于相似度图谱和四要素图谱）
+const defaultCategories = [
   { name: '论文', itemStyle: { color: '#4a9d9a' } },
   { name: '研究背景', itemStyle: { color: '#6b8e8e' } },
   { name: '研究方法', itemStyle: { color: '#e8b86d' } },
   { name: '创新点', itemStyle: { color: '#c17767' } },
   { name: '结论', itemStyle: { color: '#4a9d9a' } },
 ]
+
+// 聚类颜色映射（用于 LLM 图谱）
+const clusterColors = ['#4a9d9a', '#e8b86d', '#c17767', '#6b8e8e', '#8b7cb3', '#5a9fd4']
 
 const router = useRouter()
 const folderStore = useFolderStore()
@@ -29,11 +33,14 @@ const chartRef = ref<HTMLDivElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
 const isLoading = ref(false)
 
+// 图谱类型切换：'elements' = 四要素图谱, 'similarity' = 相似度图谱, 'llm' = LLM主题聚类
+const graphType = ref<'elements' | 'similarity' | 'llm'>('elements')
+
 // 节点详情
 const nodeDetailVisible = ref(false)
 const selectedNodeData = ref<GraphNode | null>(null)
 
-// 筛选器
+// 筛选器（仅用于四要素图谱）
 const filters = reactive({
   background: true,
   method: true,
@@ -41,10 +48,11 @@ const filters = reactive({
   conclusion: true,
 })
 
-// 缓存全量节点与边（由论文数据构建）
+// 缓存全量节点与边
 let cachedNodes: GraphNode[] = []
 let cachedLinks: GraphLink[] = []
-
+// 当前使用的分类
+let currentCategories = defaultCategories
 
 const getSymbolByType = (type: NodeType) => {
   switch (type) {
@@ -56,7 +64,7 @@ const getSymbolByType = (type: NodeType) => {
   }
 }
 
-// ---- 从论文数据构建图谱 ----
+// ---- 四要素图谱：从论文数据构建 ----
 const dimensionConfig: { type: keyof PaperKeyPoints; nodeType: NodeType; label: string; category: number }[] = [
   { type: 'background', nodeType: 'background', label: '研究背景', category: 1 },
   { type: 'method',     nodeType: 'method',     label: '研究方法',  category: 2 },
@@ -113,11 +121,14 @@ function buildGraphFromPapers() {
 
   cachedNodes = nodes
   cachedLinks = links
+  currentCategories = defaultCategories
   applyFilterAndRender()
   isLoading.value = false
 
   // 异步加载后端相似度边（增强性，不阻塞主图谱）
-  loadSimilarityEdges()
+  if (graphType.value === 'elements') {
+    loadSimilarityEdges()
+  }
 }
 
 function findFolder(tree: Folder[], id: string): Folder | undefined {
@@ -131,7 +142,75 @@ function findFolder(tree: Folder[], id: string): Folder | undefined {
   return undefined
 }
 
-// ---- 从后端加载基于 embedding 余弦相似度的边 ----
+// ---- 相似度图谱：从后端加载 ----
+async function loadSimilarityGraph() {
+  isLoading.value = true
+  try {
+    const res: any = await fetchSimilarityGraphApi({
+      folder_id: folderStore.currentFolderId,
+      max_nodes: 200,
+      min_similarity: SIMILARITY_THRESHOLD,
+      top_k: 8,
+    })
+    const payload = res?.data
+    
+    if (!payload?.nodes?.length) {
+      ElMessage.info('暂无已向量的论文，请先确认论文四要素')
+      cachedNodes = []
+      cachedLinks = []
+      renderChart([], [])
+      return
+    }
+
+    // 构建节点
+    cachedNodes = payload.nodes.map((n: any) => ({
+      id: n.id,
+      name: n.name,
+      type: 'paper',
+      category: 0,
+      paperInfo: n.paperInfo,
+    }))
+
+    // 构建边
+    cachedLinks = []
+    if (payload.links?.length) {
+      const nodeIds = new Set(cachedNodes.map(n => n.id))
+      for (const link of payload.links) {
+        if (!nodeIds.has(link.source) || !nodeIds.has(link.target)) continue
+        const similarityMatch = link.label?.match(/相似度\s+([\d.]+)/)
+        const similarityValue = similarityMatch ? parseFloat(similarityMatch[1]) : 0
+
+        if (similarityValue >= SIMILARITY_THRESHOLD) {
+          cachedLinks.push({
+            source: link.source,
+            target: link.target,
+            relationType: 'semantic' as const,
+            reason: similarityValue.toFixed(2),
+          })
+        }
+      }
+    }
+
+    currentCategories = [{ name: '论文', itemStyle: { color: '#4a9d9a' } }]
+    renderChart(cachedNodes, cachedLinks)
+
+    if (payload?.meta?.reason) {
+      const reasonMap: Record<string, string> = {
+        no_embeddings: '论文尚未生成向量，需要先完成四要素提取或确认',
+        need_two_or_more_for_similarity_edges: '至少需要2篇已向量的论文才能计算相似度',
+      }
+      const msg = reasonMap[payload.meta.reason as string] || `暂无语义相似边（${payload.meta.reason}）`
+      ElMessage.info(msg)
+    }
+  } catch (e) {
+    console.error('[GraphPanel] 加载相似度图谱失败:', e)
+    ElMessage.error('加载相似度图谱失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// 异步加载相似度边（用于四要素图谱增强）
 async function loadSimilarityEdges() {
   try {
     const res: any = await fetchSimilarityGraphApi({
@@ -142,38 +221,88 @@ async function loadSimilarityEdges() {
     })
     const payload = res?.data
     if (payload?.links?.length) {
-      // 构建当前节点的 ID 集合，过滤掉引用不存在节点的脏边
       const nodeIds = new Set(cachedNodes.map(n => n.id))
       for (const link of payload.links) {
-        // 跳过 source 或 target 不在当前节点列表中的边（防止脏数据）
         if (!nodeIds.has(link.source) || !nodeIds.has(link.target)) continue
-        // 提取相似度数值（从 "相似度 0.85" 格式中提取数字）
         const similarityMatch = link.label?.match(/相似度\s+([\d.]+)/)
         const similarityValue = similarityMatch ? parseFloat(similarityMatch[1]) : 0
 
-        // 只显示相似度 >= 阈值的边
         if (similarityValue >= SIMILARITY_THRESHOLD) {
           cachedLinks.push({
             source: link.source,
             target: link.target,
             relationType: 'semantic' as const,
-            reason: similarityValue.toFixed(2), // 只保留相似度数值，如 "0.85"
+            reason: similarityValue.toFixed(2),
           })
         }
       }
       applyFilterAndRender()
-    } else if (payload?.meta?.reason) {
-      // 后端返回了明确的无边原因，给用户提示
-      const reasonMap: Record<string, string> = {
-        no_embeddings: '论文尚未生成向量，需要先完成四要素提取或确认',
-        need_two_or_more_for_similarity_edges: '至少需要2篇已向量的论文才能计算相似度',
-      }
-      const msg = reasonMap[payload.meta.reason as string] || `暂无语义相似边（${payload.meta.reason}）`
-      ElMessage.info(msg)
     }
   } catch (e) {
     console.warn('[GraphPanel] 加载语义相似边失败:', e)
-    // 相似度边是增强性的，不阻塞主图谱渲染
+  }
+}
+
+// ---- LLM 主题聚类图谱 ----
+async function loadLLMGraph() {
+  isLoading.value = true
+  try {
+    const res: any = await fetchLLMGraphApi({
+      folder_id: folderStore.currentFolderId,
+      max_nodes: 50,
+    })
+    const payload = res?.data
+    
+    if (!payload?.nodes?.length) {
+      const reason = payload?.meta?.reason || 'no_confirmed_papers'
+      if (reason === 'no_confirmed_papers') {
+        ElMessage.info('没有已确认的论文，请先确认论文四要素')
+      } else {
+        ElMessage.info('暂无数据')
+      }
+      cachedNodes = []
+      cachedLinks = []
+      renderChart([], [])
+      return
+    }
+
+    // 使用 clusters 构建动态分类
+    currentCategories = payload.clusters.map((c: any, idx: number) => ({
+      name: c.name,
+      itemStyle: { color: clusterColors[idx % clusterColors.length] }
+    }))
+
+    // 构建节点
+    cachedNodes = payload.nodes.map((n: any) => ({
+      id: n.id,
+      name: n.name,
+      type: 'paper',
+      category: n.category,
+      paperInfo: n.paperInfo,
+    }))
+
+    // 构建边（LLM 生成的语义关系）
+    const relationTypeMap: Record<string, string> = {
+      extends: '扩展',
+      applies: '应用',
+      compares: '对比',
+      related: '相关',
+    }
+    
+    cachedLinks = (payload.links || []).map((l: any) => ({
+      source: l.source,
+      target: l.target,
+      relationType: l.relationType,
+      label: l.label,
+      reason: l.label, // 使用 label 作为 reason 显示
+    }))
+
+    renderChart(cachedNodes, cachedLinks)
+  } catch (e) {
+    console.error('[GraphPanel] 加载 LLM 图谱失败:', e)
+    ElMessage.error('加载 LLM 图谱失败')
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -193,7 +322,6 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   const nodeCount = nodes.length
   let forceConfig
   if (nodeCount > 50) {
-    // 大规模图谱：更分散的布局
     forceConfig = { 
       repulsion: 1500,
       gravity: 0.02,
@@ -201,7 +329,6 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       friction: 0.7
     }
   } else if (nodeCount < 20) {
-    // 小规模图谱：更紧凑的布局
     forceConfig = { 
       repulsion: 800,
       gravity: 0.05,
@@ -209,7 +336,6 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       friction: 0.6
     }
   } else {
-    // 中等规模：默认配置
     forceConfig = { 
       repulsion: 1000,
       gravity: 0.03,
@@ -230,12 +356,16 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           const relationLabels: Record<string, string> = {
             ownership: '归属关系',
             semantic: '语义关联',
-            citation: '引用关系'
+            citation: '引用关系',
+            extends: '扩展关系',
+            applies: '应用关系',
+            compares: '对比关系',
+            related: '相关关系',
           }
           
-          // 只有语义关联才显示理由，其他类型不显示
           let reasonHtml = ''
-          if (params.data.relationType === 'semantic') {
+          if (params.data.relationType === 'semantic' || 
+              ['extends', 'applies', 'compares', 'related'].includes(params.data.relationType)) {
             const reasonText = params.data.reason || params.data.label
             if (reasonText && typeof reasonText === 'string') {
               reasonHtml = `<div style="color: #666; font-size: 11px;">${reasonText}</div>`
@@ -257,7 +387,6 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           conclusion: '✅ 结论'
         }
         
-        // 论文节点显示完整信息
         if (params.data.type === 'paper' && params.data.paperInfo) {
           const paper = params.data.paperInfo
           return `
@@ -279,7 +408,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       }
     },
     legend: { 
-      data: categories.map(c => c.name), 
+      data: currentCategories.map(c => c.name), 
       orient: 'vertical', 
       right: 15, 
       top: 15,
@@ -291,7 +420,7 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       itemHeight: 10,
       itemGap: 10,
       selector: false,
-      selectedMode: false  // 禁用图例的点击和悬停交互
+      selectedMode: false
     },
     series: [{
       type: 'graph',
@@ -311,16 +440,16 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
       links: links.map(l => ({
         ...l,
         lineStyle: {
-          type: l.relationType === 'semantic' ? 'dashed' : 'solid',
+          type: ['semantic', 'extends', 'applies', 'compares', 'related'].includes(l.relationType) ? 'dashed' : 'solid',
           color: l.relationType === 'citation' ? 'rgba(153,153,153,0.35)' :
-                 l.relationType === 'semantic' ? 'rgba(99,132,180,0.4)' : 'rgba(120,140,170,0.25)',
-          curveness: l.relationType === 'semantic' ? 0.25 : 0.05,
+                 ['semantic', 'extends', 'applies', 'compares', 'related'].includes(l.relationType) ? 'rgba(99,132,180,0.4)' : 'rgba(120,140,170,0.25)',
+          curveness: ['semantic', 'extends', 'applies', 'compares', 'related'].includes(l.relationType) ? 0.25 : 0.05,
           width: l.relationType === 'ownership' ? 2.5 : 1.8,
           opacity: 0.7,
         },
         label: { show: false },
       })),
-      categories,
+      categories: currentCategories,
       roam: true,
       draggable: true,
       force: forceConfig,
@@ -369,9 +498,13 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   chartInstance?.on('click', handleChartClick) 
 }
 
-// 综合筛选并渲染
+// 综合筛选并渲染（仅用于四要素图谱）
 const applyFilterAndRender = () => {
-  // 不再提前返回，允许渲染空图谱以清空画布
+  if (graphType.value !== 'elements') {
+    renderChart(cachedNodes, cachedLinks)
+    return
+  }
+  
   const visibleTypes: NodeType[] = ['paper']
   if (filters.background) visibleTypes.push('background')
   if (filters.method) visibleTypes.push('method')
@@ -385,19 +518,44 @@ const applyFilterAndRender = () => {
   renderChart(filteredNodes, filteredLinks)
 }
 
-// 监听筛选条件
+// 监听筛选条件（仅四要素图谱）
 watch(
   () => [filters.background, filters.method, filters.innovation, filters.conclusion],
-  applyFilterAndRender,
+  () => {
+    if (graphType.value === 'elements') {
+      applyFilterAndRender()
+    }
+  },
   { deep: true }
 )
-// 监听文件夹变化 → 重新构建图谱
-watch(() => folderStore.currentFolderId, () => {
-  buildGraphFromPapers()
+
+// 监听图谱类型切换
+watch(graphType, (type) => {
+  if (type === 'elements') {
+    buildGraphFromPapers()
+  } else if (type === 'similarity') {
+    loadSimilarityGraph()
+  } else if (type === 'llm') {
+    loadLLMGraph()
+  }
 })
-// 监听论文列表及内容变化（如四要素更新后触发向量化）→ 重新构建图谱
+
+// 监听文件夹变化
+watch(() => folderStore.currentFolderId, () => {
+  if (graphType.value === 'elements') {
+    buildGraphFromPapers()
+  } else if (graphType.value === 'similarity') {
+    loadSimilarityGraph()
+  } else if (graphType.value === 'llm') {
+    loadLLMGraph()
+  }
+})
+
+// 监听论文列表变化
 watch(paperStore.papers, () => {
-  buildGraphFromPapers()
+  if (graphType.value === 'elements') {
+    buildGraphFromPapers()
+  }
 }, { deep: true })
 
 // ---- 点击节点 ----
@@ -421,21 +579,25 @@ const handleNavigateToPaper = (paperId: string) => {
 
 // ---- 生命周期 ----
 onMounted(async () => {
-  // 确保论文数据已加载
   if (paperStore.papers.length === 0) {
     await paperStore.loadPapers()
   }
-  buildGraphFromPapers()
   
-  // 监听窗口 resize 事件
+  // 根据当前图谱类型加载数据
+  if (graphType.value === 'elements') {
+    buildGraphFromPapers()
+  } else if (graphType.value === 'similarity') {
+    loadSimilarityGraph()
+  } else if (graphType.value === 'llm') {
+    loadLLMGraph()
+  }
+  
   const handleWindowResize = () => chartInstance?.resize()
   window.addEventListener('resize', handleWindowResize)
   
-  // 监听侧边栏折叠/展开事件
   const handleSidebarToggle = () => chartInstance?.resize()
   window.addEventListener('sidebar-toggle', handleSidebarToggle)
   
-  // 保存清理函数引用（用于卸载时移除）
   ;(chartInstance as any)._cleanupHandlers = () => {
     window.removeEventListener('resize', handleWindowResize)
     window.removeEventListener('sidebar-toggle', handleSidebarToggle)
@@ -443,7 +605,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // 清理事件监听器
   if ((chartInstance as any)?._cleanupHandlers) {
     ;(chartInstance as any)._cleanupHandlers()
   }
@@ -455,7 +616,15 @@ onUnmounted(() => {
   <div class="graph-panel">
     <header class="graph-header">
       <div class="header-left">
-        <div class="graph-filters">
+        <!-- 图谱类型切换 -->
+        <el-radio-group v-model="graphType" size="small" class="graph-type-switch">
+          <el-radio-button label="elements">四要素图谱</el-radio-button>
+          <el-radio-button label="similarity">相似度图谱</el-radio-button>
+          <el-radio-button label="llm">主题聚类</el-radio-button>
+        </el-radio-group>
+        
+        <!-- 四要素筛选器（仅四要素图谱显示） -->
+        <div v-if="graphType === 'elements'" class="graph-filters">
           <el-checkbox v-model="filters.background" size="small" class="filter-chip">
             <span class="filter-icon" style="background: #6b8e8e" /> 研究背景
           </el-checkbox>
@@ -510,11 +679,9 @@ onUnmounted(() => {
   gap: 0.8rem;
 }
 
-.section-title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0;
+.graph-type-switch {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .graph-filters {
