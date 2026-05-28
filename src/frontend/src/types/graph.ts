@@ -17,6 +17,9 @@ export interface GraphNode {
   paperTitle?: string  // 论文名称简称（用于显示）
   content?: string  // 要素内容文本
   paperInfo?: LibraryPaper  // 论文完整信息（仅论文节点有）
+
+  x?: number
+  y?: number
 }
 
 export interface GraphLink {
