@@ -201,6 +201,3 @@ jobs:
         env:
           GHCR_USER: ${{ github.repository_owner }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        env:
-          GHCR_USER: ${{ github.repository_owner }}
-          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
