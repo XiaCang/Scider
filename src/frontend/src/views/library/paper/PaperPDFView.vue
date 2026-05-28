@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -8,8 +8,6 @@ import * as pdfjsLib from 'pdfjs-dist'
 // 配置 PDF.js worker - 使用 CDN 上的 ES module worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
 
-import { marked } from 'marked'
-import MarkdownEditor from '../../../components/MarkdownEditor.vue'
 import type { PaperNote, PaperPdfInfo } from '../../../types/library'
 import {
   fetchPaperPdfInfoApi,
@@ -58,40 +56,7 @@ const pdfLoading = ref(true)
 const pdfError = ref('')
 let pdfObjectUrl = ''
 
-// 笔记栏宽度调整
-const NOTE_SIDEBAR_MIN_WIDTH = 200
-const NOTE_SIDEBAR_MAX_WIDTH = 600
-const noteSidebarWidth = ref(270)
-const isResizing = ref(false)
-
-const startResize = (e: MouseEvent) => {
-  e.preventDefault()
-  isResizing.value = true
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-
-  const startX = e.clientX
-  const startWidth = noteSidebarWidth.value
-
-  const onMouseMove = (ev: MouseEvent) => {
-    const delta = startX - ev.clientX
-    const newWidth = Math.min(NOTE_SIDEBAR_MAX_WIDTH, Math.max(NOTE_SIDEBAR_MIN_WIDTH, startWidth + delta))
-    noteSidebarWidth.value = newWidth
-  }
-
-  const onMouseUp = () => {
-    isResizing.value = false
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
-
-// 自动保存定时器
+const showSearchInline = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const handleResize = () => {
@@ -422,59 +387,23 @@ const formatTime = (isoString: string) => {
   })
 }
 
-/** 触发文件下载 */
-const downloadFile = (content: string, filename: string, mime: string) => {
-  const blob = new Blob([content], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleKeyDown)
+  loadPaperData()
+})
 
-/** 导出笔记为 Markdown */
-const exportMarkdown = () => {
-  if (!noteContent.value.trim()) {
-    ElMessage.warning('笔记内容为空，无法导出')
-    return
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeyDown)
+  if (pagesContainer.value) {
+    pagesContainer.value.removeEventListener('scroll', handleScroll)
+    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
   }
-  const safeName = paperTitle.value?.replace(/[/\\?%*:|"<>]/g, '_') || '笔记'
-  downloadFile(noteContent.value, `${safeName}.md`, 'text/markdown;charset=utf-8')
-  ElMessage.success('笔记已导出为 Markdown')
-}
-
-/** 导出笔记为 HTML */
-const exportHtml = () => {
-  if (!noteContent.value.trim()) {
-    ElMessage.warning('笔记内容为空，无法导出')
-    return
-  }
-  const safeName = paperTitle.value?.replace(/[/\\?%*:|"<>]/g, '_') || '笔记'
-  const bodyHtml = marked.parse(noteContent.value, { breaks: true }) as string
-  const fullHtml = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${paperTitle.value} - 笔记</title>
-<style>
-body { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.8; color: #333; }
-img { max-width: 100%; }
-pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
-pre code { background: none; padding: 0; }
-blockquote { border-left: 3px solid #4a9d9a; margin: 1em 0; padding: 0.5em 1em; color: #666; background: #f9fbfb; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-th { background: #f5f5f5; }
-</style>
-</head>
-<body>${bodyHtml}</body>
-</html>`
-  downloadFile(fullHtml, `${safeName}.html`, 'text/html;charset=utf-8')
-  ElMessage.success('笔记已导出为 HTML')
-}
+  if (pdfDoc.value) pdfDoc.value.destroy()
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
+  if (rafId !== null) cancelAnimationFrame(rafId)
+})
 </script>
 
 <template>
@@ -587,45 +516,18 @@ th { background: #f5f5f5; }
       </div>
     </main>
 
-    <!-- 拖拽分隔条 -->
-    <div
-      v-if="!isMobile"
-      class="resizer"
-      :class="{ 'is-active': isResizing }"
-      @mousedown="startResize"
-    />
-
     <!-- 右侧笔记栏 -->
-    <aside
-      class="note-sidebar"
-      :class="{ mobile: isMobile, visible: showNoteDrawer, 'is-resizing': isResizing }"
-      :style="{ width: isMobile ? '' : noteSidebarWidth + 'px' }"
-    >
+    <aside class="note-sidebar" :class="{ mobile: isMobile, visible: showNoteDrawer }">
       <div class="note-header">
         <h3 class="note-section-title">我的笔记</h3>
-        <div class="note-header-actions">
-          <span v-if="note" class="save-status">已自动保存</span>
-          <el-dropdown
-            v-if="noteContent.trim()"
-            trigger="click"
-            @command="(cmd: string) => cmd === 'md' ? exportMarkdown() : exportHtml()"
-          >
-            <el-button size="small" text class="export-btn">
-              <el-icon :size="14"><Download /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="md">导出 Markdown (.md)</el-dropdown-item>
-                <el-dropdown-item command="html">导出 HTML (.html)</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+        <span v-if="note" class="save-status">已自动保存</span>
       </div>
       <div class="note-input-area">
-        <MarkdownEditor
+        <el-input
           v-model="noteContent"
-          placeholder="记录你对这篇论文的想法...（支持 Markdown，内容会自动保存）"
+          type="textarea"
+          :rows="12"
+          placeholder="记录你对这篇论文的想法...（内容会自动保存）"
         />
         <div v-if="note" class="note-info">
           <span class="info-text">最后更新：{{ formatTime(note.updatedAt) }}</span>
@@ -784,52 +686,15 @@ th { background: #f5f5f5; }
   word-break: break-word;
 }
 
-.pdf-viewer {
-  max-width: 900px;
-  width: 100%;
-  transition: transform 0.2s ease;
-}
-
-.pdf-viewer :deep(.vue-pdf-embed) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* canvas 尺寸完全由外层容器 scale 控制 */
-.pdf-viewer :deep(canvas) {
-  display: block;
-  max-width: 100%;
-}
-
-/* ── 拖拽分隔条 ── */
-.resizer {
-  width: 5px;
-  cursor: col-resize;
-  background: transparent;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-  transition: background 0.15s ease;
-}
-
-.resizer:hover,
-.resizer.is-active {
-  background: var(--brand);
-}
-
+/* 笔记栏 */
 .note-sidebar {
+  width: 270px;
   background-color: var(--bg-secondary);
   border-left: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
   transition: transform 0.3s ease;
 }
-
-.note-sidebar.is-resizing {
-  transition: none;
-}
-
 .note-header {
   padding: 0.55rem 0.8rem;
   border-bottom: 1px solid var(--line-soft);
@@ -837,22 +702,6 @@ th { background: #f5f5f5; }
   justify-content: space-between;
   align-items: center;
 }
-
-.note-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.export-btn {
-  color: var(--text-tertiary);
-  transition: color 0.15s ease;
-}
-
-.export-btn:hover {
-  color: var(--brand);
-}
-
 .note-section-title {
   font-size: 0.85rem;
   font-weight: 600;
@@ -869,33 +718,6 @@ th { background: #f5f5f5; }
   padding: 0.55rem 0.8rem;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.note-input-area :deep(.md-editor) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* 分栏模式 */
-.note-input-area :deep(.mode-split .md-preview-section) {
-  flex: 1;
-  min-height: 0;
-}
-
-.note-input-area :deep(.mode-split .md-preview) {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* 实时预览模式 */
-.note-input-area :deep(.mode-live .md-live) {
-  flex: 1;
-  min-height: 0;
 }
 .note-info {
   padding-top: 0.35rem;
