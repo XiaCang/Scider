@@ -198,6 +198,17 @@ jobs:
             # Restart all services
             docker compose -f ${{ env.COMPOSE_FILE }} up -d
 
+            # Wait for backend to become healthy (DB fully ready)
+            echo "⏳ 等待后端服务就绪..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+                echo "✅ 后端服务就绪"
+                break
+              fi
+              echo "  等待中 ($i/30)..."
+              sleep 2
+            done
+
             # Clean up stale images
             docker image prune -af --filter "until=24h"
 
