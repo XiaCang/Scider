@@ -183,6 +183,9 @@ jobs:
             # Login to GHCR so we can pull private images
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
+            # Stop & remove old containers (data volumes preserved)
+            docker compose -f ${{ env.COMPOSE_FILE }} down
+
             # Pull latest images (built & pushed by build-and-push job)
             docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
 
