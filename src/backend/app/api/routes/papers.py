@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 import os
@@ -578,6 +579,10 @@ class SearchRequest(BaseModel):
     limit: int = Field(50, ge=1, le=200, description="返回结果数量上限")
 
 
+class AskRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+
+
 @router.post("/{paper_id}/search")
 async def search_in_paper(
     paper_id: str,
@@ -724,3 +729,59 @@ def _extract_highlights(full_text: str, keyword: str, limit: int = 50) -> list:
         })
     
     return results
+
+
+@router.post("/{paper_id}/ask")
+async def ask_paper_question(
+    paper_id: str,
+    request: Request,
+    body: AskRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """基于论文全文和用户笔记，用 LLM 回答自然语言问题。"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return error(msg="未认证", code=401, data=None, status_code=401)
+
+    from sqlalchemy import select
+    from db.models import Paper
+
+    result = await session.execute(
+        select(Paper).where(Paper.id == paper_id, Paper.user_id == user["id"])
+    )
+    paper = result.scalar_one_or_none()
+    if not paper:
+        return error(msg="论文不存在或无权访问", code=404, data=None, status_code=404)
+
+    notes = await get_notes_by_paper(session, paper_id)
+
+    if not paper.full_text and not notes:
+        return error(msg="论文尚未解析且无笔记，暂无内容可供回答", code=400, data=None, status_code=400)
+
+    from app.core.prompts import QA_SYSTEM_PROMPT, build_qa_user_prompt
+    from app.core.llm_client import chat_completion
+
+    user_prompt = build_qa_user_prompt(
+        title=paper.title,
+        authors=paper.authors,
+        full_text=paper.full_text,
+        notes=notes,
+        question=body.question,
+        max_chars=settings.QA_MAX_CHARS,
+    )
+
+    try:
+        answer = await asyncio.to_thread(chat_completion, QA_SYSTEM_PROMPT, user_prompt)
+    except Exception as e:
+        logger.error("ask_paper LLM error paper_id=%s: %s", paper_id, e)
+        return error(msg="AI 服务暂时不可用，请稍后重试", code=503, data=None, status_code=503)
+
+    sources = []
+    if paper.full_text:
+        excerpt = paper.full_text[:300] + ("…" if len(paper.full_text) > 300 else "")
+        sources.append({"type": "full_text", "excerpt": excerpt, "page_number": None})
+    for note in notes:
+        note_excerpt = note.content[:200] + ("…" if len(note.content) > 200 else "")
+        sources.append({"type": "note", "excerpt": note_excerpt, "page_number": note.page_number})
+
+    return success(data={"answer": answer, "sources": sources}, msg="回答成功", code=0, status_code=200)

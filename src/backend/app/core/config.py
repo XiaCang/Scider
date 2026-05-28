@@ -54,5 +54,10 @@ class Settings:
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
     MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
 
+    # ──────────────────────────────────────────────
+    # Q&A settings
+    # ──────────────────────────────────────────────
+    QA_MAX_CHARS = int(os.getenv("QA_MAX_CHARS", "6000"))
+
 
 settings = Settings()
