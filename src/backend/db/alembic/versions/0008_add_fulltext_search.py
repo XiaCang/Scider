@@ -12,7 +12,7 @@ from sqlalchemy.dialects import mysql
 
 
 revision = "0008_add_fulltext_search"
-down_revision = "0007_add_avatar_llmprovider"
+down_revision = "0008_merge_branches"
 branch_labels = None
 depends_on = None
 

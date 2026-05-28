@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '0009_add_notes_tables'
-down_revision = '0008_merge_branches'
+down_revision = '0008_add_fulltext_search'
 branch_labels = None
 depends_on = None
 
