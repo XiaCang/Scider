@@ -92,6 +92,8 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener('mouseup', onMouseUp)
 }
 
+const showSearchInline = ref(false)
+
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -148,7 +150,7 @@ const handleScroll = () => {
   })
 }
 
-// ---------- 超采样渲染：保证缩小后依然清晰 ----------
+// 超采样渲染
 // 目标缩放比例为 targetScale（用户期望的缩放值），实际渲染精度至少为 1 倍
 const renderAllPagesWithScale = async (targetScale: number) => {
   const doc = pdfDoc.value;
@@ -440,6 +442,24 @@ const formatTime = (isoString: string) => {
     hour: '2-digit', minute: '2-digit',
   })
 }
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleKeyDown)
+  loadPaperData()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeyDown)
+  if (pagesContainer.value) {
+    pagesContainer.value.removeEventListener('scroll', handleScroll)
+    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
+  }
+  if (pdfDoc.value) pdfDoc.value.destroy()
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
+  if (rafId !== null) cancelAnimationFrame(rafId)
+})
 
 /** 触发文件下载 */
 const downloadFile = (content: string, filename: string, mime: string) => {
