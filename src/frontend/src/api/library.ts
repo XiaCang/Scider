@@ -1,6 +1,6 @@
 import request from '../network/request'
 
-import type {LibraryPaper, PaperKeyPoints, PaperNote, PaperPdfInfo } from '../types/library'
+import type {LibraryPaper, PaperKeyPoints, PaperNote, NoteListItem, NoteUploadImageResponse, PaperPdfInfo } from '../types/library'
 import type { Folder } from '../types/folder'
 import type { ApiResponse } from '../types/auth'
 
@@ -139,26 +139,56 @@ export const fetchPaperPdfFileApi = (paperId: string) =>
   }) as Promise<Blob>
 
 /**
- * 获取论文笔记列表
+ * 获取论文笔记列表（新 API：支持分页）
  */
-export const fetchPaperNotesApi = (paperId: string) =>
-  request.get<PaperNote[]>(`/papers/${paperId}/notes`)
+export const fetchPaperNotesApi = (paperId: string, page = 1, pageSize = 50) =>
+  request.get<ApiResponse<{ total: number; items: NoteListItem[] }>>(`/notes/`, {
+    params: { paperId, page, pageSize }
+  })
 
 /**
- * 创建笔记
+ * 创建笔记（新 API）
  */
-export const createNoteApi = (paperId: string, data: {
-  content: string
-  pageNumber: number
-  selectedText?: string
+export const createNoteApi = (data: {
+  paperId: string
+  title: string
+  contentHtml: string
+  contentFormat: string
 }) =>
-  request.post<PaperNote>(`/papers/${paperId}/notes`, data)
+  request.post<ApiResponse<PaperNote>>(`/notes/`, data)
+
+/**
+ * 获取单个笔记详情
+ */
+export const fetchNoteDetailApi = (noteId: string) =>
+  request.get<ApiResponse<PaperNote>>(`/notes/${noteId}`)
 
 /**
  * 更新笔记
  */
-export const updateNoteApi = (paperId: string, noteId: string, data: { content: string }) =>
-  request.patch<PaperNote>(`/papers/${paperId}/notes/${noteId}`, data)
+export const updateNoteApi = (noteId: string, data: {
+  title: string
+  contentHtml: string
+  contentFormat: string
+}) =>
+  request.patch<ApiResponse<PaperNote>>(`/notes/${noteId}`, data)
+
+/**
+ * 笔记图片上传
+ */
+export const uploadNoteImageApi = (
+  paperId: string,
+  noteId: string,
+  file: File
+) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ApiResponse<NoteUploadImageResponse>>(
+    `/notes/uploads?paperId=${paperId}&noteId=${noteId}`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+}
 
 // ==================== PDF上传相关接口 ====================
 

@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Placeholder from '@tiptap/extension-placeholder'
+import ImageExt from '@tiptap/extension-image'
+import LinkExt from '@tiptap/extension-link'
+import Underline from '@tiptap/extension-underline'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
+import Highlight from '@tiptap/extension-highlight'
 import { marked } from 'marked'
+import TurndownService from 'turndown'
 import {
-  List,
-  Sort,
-  Tickets,
-  Picture,
-  Cpu,
-  CollectionTag,
+  List, Sort, Picture, Cpu, CollectionTag, Link,
 } from '@element-plus/icons-vue'
 
 const props = defineProps<{
@@ -19,88 +24,122 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-type PreviewMode = 'split' | 'live'
-
+type PreviewMode = 'live' | 'split'
 const previewMode = ref<PreviewMode>('live')
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
+let isExternalUpdate = false
 
-const hasContent = computed(() => Boolean(props.modelValue?.trim()))
-const markdownHtml = computed(() => {
-  if (!props.modelValue?.trim()) return ''
-  return marked.parse(props.modelValue, { breaks: true }) as string
+// ---- Markdown ↔ HTML 转换 ----
+marked.setOptions({ breaks: true })
+
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  emDelimiter: '*',
+  bulletListMarker: '-',
 })
+
+function markdownToHtml(markdown: string): string {
+  if (!markdown.trim()) return ''
+  return marked.parse(markdown, { breaks: true }) as string
+}
+
+function htmlToMarkdown(html: string): string {
+  if (!html.trim()) return ''
+  return turndown.turndown(html)
+}
+
+// ---- 编辑器 ----
+const editor = useEditor({
+  content: markdownToHtml(props.modelValue || ''),
+  extensions: [
+    StarterKit.configure({
+      heading: { levels: [1, 2, 3, 4] },
+      codeBlock: { HTMLAttributes: { class: 'code-block' } },
+    }),
+    Placeholder.configure({
+      placeholder: props.placeholder || '记录你对这篇论文的想法...',
+    }),
+    Underline,
+    LinkExt.configure({
+      openOnClick: true,
+      HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+    }),
+    ImageExt.configure({ inline: false }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Highlight,
+  ],
+  onUpdate: ({ editor }) => {
+    if (isExternalUpdate) return
+    const html = editor.getHTML()
+    const md = htmlToMarkdown(html)
+    emit('update:modelValue', md)
+  },
+})
+
+// 外部 modelValue 变化 → 同步到编辑器
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    if (!editor.value) return
+    const currentHtml = editor.value.getHTML()
+    const currentMd = htmlToMarkdown(currentHtml)
+    if (newVal !== currentMd) {
+      isExternalUpdate = true
+      const html = markdownToHtml(newVal || '')
+      editor.value.commands.setContent(html || '<p></p>')
+      nextTick(() => { isExternalUpdate = false })
+    }
+  }
+)
+
+onBeforeUnmount(() => {
+  editor.value?.destroy()
+})
+
+// ---- 编辑器命令 ----
+const isActive = (name: string, attrs?: Record<string, any>) =>
+  editor.value?.isActive(name, attrs) ?? false
+
+const toggleBold = () => editor.value?.chain().focus().toggleBold().run()
+const toggleItalic = () => editor.value?.chain().focus().toggleItalic().run()
+const toggleUnderline = () => editor.value?.chain().focus().toggleUnderline().run()
+const toggleStrike = () => editor.value?.chain().focus().toggleStrike().run()
+const toggleHeading = (level: 1 | 2 | 3 | 4) =>
+  editor.value?.chain().focus().toggleHeading({ level }).run()
+const toggleBulletList = () => editor.value?.chain().focus().toggleBulletList().run()
+const toggleOrderedList = () => editor.value?.chain().focus().toggleOrderedList().run()
+const toggleTaskList = () => editor.value?.chain().focus().toggleTaskList().run()
+const toggleCode = () => editor.value?.chain().focus().toggleCode().run()
+const toggleCodeBlock = () => editor.value?.chain().focus().toggleCodeBlock().run()
+const toggleBlockquote = () => editor.value?.chain().focus().toggleBlockquote().run()
+const toggleHighlight = () => editor.value?.chain().focus().toggleHighlight().run()
+
+const insertImage = () => {
+  const url = window.prompt('输入图片链接：')
+  if (url) editor.value?.chain().focus().setImage({ src: url }).run()
+}
+
+const setLink = () => {
+  const url = window.prompt('输入链接地址：')
+  if (url) editor.value?.chain().focus().setLink({ href: url }).run()
+}
 
 const setMode = (mode: PreviewMode) => {
   previewMode.value = mode
 }
 
-const handleInput = (e: Event) => {
-  const target = e.target as HTMLTextAreaElement
-  emit('update:modelValue', target.value)
-}
+// 撤销 / 重做
+const undo = () => editor.value?.chain().focus().undo().run()
+const redo = () => editor.value?.chain().focus().redo().run()
 
-// ── Toolbar helpers ──
-
-const insertMarkdown = (before: string, after: string, defaultText = 'text') => {
-  const ta = textareaRef.value
-  if (!ta) return
-
-  const start = ta.selectionStart
-  const end = ta.selectionEnd
-  const text = props.modelValue
-  const selected = text.slice(start, end) || defaultText
-
-  const newText = text.slice(0, start) + before + selected + after + text.slice(end)
-  emit('update:modelValue', newText)
-
-  requestAnimationFrame(() => {
-    ta.focus()
-    const pos = start + before.length
-    ta.setSelectionRange(pos, pos + selected.length)
-  })
-}
-
-const toggleBold = () => insertMarkdown('**', '**', '粗体文字')
-const toggleItalic = () => insertMarkdown('*', '*', '斜体文字')
-const toggleHeading = () => {
-  const ta = textareaRef.value
-  if (!ta) return
-  const start = ta.selectionStart
-  const text = props.modelValue
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1
-  const lineEnd = text.indexOf('\n', start)
-  const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd)
-
-  if (/^#{1,6}\s/.test(line)) {
-    const headingEnd = line.indexOf(' ')
-    const newText = text.slice(0, lineStart) + line.slice(headingEnd + 1) + text.slice(lineStart + line.length)
-    emit('update:modelValue', newText)
-  } else {
-    insertMarkdown('### ', '', '标题')
-  }
-}
-
-const toggleBulletList = () => insertMarkdown('- ', '', '列表项')
-const toggleOrderedList = () => insertMarkdown('1. ', '', '列表项')
-const toggleCode = () => insertMarkdown('`', '`', 'code')
-const toggleCodeBlock = () => insertMarkdown('```\n', '\n```', '代码块')
-
-/** 图片上传（stub — 仅插入 markdown 图片语法） */
-const insertImage = () => {
-  const ta = textareaRef.value
-  if (!ta) return
-
-  const start = ta.selectionStart
-  const end = ta.selectionEnd
-  const text = props.modelValue
-  const selected = text.slice(start, end)
-
-  const alt = selected || '图片描述'
-  const stubUrl = 'https://via.placeholder.com/400x200?text=Paste+image+URL+here'
-  const markdown = `![${alt}](${stubUrl})`
-
-  const newText = text.slice(0, start) + markdown + text.slice(end)
-  emit('update:modelValue', newText)
+// 分栏模式：textarea 输入同步
+const splitValue = ref(props.modelValue)
+watch(() => props.modelValue, (v) => { splitValue.value = v })
+const onSplitInput = (e: Event) => {
+  const val = (e.target as HTMLTextAreaElement).value
+  splitValue.value = val
+  emit('update:modelValue', val)
 }
 </script>
 
@@ -109,126 +148,169 @@ const insertImage = () => {
     <!-- 工具栏 -->
     <div class="md-toolbar">
       <div class="md-toolbar-group">
+        <el-tooltip content="撤销" placement="top" :show-after="400">
+          <button class="md-btn" @click="undo" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="重做" placement="top" :show-after="400">
+          <button class="md-btn" @click="redo" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+          </button>
+        </el-tooltip>
+      </div>
+
+      <div class="md-separator" />
+
+      <div class="md-toolbar-group">
         <el-tooltip content="粗体" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleBold" tabindex="-1">
+          <button class="md-btn" :class="{ 'is-active': isActive('bold') }" @click="toggleBold" tabindex="-1">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
-              <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+              <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" /><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
             </svg>
           </button>
         </el-tooltip>
         <el-tooltip content="斜体" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleItalic" tabindex="-1">
+          <button class="md-btn" :class="{ 'is-active': isActive('italic') }" @click="toggleItalic" tabindex="-1">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="19" y1="4" x2="10" y2="4" />
-              <line x1="14" y1="20" x2="5" y2="20" />
-              <line x1="15" y1="4" x2="9" y2="20" />
+              <line x1="19" y1="4" x2="10" y2="4" /><line x1="14" y1="20" x2="5" y2="20" /><line x1="15" y1="4" x2="9" y2="20" />
             </svg>
           </button>
         </el-tooltip>
-        <el-tooltip content="标题" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleHeading" tabindex="-1">
-            <el-icon :size="15"><Tickets /></el-icon>
+        <el-tooltip content="下划线" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('underline') }" @click="toggleUnderline" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" /><line x1="4" y1="21" x2="20" y2="21" />
+            </svg>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="删除线" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('strike') }" @click="toggleStrike" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12" /><path d="M16 6H9a3 3 0 0 0 0 6" /><path d="M8 18h7a3 3 0 0 0 3-3" />
+            </svg>
           </button>
         </el-tooltip>
       </div>
 
+      <div class="md-separator" />
+
+      <div class="md-toolbar-group">
+        <el-tooltip content="标题 1" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('heading', { level: 1 }) }" @click="toggleHeading(1)" tabindex="-1">H1</button>
+        </el-tooltip>
+        <el-tooltip content="标题 2" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('heading', { level: 2 }) }" @click="toggleHeading(2)" tabindex="-1">H2</button>
+        </el-tooltip>
+        <el-tooltip content="标题 3" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('heading', { level: 3 }) }" @click="toggleHeading(3)" tabindex="-1">H3</button>
+        </el-tooltip>
+      </div>
+
+      <div class="md-separator" />
+
       <div class="md-toolbar-group">
         <el-tooltip content="无序列表" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleBulletList" tabindex="-1">
+          <button class="md-btn" :class="{ 'is-active': isActive('bulletList') }" @click="toggleBulletList" tabindex="-1">
             <el-icon :size="15"><List /></el-icon>
           </button>
         </el-tooltip>
         <el-tooltip content="有序列表" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleOrderedList" tabindex="-1">
+          <button class="md-btn" :class="{ 'is-active': isActive('orderedList') }" @click="toggleOrderedList" tabindex="-1">
             <el-icon :size="15"><Sort /></el-icon>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="任务列表" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('taskList') }" @click="toggleTaskList" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="m9 12 2 2 4-4" />
+            </svg>
           </button>
         </el-tooltip>
       </div>
 
+      <div class="md-separator" />
+
       <div class="md-toolbar-group">
         <el-tooltip content="行内代码" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleCode" tabindex="-1">
+          <button class="md-btn" :class="{ 'is-active': isActive('code') }" @click="toggleCode" tabindex="-1">
             <el-icon :size="15"><Cpu /></el-icon>
           </button>
         </el-tooltip>
         <el-tooltip content="代码块" placement="top" :show-after="400">
-          <button class="md-btn" @click="toggleCodeBlock" tabindex="-1">
+          <button class="md-btn" :class="{ 'is-active': isActive('codeBlock') }" @click="toggleCodeBlock" tabindex="-1">
             <el-icon :size="15"><CollectionTag /></el-icon>
           </button>
         </el-tooltip>
+        <el-tooltip content="引用" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('blockquote') }" @click="toggleBlockquote" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" /><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" />
+            </svg>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="高亮" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('highlight') }" @click="toggleHighlight" tabindex="-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 2 2.5 5.5L20 9l-4 4 1 5.5L12 16l-5 2.5L8 13l-4-4 5.5-1.5Z" />
+            </svg>
+          </button>
+        </el-tooltip>
+      </div>
+
+      <div class="md-separator" />
+
+      <div class="md-toolbar-group">
         <el-tooltip content="插入图片" placement="top" :show-after="400">
           <button class="md-btn" @click="insertImage" tabindex="-1">
             <el-icon :size="15"><Picture /></el-icon>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="插入链接" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': isActive('link') }" @click="setLink" tabindex="-1">
+            <el-icon :size="15"><Link /></el-icon>
           </button>
         </el-tooltip>
       </div>
 
       <div class="md-toolbar-spacer" />
 
-      <!-- 预览模式切换 -->
       <div class="md-toolbar-group mode-switch">
         <button
           class="md-btn mode-btn"
           :class="{ 'is-active': previewMode === 'live' }"
           @click="setMode('live')"
-          tabindex="-1"
         >
-          实时预览
+          所见即所得
         </button>
         <button
           class="md-btn mode-btn"
           :class="{ 'is-active': previewMode === 'split' }"
           @click="setMode('split')"
-          tabindex="-1"
         >
-          分栏预览
+          源码
         </button>
       </div>
     </div>
 
-    <!-- 分栏模式：编辑区 + 预览区 -->
-    <template v-if="previewMode === 'split'">
-      <div class="md-body">
-        <textarea
-          ref="textareaRef"
-          class="md-textarea"
-          :value="modelValue"
-          :placeholder="placeholder || '支持 Markdown 语法...'"
-          @input="handleInput"
-        />
-      </div>
-      <div class="md-preview-section" :class="{ 'is-empty': !hasContent }">
-        <div class="md-preview-label">预览</div>
-        <div class="md-preview markdown-body">
-          <div v-if="!hasContent" class="md-preview-empty">
-            <span>输入内容后可预览渲染效果</span>
-          </div>
-          <div v-else v-html="markdownHtml" />
-        </div>
-      </div>
-    </template>
+    <!-- 所见即所得模式 -->
+    <div v-if="previewMode === 'live'" class="md-live">
+      <EditorContent :editor="editor" class="tiptap-editor" />
+    </div>
 
-    <!-- 实时预览模式：只显示渲染结果 -->
-    <div v-else class="md-live markdown-body">
-      <div v-if="!hasContent" class="md-live-empty">
-        <textarea
-          ref="textareaRef"
-          class="md-live-textarea"
-          :value="modelValue"
-          :placeholder="placeholder || '开始写作...（支持 Markdown 语法）'"
-          @input="handleInput"
-        />
-      </div>
-      <div v-else v-html="markdownHtml" />
-      <!-- 点击预览区域重新唤起编辑 -->
-      <div
-        v-if="hasContent"
-        class="md-live-edit-trigger"
-        @click="setMode('split')"
-      >
-        点击编辑
-      </div>
+    <!-- 分栏模式 -->
+    <div v-else class="md-split">
+      <textarea
+        class="md-textarea"
+        :value="splitValue"
+        :placeholder="props.placeholder || '支持 Markdown 语法...'"
+        @input="onSplitInput"
+      />
+      <div class="md-preview markdown-body" v-html="markdownToHtml(splitValue)" />
     </div>
   </div>
 </template>
@@ -237,28 +319,23 @@ const insertImage = () => {
 .md-editor {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  height: 100%;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: white;
   overflow: hidden;
-  background: var(--bg-page);
-  transition: border-color 0.2s ease;
 }
 
-.md-editor:focus-within {
-  border-color: var(--brand);
-}
-
-/* ── 工具栏 ── */
+/* 工具栏 */
 .md-toolbar {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-bottom: 1px solid var(--line-soft);
-  background: var(--bg-secondary);
-  user-select: none;
-  flex-shrink: 0;
+  background: #fafafa;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .md-toolbar-group {
@@ -267,323 +344,259 @@ const insertImage = () => {
   gap: 1px;
 }
 
-.md-toolbar-group + .md-toolbar-group {
-  margin-left: 2px;
-  padding-left: 2px;
-  border-left: 1px solid var(--line-soft);
-}
-
-.md-toolbar-spacer {
-  flex: 1;
+.md-separator {
+  width: 1px;
+  height: 20px;
+  background: #e0e0e0;
+  margin: 0 3px;
+  flex-shrink: 0;
 }
 
 .md-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 30px;
   height: 28px;
+  padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  color: var(--text-secondary);
+  color: #555;
   cursor: pointer;
-  transition: all 0.12s ease;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
 }
 
 .md-btn:hover {
-  background: rgba(74, 157, 154, 0.08);
-  color: var(--brand);
+  background: #e8e8e8;
+  color: #333;
 }
 
 .md-btn:active {
-  background: rgba(74, 157, 154, 0.15);
-  transform: scale(0.95);
+  background: #ddd;
 }
 
-/* ── 模式切换按钮 ── */
-.mode-switch {
-  gap: 2px !important;
-  border-left: 1px solid var(--line-soft);
-  padding-left: 4px;
+.md-btn.is-active {
+  background: #d4e6ff;
+  color: #1a73e8;
 }
 
 .mode-btn {
   width: auto;
   padding: 0 8px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  border-radius: 6px;
-  letter-spacing: 0.02em;
 }
 
-.mode-btn.is-active {
-  background: rgba(74, 157, 154, 0.12);
-  color: var(--brand);
-  font-weight: 600;
-}
-
-/* ── 分栏模式：编辑区 ── */
-.md-body {
-  flex-shrink: 0;
-}
-
-.md-textarea {
-  width: 100%;
-  min-height: 100px;
-  max-height: 300px;
-  padding: 10px 12px;
-  border: none;
-  outline: none;
-  resize: vertical;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.82rem;
-  line-height: 1.7;
-  color: var(--text-primary);
-  background: var(--bg-page);
-}
-
-.md-textarea::placeholder {
-  color: var(--text-tertiary);
-}
-
-/* ── 分栏模式：预览区 ── */
-.md-preview-section {
-  border-top: 1px solid var(--line-soft);
-  background: var(--bg-secondary);
+.md-toolbar-spacer {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+}
+
+/* 所见即所得编辑区 */
+.md-live {
+  flex: 1;
+  overflow-y: auto;
   min-height: 0;
 }
 
-.md-preview-section.is-empty {
-  background: var(--bg-page);
+.tiptap-editor {
+  padding: 14px 16px;
+  outline: none;
+  font-size: 0.88rem;
+  line-height: 1.75;
+  color: #333;
 }
 
-.md-preview-label {
-  padding: 5px 12px 3px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
+.tiptap-editor :deep(p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  color: #bbb;
+  pointer-events: none;
+  float: left;
+  height: 0;
 }
 
-.md-preview {
-  padding: 0 12px 12px;
-  overflow-y: auto;
+/* 分栏模式 */
+.md-split {
   flex: 1;
-}
-
-.md-preview-empty {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60px;
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
+  min-height: 0;
 }
 
-/* ── 实时预览模式 ── */
-.mode-live .md-toolbar {
-  border-bottom-color: var(--line-soft);
-}
-
-.md-live {
+.md-textarea {
   flex: 1;
-  padding: 16px 14px;
-  overflow-y: auto;
-  min-height: 120px;
-  cursor: default;
-}
-
-.md-live-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 120px;
-}
-
-.md-live-textarea {
-  width: 100%;
-  min-height: 120px;
-  padding: 0;
+  width: 50%;
+  min-height: 100px;
+  padding: 12px 14px;
   border: none;
   outline: none;
   resize: none;
-  font-family: inherit;
-  font-size: 0.88rem;
-  line-height: 1.75;
-  color: var(--text-tertiary);
-  background: transparent;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  background: #f8f9fa;
+  color: #333;
 }
 
-.md-live-textarea::placeholder {
-  color: var(--text-tertiary);
-}
-
-.md-live-edit-trigger {
-  position: sticky;
-  bottom: 0;
-  text-align: center;
-  padding: 6px 0 2px;
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  background: linear-gradient(transparent, var(--bg-page) 40%);
-}
-
-.md-live:hover .md-live-edit-trigger {
-  opacity: 1;
+.md-preview {
+  flex: 1;
+  width: 50%;
+  padding: 12px 14px;
+  overflow-y: auto;
+  background: white;
+  border-left: 1px solid var(--line-soft);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: #333;
 }
 </style>
 
 <style>
-/* ── Markdown 渲染样式（全局，因为 v-html 内容在 scoped 外） ── */
-.markdown-body {
-  font-size: 0.85rem;
-  line-height: 1.75;
-  color: var(--text-primary);
-  word-wrap: break-word;
+/* Tiptap 编辑器内容样式 */
+.tiptap-editor .ProseMirror {
+  outline: none;
+  min-height: 120px;
 }
 
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3,
-.markdown-body h4,
-.markdown-body h5,
-.markdown-body h6 {
-  margin: 1em 0 0.5em;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--text-primary);
-}
+.tiptap-editor h1 { font-size: 1.5rem; font-weight: 700; margin: 0.6em 0 0.3em; }
+.tiptap-editor h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5em 0 0.25em; }
+.tiptap-editor h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4em 0 0.2em; }
+.tiptap-editor h4 { font-size: 1rem; font-weight: 600; margin: 0.3em 0 0.15em; }
 
-.markdown-body h1 { font-size: 1.3rem; }
-.markdown-body h2 { font-size: 1.15rem; }
-.markdown-body h3 { font-size: 1.05rem; }
-.markdown-body h4 { font-size: 0.95rem; }
+.tiptap-editor strong { font-weight: 700; }
+.tiptap-editor em { font-style: italic; }
+.tiptap-editor u { text-decoration: underline; }
+.tiptap-editor s { text-decoration: line-through; }
 
-.markdown-body p {
-  margin: 0 0 0.75em;
-}
+.tiptap-editor p { margin: 0.3em 0; }
 
-.markdown-body strong {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.markdown-body em {
-  font-style: italic;
-}
-
-.markdown-body ul,
-.markdown-body ol {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
-}
-
-.markdown-body li {
-  margin: 0.25em 0;
-}
-
-.markdown-body li > ul,
-.markdown-body li > ol {
-  margin: 0.25em 0;
-}
-
-.markdown-body code {
+.tiptap-editor code {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.8em;
-  background: rgba(74, 157, 154, 0.08);
-  color: var(--brand);
+  font-size: 0.82em;
+  background: #f0f0f0;
+  color: #d63384;
 }
 
-.markdown-body pre {
-  margin: 0.75em 0;
-  padding: 12px 14px;
+.tiptap-editor pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 14px 16px;
   border-radius: 8px;
-  background: #f0f4f4;
   overflow-x: auto;
-}
-
-.markdown-body pre code {
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-primary);
+  margin: 0.6em 0;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 0.8rem;
   line-height: 1.6;
 }
 
-.markdown-body blockquote {
-  margin: 0.75em 0;
-  padding: 0.5em 1em;
-  border-left: 3px solid var(--brand);
-  background: rgba(74, 157, 154, 0.04);
-  border-radius: 0 6px 6px 0;
-  color: var(--text-secondary);
+.tiptap-editor pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
 }
 
-.markdown-body blockquote p {
-  margin: 0.25em 0;
+.tiptap-editor blockquote {
+  border-left: 3px solid #4a9d9a;
+  padding: 0.3em 1em;
+  margin: 0.6em 0;
+  background: rgba(74, 157, 154, 0.05);
+  color: #555;
 }
 
-.markdown-body a {
-  color: var(--brand);
-  text-decoration: none;
+.tiptap-editor ul,
+.tiptap-editor ol {
+  padding-left: 1.5em;
+  margin: 0.3em 0;
 }
 
-.markdown-body a:hover {
-  text-decoration: underline;
+.tiptap-editor li {
+  margin: 0.15em 0;
 }
 
-.markdown-body img {
+.tiptap-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4em;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25em;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > label input[type="checkbox"] {
+  accent-color: #4a9d9a;
+  cursor: pointer;
+}
+
+.tiptap-editor img {
   max-width: 100%;
-  border-radius: 8px;
-  margin: 0.75em 0;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5em 0;
+  display: block;
 }
 
-.markdown-body hr {
-  margin: 1.5em 0;
+.tiptap-editor a {
+  color: #1a73e8;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap-editor mark {
+  background: #fff3cd;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
+.tiptap-editor hr {
   border: none;
-  border-top: 1px solid var(--line-soft);
+  border-top: 2px solid #e0e0e0;
+  margin: 1em 0;
 }
 
-.markdown-body table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0.75em 0;
-  font-size: 0.82rem;
+/* 分栏模式预览区样式 */
+.md-preview h1 { font-size: 1.5rem; font-weight: 700; margin: 0.6em 0 0.3em; }
+.md-preview h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5em 0 0.25em; }
+.md-preview h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4em 0 0.2em; }
+.md-preview p { margin: 0.3em 0; line-height: 1.7; }
+.md-preview code {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 0.82em;
+  background: #f0f0f0;
+  color: #d63384;
 }
-
-.markdown-body th,
-.markdown-body td {
-  padding: 8px 12px;
-  border: 1px solid var(--line-soft);
-  text-align: left;
+.md-preview pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 14px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
 }
-
-.markdown-body th {
-  background: var(--bg-secondary);
-  font-weight: 600;
+.md-preview pre code { background: none; color: inherit; padding: 0; }
+.md-preview blockquote {
+  border-left: 3px solid #4a9d9a;
+  padding: 0.3em 1em;
+  margin: 0.6em 0;
+  background: rgba(74, 157, 154, 0.05);
+  color: #555;
 }
-
-.markdown-body tr:nth-child(even) {
-  background: var(--bg-secondary);
-}
-
-.markdown-body input[type="checkbox"] {
-  margin-right: 4px;
-}
-
-.markdown-body del {
-  color: var(--text-tertiary);
-}
+.md-preview ul, .md-preview ol { padding-left: 1.5em; }
+.md-preview img { max-width: 100%; border-radius: 6px; }
+.md-preview a { color: #1a73e8; }
+.md-preview table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+.md-preview th, .md-preview td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+.md-preview th { background: #f5f5f5; font-weight: 600; }
 </style>

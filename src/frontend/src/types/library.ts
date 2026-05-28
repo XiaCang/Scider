@@ -49,14 +49,50 @@ export interface PaperPdfInfo {
 }
 
 /**
- * 论文笔记
+ * 论文笔记（新 API 结构）
  */
 export interface PaperNote {
   id: string
   paperId: string
-  content: string
-  pageNumber: number
-  selectedText?: string
+  title: string
+  contentHtml: string
+  contentText?: string
+  contentFormat: string
+  images?: NoteImage[]
   createdAt: string
   updatedAt: string
+}
+
+export interface NoteImage {
+  id: string
+  url: string
+  orderIndex: number
+}
+
+export interface NoteListItem {
+  id: string
+  paperId: string
+  title: string
+  excerpt: string
+  firstImageUrl: string | null
+  updatedAt: string
+}
+
+/** 笔记图片上传响应 */
+export interface NoteUploadImageResponse {
+  id: string
+  noteId: string
+  url: string
+  filename: string
+  mimeType: string
+  size: number
+  createdAt: string
+}
+
+/** AI 对话消息 */
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: string
 }

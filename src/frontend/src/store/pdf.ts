@@ -1,7 +1,6 @@
-// stores/pdf.ts
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { PaperPdfInfo, PaperNote } from '../types/library'
+import type { PaperPdfInfo, NoteListItem } from '../types/library'
 import {
   fetchPaperPdfInfoApi,
   fetchPaperNotesApi,
@@ -11,50 +10,60 @@ import {
 
 export const usePdfStore = defineStore('pdf', () => {
   const pdfInfo = ref<PaperPdfInfo | null>(null)
-  const notes = ref<PaperNote[]>([])
-  const currentPaperId = ref<string | null>(null)   // 当前正在阅读的论文 ID
+  const notes = ref<NoteListItem[]>([])
+  const currentPaperId = ref<string | null>(null)
   const loading = ref(false)
 
-  // 根据论文加载 PDF 信息
   async function loadPdfInfo(paperId: string) {
     loading.value = true
     currentPaperId.value = paperId
     try {
       const data = await fetchPaperPdfInfoApi(paperId)
-      pdfInfo.value = data
+      pdfInfo.value = data as any
     } finally {
       loading.value = false
     }
   }
 
-  // 加载该论文的所有笔记
   async function loadNotes(paperId: string) {
-    const data = await fetchPaperNotesApi(paperId)
-    notes.value = data
+    const resp = await fetchPaperNotesApi(paperId)
+    const data = (resp as any).data || resp
+    notes.value = data.items || []
   }
 
-  // 创建笔记
-  async function createNote(content: string, pageNumber: number, selectedText?: string) {
+  async function createNote(title: string, contentHtml: string) {
     if (!currentPaperId.value) throw new Error('未选择论文')
-    const data = await createNoteApi(currentPaperId.value, {
-      content,
-      pageNumber,
-      selectedText,
+    const resp = await createNoteApi({
+      paperId: currentPaperId.value,
+      title,
+      contentHtml,
+      contentFormat: 'markdown',
     })
-    notes.value.push(data)
+    const data = (resp as any).data || resp
+    notes.value.unshift({
+      id: data.id,
+      paperId: currentPaperId.value,
+      title: data.title || title,
+      excerpt: contentHtml.slice(0, 100),
+      firstImageUrl: null,
+      updatedAt: data.updatedAt || new Date().toISOString(),
+    })
     return data
   }
 
-  // 更新笔记
-  async function updateNote(noteId: string, content: string) {
+  async function updateNote(noteId: string, title: string, contentHtml: string) {
     if (!currentPaperId.value) throw new Error('未选择论文')
-    const data = await updateNoteApi(currentPaperId.value, noteId, { content })
+    const resp = await updateNoteApi(noteId, { title, contentHtml, contentFormat: 'markdown' })
+    const data = (resp as any).data || resp
     const idx = notes.value.findIndex(n => n.id === noteId)
-    if (idx !== -1) notes.value[idx] = data
+    if (idx !== -1) {
+      notes.value[idx].title = title
+      notes.value[idx].excerpt = contentHtml.slice(0, 100)
+      notes.value[idx].updatedAt = data.updatedAt || new Date().toISOString()
+    }
     return data
   }
 
-  // 清空（切换论文时重置）
   function resetPdf() {
     pdfInfo.value = null
     notes.value = []
