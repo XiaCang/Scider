@@ -23,16 +23,16 @@ vi.mock('../utils/auth_storage', () => ({
 }))
 
 // window.location.href 模拟
-const originalLocation = window.location
-
 beforeEach(() => {
-  // @ts-ignore
-  delete window.location
-  window.location = { ...originalLocation, href: '', pathname: '/app/library' } as any
+  vi.stubGlobal('location', {
+    ...window.location,
+    href: '',
+    pathname: '/app/library',
+  })
 })
 
 afterEach(() => {
-  window.location = originalLocation
+  vi.unstubAllGlobals()
 })
 
 describe('request 拦截器逻辑（直接测试拦截器函数）', () => {
@@ -98,7 +98,7 @@ describe('request 拦截器逻辑（直接测试拦截器函数）', () => {
         {} as any,
         {} as any,
         {
-          status,
+          status: status ?? 500,
           data,
           statusText: 'Error',
           headers: new AxiosHeaders(),
