@@ -40,6 +40,71 @@ _USER_TEMPLATE = """\
 """
 
 
+QA_SYSTEM_PROMPT = """\
+你是一位专业的学术研究助手，专门帮助用户深入理解和分析学术论文。
+
+回答规则：
+1. 仅基于所提供的论文正文和用户笔记作答；不得引用外部知识或对原文未提及的内容进行推测。
+2. 若提供的内容不足以回答问题，请明确告知："根据现有内容，暂无法回答此问题"，并说明缺失的信息类型。
+3. 引用具体段落时，请在括号内注明来源，例如：（论文正文）或（笔记·第X页）。
+4. 使用与用户问题相同的语言作答：中文问题用中文回答，英文问题用英文回答。
+5. 回答应简洁、精准，避免重复上下文中已明显可见的内容。\
+"""
+
+_QA_USER_TEMPLATE = """\
+【论文信息】
+标题：{title}
+{authors_line}\
+【论文正文摘录】
+{fulltext}
+
+【用户笔记】
+{notes}
+
+用户问题：{question}\
+"""
+
+
+def build_qa_user_prompt(
+    title: str,
+    authors: str | None,
+    full_text: str | None,
+    notes: list,
+    question: str,
+    max_chars: int = 6000,
+) -> str:
+    authors_line = f"作者：{authors}\n" if authors else ""
+
+    if full_text and full_text.strip():
+        truncated = full_text[:max_chars]
+        if len(full_text) > max_chars:
+            truncated += f"\n\n[正文已截断，仅展示前 {max_chars} 个字符]"
+        fulltext = truncated
+    else:
+        fulltext = "（暂无，论文可能尚未完成解析）"
+
+    if notes:
+        lines = []
+        for note in notes:
+            location = f"第 {note.page_number} 页" if note.page_number else "位置不详"
+            if note.selected_text:
+                preview = note.selected_text[:120] + ("…" if len(note.selected_text) > 120 else "")
+                lines.append(f"• [{location}] 选中原文：「{preview}」\n  笔记：{note.content}")
+            else:
+                lines.append(f"• [{location}] {note.content}")
+        notes_str = "\n".join(lines)
+    else:
+        notes_str = "（暂无笔记）"
+
+    return _QA_USER_TEMPLATE.format(
+        title=title,
+        authors_line=authors_line,
+        fulltext=fulltext,
+        notes=notes_str,
+        question=question,
+    )
+
+
 def build_user_prompt(paper_text: str, max_chars: int = 8000) -> str:
     """
     构造 User Prompt，对超长文本进行截断以避免超出模型 Context 限制。
