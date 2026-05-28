@@ -20,7 +20,6 @@ from module.user.controller.user_router import router as user_router
 from module.user.controller.avatar_router import router as avatar_router
 from module.user.controller.llm_provider_router import router as llm_provider_router
 
-print("DATABASE_URL from env:", os.getenv("DATABASE_URL"))
 app = FastAPI(
     title=settings.APP_NAME,
     description="Scider 学术论文管理系统 API 文档",
