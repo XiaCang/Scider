@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, ZoomIn, ZoomOut, FullScreen, Download, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -91,6 +91,8 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener('mouseup', onMouseUp)
 }
 
+const showSearchInline = ref(false)
+
 // 自动保存定时器
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -98,7 +100,7 @@ const handleResize = () => {
   isMobile.value = window.innerWidth < 900
 }
 
-// ---------- 滚动时计算当前页码（使用 requestAnimationFrame 节流）----------
+// 滚动时计算当前页码
 const updateCurrentPageFromScroll = () => {
   if (!pagesContainer.value) return
   const containerRect = pagesContainer.value.getBoundingClientRect()
@@ -129,7 +131,7 @@ const handleScroll = () => {
   })
 }
 
-// ---------- 超采样渲染：保证缩小后依然清晰 ----------
+// 超采样渲染
 // 目标缩放比例为 targetScale（用户期望的缩放值），实际渲染精度至少为 1 倍
 const renderAllPagesWithScale = async (targetScale: number) => {
   const doc = pdfDoc.value;
@@ -421,6 +423,24 @@ const formatTime = (isoString: string) => {
     hour: '2-digit', minute: '2-digit',
   })
 }
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleKeyDown)
+  loadPaperData()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeyDown)
+  if (pagesContainer.value) {
+    pagesContainer.value.removeEventListener('scroll', handleScroll)
+    pagesContainer.value.removeEventListener('wheel', handleWheelZoom)
+  }
+  if (pdfDoc.value) pdfDoc.value.destroy()
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
+  if (rafId !== null) cancelAnimationFrame(rafId)
+})
 
 /** 触发文件下载 */
 const downloadFile = (content: string, filename: string, mime: string) => {
