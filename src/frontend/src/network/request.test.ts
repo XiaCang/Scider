@@ -23,12 +23,12 @@ vi.mock('../utils/auth_storage', () => ({
 }))
 
 // window.location.href 模拟
-const originalLocation = window.location
-
 beforeEach(() => {
-  // @ts-ignore
-  delete window.location
-  window.location = { ...originalLocation, href: '', pathname: '/app/library' } as any
+  vi.stubGlobal('location', {
+    ...window.location,
+    href: '',
+    pathname: '/app/library',
+  })
 })
 
 afterEach(() => {

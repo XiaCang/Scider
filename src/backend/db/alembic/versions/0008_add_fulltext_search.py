@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
 
 
-revision = "0007_add_fulltext_search"
-down_revision = "0006_add_uix_user_md5"
+revision = "0008_add_fulltext_search"
+down_revision = "0007_add_avatar_llmprovider"
 branch_labels = None
 depends_on = None
 

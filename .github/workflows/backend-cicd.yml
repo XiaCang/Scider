@@ -158,12 +158,12 @@ jobs:
         run: |
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "DEPLOY_ENV=production" >> $GITHUB_ENV
-            echo "COMPOSE_FILE=docker-compose.prod.yml" >> $GITHUB_ENV
+            echo "COMPOSE_FILE=src/backend/docker-compose.prod.yml" >> $GITHUB_ENV
             echo "SSH_HOST=${{ secrets.PROD_SERVER_IP }}" >> $GITHUB_ENV
             echo "SSH_USER=${{ secrets.PROD_SERVER_USER }}" >> $GITHUB_ENV
           else
             echo "DEPLOY_ENV=dev" >> $GITHUB_ENV
-            echo "COMPOSE_FILE=docker-compose.yml" >> $GITHUB_ENV
+            echo "COMPOSE_FILE=src/backend/docker-compose.yml" >> $GITHUB_ENV
             echo "SSH_HOST=${{ secrets.SERVER_IP }}" >> $GITHUB_ENV
             echo "SSH_USER=${{ secrets.SERVER_USER }}" >> $GITHUB_ENV
           fi
@@ -183,16 +183,20 @@ jobs:
             # Login to GHCR so we can pull private images
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
+            # Remove old containers forcefully (data volumes preserved)
+            docker compose -f ${{ env.COMPOSE_FILE }} down --remove-orphans
+            docker rm -f scider-mysql scider-redis scider-backend scider-worker 2>/dev/null || true
+
             # Pull latest images (built & pushed by build-and-push job)
             docker compose -f ${{ env.COMPOSE_FILE }} pull backend worker
 
             # Apply DB migrations before restarting
             # Skip entrypoint to avoid double migration (entrypoint also runs alembic)
             docker compose -f ${{ env.COMPOSE_FILE }} run --rm --entrypoint "" backend \
-              sh -c "cd /app/db && alembic upgrade 0006_add_uix_user_md5"
+              sh -c "cd /app/db && alembic upgrade head"
 
-            # Restart services (entrypoint will see no pending migrations)
-            docker compose -f ${{ env.COMPOSE_FILE }} up -d backend worker
+            # Restart all services
+            docker compose -f ${{ env.COMPOSE_FILE }} up -d
 
             # Clean up stale images
             docker image prune -af --filter "until=24h"
