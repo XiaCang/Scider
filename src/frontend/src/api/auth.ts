@@ -37,9 +37,9 @@ export const changePasswordApi = (payload: { email: string; code: string; new_pa
 export const changePasswordByOldApi = (payload: ChangePasswordByOldPayload) =>
   request.post<ApiResponse<null>>('/user/change-password-by-old', payload)
 
-/** PUT /api/user/profile — 更新个人信息 */
+/** PATCH /api/user/me — 修改用户名 */
 export const updateProfileApi = (payload: UpdateProfilePayload) =>
-  request.put<ApiResponse<ProfileResponseData>>('/user/profile', payload)
+  request.patch<ApiResponse<null>>('/user/me', payload)
 
 /** POST /api/user/avatar — 上传头像 */
 export const uploadAvatarApi = (file: File) => {

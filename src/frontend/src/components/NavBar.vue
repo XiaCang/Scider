@@ -27,6 +27,8 @@ const activePath = computed(() => {
 })
 
 const displayName = computed(() => authStore.displayName)
+const userAvatarUrl = computed(() => authStore.avatarUrl)
+const hasAvatar = computed(() => Boolean(userAvatarUrl.value))
 
 const handleNavigate = async (path: string) => {
   if (path !== route.path) {
@@ -68,7 +70,15 @@ const handleSettings = async () => {
       <el-dropdown trigger="click" popper-class="user-dropdown-popper" placement="bottom-end">
         <button class="workspace-user" type="button">
           <span class="workspace-user__avatar">
-            {{ displayName.slice(0, 1).toUpperCase() }}
+            <img
+              v-if="hasAvatar"
+              :src="userAvatarUrl!"
+              :alt="displayName"
+              class="workspace-user__avatar-img"
+            />
+            <template v-else>
+              {{ displayName.slice(0, 1).toUpperCase() }}
+            </template>
           </span>
           <el-icon><ArrowDown /></el-icon>
         </button>
@@ -185,6 +195,14 @@ const handleSettings = async () => {
   justify-content: center;
   font-weight: bold;
   font-size: 0.9rem;
+  overflow: hidden;
+}
+
+.workspace-user__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .user-dropdown-header {

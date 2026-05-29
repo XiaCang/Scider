@@ -26,3 +26,9 @@ export interface UpdateProviderPayload {
   api_key?: string
   enabled?: boolean
 }
+
+/** 可用模型项 */
+export interface ModelItem {
+  id: string
+  name: string
+}

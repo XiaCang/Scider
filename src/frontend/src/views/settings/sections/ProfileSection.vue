@@ -80,6 +80,7 @@ const handleAvatarChange = async (e: Event) => {
     const res = await uploadAvatarApi(file)
     if (res.data?.avatarUrl) {
       avatarUrl.value = resolveAvatarUrl(res.data.avatarUrl)
+      authStore.setAvatarUrlDirect(avatarUrl.value)
     }
     ElMessage.success('头像已更新')
   } catch (error) {
@@ -108,6 +109,7 @@ const handleDeleteAvatar = async () => {
     )
     await deleteAvatarApi()
     avatarUrl.value = null
+    authStore.setAvatarUrlDirect(null)
     ElMessage.success('头像已删除')
   } catch (error) {
     if (error !== 'cancel') {
@@ -127,7 +129,7 @@ const handleSubmit = async () => {
 
     loading.value = true
     try {
-      await updateProfileApi({ username: form.username, bio: form.bio })
+      await updateProfileApi({ name: form.username })
       // 更新 store 中的用户名
       if (authStore.user) {
         authStore.user.username = form.username
