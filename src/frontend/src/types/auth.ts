@@ -66,11 +66,9 @@ export interface ChangePasswordByOldPayload {
   new_password: string
 }
 
-/** PUT /api/user/profile → payload */
+/** PATCH /api/user/me → payload (用户名修改) */
 export interface UpdateProfilePayload {
-  username?: string
-  avatar?: string
-  bio?: string
+  name: string
 }
 
 /** GET /api/user/avatar → data */

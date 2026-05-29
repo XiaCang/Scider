@@ -3,6 +3,7 @@ import type { AuthUser } from '../types/auth'
 const KEYS = {
   ACCESS_TOKEN: 'scider_access_token',
   PROFILE: 'scider_user_profile',
+  AVATAR_URL: 'scider_avatar_url',
 } as const
 
 export const authStorage = {
@@ -19,7 +20,7 @@ export const authStorage = {
   getProfile(): AuthUser | null {
     const raw = localStorage.getItem(KEYS.PROFILE)
     if (!raw) return null
-    
+
     try {
       return JSON.parse(raw) as AuthUser
     } catch {
@@ -30,6 +31,23 @@ export const authStorage = {
 
   setProfile(profile: AuthUser): void {
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile))
+  },
+
+  // --- Avatar URL 管理 ---
+  getAvatarUrl(): string | null {
+    return localStorage.getItem(KEYS.AVATAR_URL)
+  },
+
+  setAvatarUrl(url: string | null): void {
+    if (url) {
+      localStorage.setItem(KEYS.AVATAR_URL, url)
+    } else {
+      this.clearAvatarUrl()
+    }
+  },
+
+  clearAvatarUrl(): void {
+    localStorage.removeItem(KEYS.AVATAR_URL)
   },
 
   // --- 清理逻辑 ---
@@ -44,5 +62,6 @@ export const authStorage = {
   clearAll(): void {
     this.clearToken()
     this.clearProfile()
+    this.clearAvatarUrl()
   }
 }

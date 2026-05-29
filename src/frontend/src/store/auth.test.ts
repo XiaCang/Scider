@@ -8,6 +8,7 @@ vi.mock('../api/auth', () => ({
   loginApi: vi.fn(),
   registerApi: vi.fn(),
   getProfileApi: vi.fn(),
+  getAvatarApi: vi.fn(),
 }))
 
 vi.mock('../utils/auth_storage', () => {
@@ -19,6 +20,9 @@ vi.mock('../utils/auth_storage', () => {
       setProfile: vi.fn(),
       clearToken: vi.fn(() => { delete store['scider_access_token'] }),
       clearProfile: vi.fn(),
+      getAvatarUrl: vi.fn(() => store['scider_avatar_url'] ?? null),
+      setAvatarUrl: vi.fn(),
+      clearAvatarUrl: vi.fn(),
       clearAll: vi.fn(() => { store = {} }),
     },
   }
