@@ -167,6 +167,7 @@ const formatFileSize = (bytes: number) => {
     width="500px"
     :close-on-click-modal="false"
     :show-close="!isUploading"
+    class="upload-dialog"
     @close="handleClose"
   >
     <div class="upload-container">
@@ -337,5 +338,29 @@ const formatFileSize = (bytes: number) => {
 .remove-icon:hover {
   color: var(--danger, #f56c6c);
   background: rgba(245, 108, 108, 0.1);
+}
+</style>
+
+<style>
+.upload-dialog .el-button--primary {
+  background-color: #4a9d9a !important;
+  border-color: #4a9d9a !important;
+  color: #fff;
+}
+
+.upload-dialog .el-button--primary:hover,
+.upload-dialog .el-button--primary:focus {
+  background-color: #3d8b88 !important;
+  border-color: #3d8b88 !important;
+}
+
+.upload-dialog .el-button--primary:active {
+  background-color: #357a77 !important;
+  border-color: #357a77 !important;
+}
+
+.upload-dialog .el-button--primary.is-disabled {
+  background-color: rgba(74, 157, 154, 0.5) !important;
+  border-color: transparent !important;
 }
 </style>

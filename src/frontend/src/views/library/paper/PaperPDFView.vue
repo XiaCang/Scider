@@ -1324,4 +1324,16 @@ onUnmounted(() => {
 .textLayer ::selection {
   background-color: rgba(0, 0, 255, 0.2);
 }
+
+/* ── 工具栏按钮 hover 颜色改为品牌色（替代 Element Plus 默认蓝色）── */
+.pdf-toolbar .el-button:not(.el-button--primary):not(:disabled):hover {
+  color: #4a9d9a !important;
+  background-color: rgba(74, 157, 154, 0.08) !important;
+  border-color: transparent;
+}
+
+.pdf-toolbar .el-button.is-text:not(:disabled):hover {
+  color: #4a9d9a !important;
+  background-color: rgba(74, 157, 154, 0.08) !important;
+}
 </style>
