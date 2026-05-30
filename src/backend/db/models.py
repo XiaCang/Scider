@@ -233,3 +233,42 @@ class NoteSearch(Base):
     paper_title = Column(String(1024), nullable=True)
     content_text = Column(Text, nullable=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class GraphNode(Base):
+    """自定义图谱节点表"""
+    __tablename__ = "graph_node"
+
+    id = Column(String(64), primary_key=True, default=gen_id)
+    user_id = Column(String(64), ForeignKey("user.id"), nullable=False, index=True)
+    paper_id = Column(String(64), ForeignKey("paper.id"), nullable=True, index=True)
+    name = Column(String(255), nullable=False)
+    node_type = Column(String(50), nullable=False, server_default="custom")
+    category = Column(Integer, nullable=False, server_default="0")
+    properties = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User")
+    paper = relationship("Paper")
+    outgoing_edges = relationship("GraphEdge", foreign_keys="GraphEdge.source_id", back_populates="source_node", cascade="all, delete-orphan")
+    incoming_edges = relationship("GraphEdge", foreign_keys="GraphEdge.target_id", back_populates="target_node", cascade="all, delete-orphan")
+
+
+class GraphEdge(Base):
+    """自定义图谱边表"""
+    __tablename__ = "graph_edge"
+
+    id = Column(String(64), primary_key=True, default=gen_id)
+    user_id = Column(String(64), ForeignKey("user.id"), nullable=False, index=True)
+    source_id = Column(String(64), ForeignKey("graph_node.id"), nullable=False, index=True)
+    target_id = Column(String(64), ForeignKey("graph_node.id"), nullable=False, index=True)
+    relation_type = Column(String(50), nullable=False, server_default="related")
+    label = Column(String(255), nullable=True)
+    properties = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User")
+    source_node = relationship("GraphNode", foreign_keys=[source_id], back_populates="outgoing_edges")
+    target_node = relationship("GraphNode", foreign_keys=[target_id], back_populates="incoming_edges")
