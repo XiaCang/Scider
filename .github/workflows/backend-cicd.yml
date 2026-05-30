@@ -1,13 +1,12 @@
 name: Backend CI/CD
 
+# ──────────────────────────────────────────────
+# Workflow name & triggers
+# ──────────────────────────────────────────────
+
 on:
   push:
     branches: [dev, main]
-    paths:
-      - 'src/backend/**'
-      - '.github/workflows/backend-cicd.yml'
-  pull_request:
-    branches: [dev]
     paths:
       - 'src/backend/**'
       - '.github/workflows/backend-cicd.yml'
@@ -71,10 +70,11 @@ jobs:
   # Build & Push Docker Images
   # ──────────────────────────────────────────────
   build-and-push:
-    needs: test
     if: |
+      always() &&
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -142,10 +142,11 @@ jobs:
   # Deploy
   # ──────────────────────────────────────────────
   deploy:
-    needs: build-and-push
     if: |
+      always() &&
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+    needs: [build-and-push]
     runs-on: ubuntu-latest
     permissions:
       contents: read
