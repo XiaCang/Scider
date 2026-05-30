@@ -82,8 +82,6 @@ const modelsFetchError = ref('')
 const isEditing = computed(() => editingId.value !== null)
 const dialogTitle = computed(() => (isEditing.value ? '编辑提供商' : '添加提供商'))
 
-const providerMeta = computed(() => PROVIDER_META[dialogForm.provider] || PROVIDER_META.custom)
-
 const dialogRules: FormRules = {
   name: [{ required: true, message: '请输入提供商名称', trigger: 'blur' }],
   provider: [{ required: true, message: '请选择提供商类型', trigger: 'change' }],
@@ -422,7 +420,7 @@ onMounted(() => {
       width="540px"
       :close-on-click-modal="false"
       class="provider-dialog"
-      :before-close="() => { currentStep = 1; modelsFetched = false; availableModels = []; }"
+      :before-close="(done: () => void) => { done(); currentStep = 1; modelsFetched = false; availableModels = []; }"
     >
       <el-form
         ref="dialogFormRef"
@@ -437,6 +435,7 @@ onMounted(() => {
             v-model="dialogForm.provider"
             placeholder="请选择类型"
             style="width: 100%"
+            popper-class="provider-dialog-select-popper"
             @change="handleProviderChange"
           >
             <el-option
@@ -790,43 +789,10 @@ onMounted(() => {
 }
 
 /* ── Select 下拉（非蓝色） ── */
-.provider-dialog :deep(.el-select .el-select__wrapper) {
-  background: var(--bg-muted) !important;
-  box-shadow: 0 0 0 1px var(--line-strong) inset;
-  border-radius: 10px;
-}
-
-.provider-dialog :deep(.el-select .el-select__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px var(--brand) inset;
-}
-
-.provider-dialog :deep(.el-select-dropdown__item.selected) {
-  color: var(--brand);
-  font-weight: 600;
-}
-
-.provider-dialog :deep(.el-select-dropdown__item.hover) {
-  background: var(--brand-soft);
-}
 
 /* ── Switch（非蓝色） ── */
-.provider-dialog :deep(.el-switch.is-checked) {
-  --el-switch-on-color: var(--brand);
-}
 
 /* ── Radio（非蓝色） ── */
-.provider-dialog :deep(.el-radio__input.is-checked .el-radio__inner) {
-  border-color: var(--brand);
-  background: var(--brand);
-}
-
-.provider-dialog :deep(.el-radio__input.is-checked + .el-radio__label) {
-  color: var(--brand);
-}
-
-.provider-dialog :deep(.el-radio__inner:hover) {
-  border-color: var(--brand);
-}
 
 /* ── 步骤 2：选择模型 ── */
 .step-model-selection {
@@ -954,7 +920,9 @@ onMounted(() => {
 </style>
 
 <style>
-/* dialog footer 被 teleport 到 body 下，scoped 样式无效，故用全局样式覆写 */
+/* dialog 相关元素被 teleport 到 body 下，scoped 样式无效，故用全局样式覆写 */
+
+/* ── Primary button ── */
 .provider-dialog .el-button--primary {
   --el-button-bg-color: #4a9d9a;
   --el-button-border-color: #4a9d9a;
@@ -962,5 +930,45 @@ onMounted(() => {
   --el-button-hover-border-color: #3d8b88;
   --el-button-active-bg-color: #357a77;
   --el-button-active-border-color: #357a77;
+}
+
+/* ── Select wrapper inside dialog ── */
+.provider-dialog .el-select .el-select__wrapper {
+  background: #f5f0ea !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1) inset;
+  border-radius: 10px;
+}
+
+.provider-dialog .el-select .el-select__wrapper.is-focus {
+  box-shadow: 0 0 0 1px #4a9d9a inset;
+}
+
+/* ── Select dropdown (teleported to body) ── */
+.provider-dialog-select-popper {
+  --el-color-primary: #4a9d9a;
+}
+
+.provider-dialog-select-popper .el-select-dropdown__item:hover,
+.provider-dialog-select-popper .el-select-dropdown__item.hover {
+  background-color: rgba(74, 157, 154, 0.08);
+}
+
+/* ── Switch inside dialog ── */
+.provider-dialog .el-switch.is-checked {
+  --el-switch-on-color: #4a9d9a;
+}
+
+/* ── Radio inside dialog ── */
+.provider-dialog .el-radio__input.is-checked .el-radio__inner {
+  border-color: #4a9d9a;
+  background: #4a9d9a;
+}
+
+.provider-dialog .el-radio__input.is-checked + .el-radio__label {
+  color: #4a9d9a;
+}
+
+.provider-dialog .el-radio__inner:hover {
+  border-color: #4a9d9a;
 }
 </style>

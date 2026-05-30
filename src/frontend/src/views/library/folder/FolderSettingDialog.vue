@@ -265,4 +265,39 @@ const confirm = async () => {
 .folder-settings-dialog .el-dialog__body {
   padding: 20px 24px;
 }
+
+/* ── 新建/子文件夹弹窗（ElMessageBox）样式 ── */
+.dialog-content {
+  padding: 4px 0;
+}
+
+.dialog-tip {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.dialog-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dialog-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.dialog-input::placeholder {
+  color: var(--text-tertiary);
+}
 </style>

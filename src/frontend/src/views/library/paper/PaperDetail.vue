@@ -384,11 +384,12 @@ const statusClassMap: Record<string, string> = {
     font-family: inherit;
     font-size: 0.85rem;
     line-height: 1.65;
-    resize: vertical;
+    resize: none;
     padding: 10px 12px;
     border-radius: 8px;
     border: 1px solid var(--el-border-color);
     transition: border-color 0.2s, box-shadow 0.2s;
+    background: var(--bg-solid);
   }
 
   :deep(.el-textarea__inner:focus) {
@@ -405,8 +406,14 @@ const statusClassMap: Record<string, string> = {
   border-top: 1px solid var(--line-soft);
 }
 
-.action-section .el-button {
+.action-section :deep(.el-button) {
   flex: 1;
+}
+
+.action-section :deep(.el-button):not(.el-button--primary):not(:disabled):hover {
+  color: var(--brand);
+  background-color: var(--brand-soft);
+  border-color: transparent;
 }
 
 /* 空状态 */
