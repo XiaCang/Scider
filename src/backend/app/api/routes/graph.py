@@ -1,5 +1,6 @@
 """知识图谱：基于论文向量相似度的节点与边（ECharts graph 友好结构）。"""
 
+import hashlib
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -11,7 +12,7 @@ from app.core.config import settings
 from app.core.graph_similarity import build_similarity_edges
 from app.core.graph_llm_clustering import generate_llm_graph_structure
 from db.crud_graph import list_papers_with_embeddings, list_papers_without_embeddings
-from db.models import KeyPoints, Paper, PaperStatus
+from db.models import KeyPoints, Paper, PaperStatus, GraphNode, GraphEdge, GraphLLMCache
 from db.session import get_db
 from utils.response import error, success
 
@@ -72,16 +73,9 @@ async def similarity_graph(
     session: AsyncSession = Depends(get_db),
     folder_id: Optional[str] = Query(None, description="仅包含该文件夹内论文；不传表示用户全部已向量论文"),
     max_nodes: int = Query(200, ge=1, le=200, description="最多节点数（论文篇数），≤200"),
-    min_similarity: float = Query(0.55, ge=0.0, le=1.0),
+    min_similarity: float = Query(0.4, ge=0.0, le=1.0),
     top_k: int = Query(8, ge=1, le=50, description="每节点保留的最高相似边数"),
 ):
-    """
-    返回当前用户文库内、已有向量的论文相似度图。
-
-    - ``max_nodes``: 最多纳入的论文数量（≤200）
-    - ``min_similarity``: 连边最低余弦相似度
-    - ``top_k``: 每个节点最多保留与其它节点的 top-k 相似连边（去重后截断）
-    """
     if folder_id == "":
         folder_id = None
 
@@ -191,10 +185,6 @@ async def trigger_batch_embeddings(
     request: Request,
     session: AsyncSession = Depends(get_db),
 ):
-    """
-    对当前用户下已有四要素但尚无向量的论文，批量投递向量化任务。
-    用于首次部署向量功能后补发历史论文的向量任务。
-    """
     user = getattr(request.state, "user", None)
     if not user:
         return error(msg="未认证", code=401, data=None, status_code=401)
@@ -224,6 +214,92 @@ async def trigger_batch_embeddings(
     )
 
 
+# ---------- 辅助函数：缓存键生成 ----------
+def _papers_hash(paper_ids: list[str]) -> str:
+    sorted_ids = sorted(paper_ids)
+    return hashlib.md5(",".join(sorted_ids).encode()).hexdigest()
+
+
+# ---------- 辅助函数：合并自定义节点 ----------
+async def _merge_custom_nodes(
+    session: AsyncSession,
+    user_id: str,
+    raw_nodes: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """合并用户自定义节点：仅合并纯自定义节点（paper_id 为 NULL），
+    系统论文节点和自动创建的覆盖节点不被合并，保留系统原始数据。"""
+    # 只查询 paper_id 为 NULL 的纯自定义节点
+    q = select(GraphNode).where(GraphNode.user_id == user_id, GraphNode.paper_id.is_(None))
+    custom_nodes = (await session.execute(q)).scalars().all()
+
+    # 建立 id -> custom node 映射
+    id_map = {n.id: n for n in custom_nodes}
+
+    result = []
+    for raw in raw_nodes:
+        node_id = raw["id"]
+        custom = id_map.get(node_id)
+        if custom:
+            # 覆盖名称、类型、分类
+            raw["name"] = custom.name
+            raw["category"] = custom.category
+            raw["type"] = custom.node_type
+        result.append(raw)
+
+    # 添加纯自定义节点（id 不在原始节点中的）
+    existing_ids = {n["id"] for n in result}
+    for custom in custom_nodes:
+        if custom.id not in existing_ids:
+            result.append({
+                "id": custom.id,
+                "name": custom.name,
+                "type": custom.node_type,
+                "category": custom.category,
+                "paperInfo": custom.properties or {},
+            })
+    return result
+
+
+async def _merge_custom_edges(
+    session: AsyncSession,
+    user_id: str,
+    raw_edges: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """合并用户自定义边：如果存在 GraphEdge 且匹配系统边则覆盖；添加纯自定义边"""
+    q = select(GraphEdge).where(GraphEdge.user_id == user_id)
+    custom_edges = (await session.execute(q)).scalars().all()
+
+    # 建立系统边的唯一标识 (source, target, relation_type) 的映射
+    edge_map = {}
+    for ce in custom_edges:
+        key = (ce.source_id, ce.target_id, ce.relation_type)
+        edge_map[key] = ce
+
+    result = []
+    for raw in raw_edges:
+        key = (raw["source"], raw["target"], raw.get("relationType", "semantic"))
+        custom = edge_map.get(key)
+        if custom:
+            raw["label"] = custom.label or raw.get("label")
+            raw["relationType"] = custom.relation_type
+        # 为每条边生成一个唯一 id（用于前端编辑），格式 edge_{source}_{target}_{relation_type}
+        raw["id"] = f"edge_{raw['source']}_{raw['target']}_{raw.get('relationType', 'semantic')}"
+        result.append(raw)
+
+    # 添加纯粹的自定义边（未在原始边中存在的）
+    existing_keys = {(e["source"], e["target"]) for e in result}
+    for custom in custom_edges:
+        if (custom.source_id, custom.target_id) not in existing_keys:
+            result.append({
+                "id": f"edge_{custom.source_id}_{custom.target_id}_{custom.relation_type}",
+                "source": custom.source_id,
+                "target": custom.target_id,
+                "relationType": custom.relation_type,
+                "label": custom.label,
+            })
+    return result
+
+
 @router.get("/llm-structure", response_model=None)
 async def llm_graph_structure(
     request: Request,
@@ -231,16 +307,6 @@ async def llm_graph_structure(
     folder_id: Optional[str] = Query(None, description="仅包含该文件夹内论文；不传表示用户全部已确认论文"),
     max_nodes: int = Query(50, ge=1, le=100, description="最多节点数（论文篇数），≤100"),
 ):
-    """
-    基于 LLM 分析论文四要素，生成主题聚类和语义关系边。
-
-    - 仅包含状态为 CONFIRMED 的论文（已确认四要素）
-    - LLM 自动识别研究主题并聚类（2-6 个主题）
-    - LLM 生成语义关系边（extends/applies/compares/related）
-    - 返回 ECharts graph 友好的节点和边结构，节点按主题分类（category 字段）
-
-    **注意**：此接口调用 LLM，响应时间较长（10-30秒），建议前端设置较长超时。
-    """
     if folder_id == "":
         folder_id = None
 
@@ -248,6 +314,7 @@ async def llm_graph_structure(
     if not user:
         return error(msg="未认证", code=401, data=None, status_code=401)
 
+    # 查询已确认的论文
     q = (
         select(Paper, KeyPoints)
         .join(KeyPoints, KeyPoints.paper_id == Paper.id)
@@ -296,85 +363,19 @@ async def llm_graph_structure(
             },
         })
 
+    # 单一论文特殊处理（无需 LLM）
     if len(papers_for_llm) == 1:
         p = papers_for_llm[0]
         paper, kp = paper_map[p["paper_id"]]
         title = paper.title or ""
         short = title if len(title) <= 24 else title[:21] + "…"
-        return success(
-            data={
-                "nodes": [
-                    GraphNodeOut(
-                        id=paper.id,
-                        name=short,
-                        type="paper",
-                        category=0,
-                        paperInfo={
-                            "id": paper.id,
-                            "title": paper.title,
-                            "authors": paper.authors,
-                            "year": paper.year,
-                            "status": "confirmed",
-                            "source": "library",
-                            "keyPoints": {
-                                "background": kp.background or "",
-                                "method": kp.methodology or "",
-                                "innovation": kp.innovation or "",
-                                "conclusion": kp.conclusion or "",
-                            },
-                        },
-                    ).model_dump()
-                ],
-                "links": [],
-                "clusters": [
-                    {
-                        "id": "cluster_0",
-                        "name": "单篇论文",
-                        "description": "仅有一篇论文，无需聚类",
-                        "paper_ids": [paper.id],
-                    }
-                ],
-                "meta": {
-                    "paper_count": 1,
-                    "cluster_count": 1,
-                    "edge_count": 0,
-                    "reason": "single_paper",
-                },
-            },
-            msg="ok",
-            code=0,
-        )
-
-    try:
-        llm_result = generate_llm_graph_structure(papers_for_llm)
-    except Exception as e:
-        return error(
-            msg=f"LLM 图结构生成失败: {str(e)}",
-            code=500,
-            data=None,
-            status_code=500,
-        )
-
-    cluster_map: dict[str, int] = {}
-    for idx, cluster in enumerate(llm_result.clusters):
-        for pid in cluster["paper_ids"]:
-            cluster_map[pid] = idx
-
-    nodes_out: list[GraphNodeOut] = []
-    for p in papers_for_llm:
-        pid = p["paper_id"]
-        paper, kp = paper_map[pid]
-        title = paper.title or ""
-        short = title if len(title) <= 24 else title[:21] + "…"
-        category = cluster_map.get(pid, 0)
-
-        nodes_out.append(
-            GraphNodeOut(
-                id=pid,
-                name=short,
-                type="paper",
-                category=category,
-                paperInfo={
+        raw_nodes = [
+            {
+                "id": paper.id,
+                "name": short,
+                "type": "paper",
+                "category": 0,
+                "paperInfo": {
                     "id": paper.id,
                     "title": paper.title,
                     "authors": paper.authors,
@@ -388,37 +389,147 @@ async def llm_graph_structure(
                         "conclusion": kp.conclusion or "",
                     },
                 },
+            }
+        ]
+        raw_edges = []
+        clusters = [
+            {
+                "id": "cluster_0",
+                "name": "单篇论文",
+                "description": "仅有一篇论文，无需聚类",
+                "paper_ids": [paper.id],
+            }
+        ]
+        # 合并自定义内容
+        final_nodes = await _merge_custom_nodes(session, user["id"], raw_nodes)
+        final_edges = await _merge_custom_edges(session, user["id"], raw_edges)
+        return success(
+            data={
+                "nodes": final_nodes,
+                "links": final_edges,
+                "clusters": clusters,
+                "meta": {
+                    "paper_count": 1,
+                    "cluster_count": 1,
+                    "edge_count": 0,
+                    "reason": "single_paper",
+                },
+            },
+            msg="ok",
+            code=0,
+        )
+
+    # 计算论文列表哈希
+    paper_ids = [p["paper_id"] for p in papers_for_llm]
+    hash_key = _papers_hash(paper_ids)
+
+    # 查询缓存
+    cache_q = select(GraphLLMCache).where(
+        GraphLLMCache.user_id == user["id"],
+        GraphLLMCache.folder_id == folder_id,
+        GraphLLMCache.papers_hash == hash_key
+    )
+    cache = (await session.execute(cache_q)).scalar_one_or_none()
+
+    if cache:
+        # 使用缓存
+        raw_nodes = cache.nodes
+        raw_edges = cache.edges
+        clusters = cache.clusters
+    else:
+        # 调用 LLM 生成
+        try:
+            llm_result = generate_llm_graph_structure(papers_for_llm)
+        except Exception as e:
+            return error(
+                msg=f"LLM 图结构生成失败: {str(e)}",
+                code=500,
+                data=None,
+                status_code=500,
             )
-        )
 
-    relation_type_map = {
-        "extends": "扩展",
-        "applies": "应用",
-        "compares": "对比",
-        "related": "相关",
-    }
+        # 构建原始节点列表（论文节点）
+        raw_nodes = []
+        for p in papers_for_llm:
+            pid = p["paper_id"]
+            paper, kp = paper_map[pid]
+            title = paper.title or ""
+            short = title if len(title) <= 24 else title[:21] + "…"
+            raw_nodes.append({
+                "id": pid,
+                "name": short,
+                "type": "paper",
+                "category": 0,  # 临时，稍后根据聚类结果更新
+                "paperInfo": {
+                    "id": paper.id,
+                    "title": paper.title,
+                    "authors": paper.authors,
+                    "year": paper.year,
+                    "status": "confirmed",
+                    "source": "library",
+                    "keyPoints": {
+                        "background": kp.background or "",
+                        "method": kp.methodology or "",
+                        "innovation": kp.innovation or "",
+                        "conclusion": kp.conclusion or "",
+                    },
+                },
+            })
 
-    links_out = [
-        GraphLinkOut(
-            source=edge["source"],
-            target=edge["target"],
-            relationType=edge["relation_type"],
-            label=f"{relation_type_map.get(edge['relation_type'], '相关')}: {edge['reason']}",
+        # 给节点分配聚类 category
+        cluster_map: dict[str, int] = {}
+        for idx, cluster in enumerate(llm_result.clusters):
+            for pid in cluster["paper_ids"]:
+                cluster_map[pid] = idx
+        for node in raw_nodes:
+            node["category"] = cluster_map.get(node["id"], 0)
+
+        # 构建原始边列表
+        relation_type_map = {
+            "extends": "扩展",
+            "applies": "应用",
+            "compares": "对比",
+            "related": "相关",
+        }
+        raw_edges = [
+            {
+                "source": edge["source"],
+                "target": edge["target"],
+                "relationType": edge["relation_type"],
+                "label": f"{relation_type_map.get(edge['relation_type'], '相关')}: {edge['reason']}",
+            }
+            for edge in llm_result.edges
+        ]
+        clusters = llm_result.clusters
+
+        # 保存缓存
+        new_cache = GraphLLMCache(
+            user_id=user["id"],
+            folder_id=folder_id,
+            papers_hash=hash_key,
+            clusters=clusters,
+            nodes=raw_nodes,
+            edges=raw_edges,
         )
-        for edge in llm_result.edges
-    ]
+        session.add(new_cache)
+        await session.commit()
+
+    # 合并用户自定义节点和边
+    final_nodes = await _merge_custom_nodes(session, user["id"], raw_nodes)
+    final_edges = await _merge_custom_edges(session, user["id"], raw_edges)
 
     payload = {
-        "nodes": [n.model_dump() for n in nodes_out],
-        "links": [l.model_dump() for l in links_out],
-        "clusters": llm_result.clusters,
+        "nodes": final_nodes,
+        "links": final_edges,
+        "clusters": clusters,
         "meta": {
             "paper_count": len(papers_for_llm),
-            "cluster_count": len(llm_result.clusters),
-            "edge_count": len(links_out),
+            "cluster_count": len(clusters),
+            "edge_count": len(final_edges),
             "max_nodes": max_nodes,
             "llm_provider": settings.LLM_PROVIDER,
             "llm_model": settings.DEEPSEEK_MODEL if settings.LLM_PROVIDER == "deepseek" else settings.QWEN_MODEL,
+            "cached": cache is not None,
         },
     }
 

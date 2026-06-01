@@ -272,3 +272,19 @@ class GraphEdge(Base):
     user = relationship("User")
     source_node = relationship("GraphNode", foreign_keys=[source_id], back_populates="outgoing_edges")
     target_node = relationship("GraphNode", foreign_keys=[target_id], back_populates="incoming_edges")
+
+class GraphLLMCache(Base):
+    """存储 LLM 生成的原始图谱结构"""
+    __tablename__ = "graph_llm_cache"
+
+    id = Column(String(64), primary_key=True, default=gen_id)
+    user_id = Column(String(64), ForeignKey("user.id"), nullable=False, index=True)
+    folder_id = Column(String(64), nullable=True, index=True)
+    papers_hash = Column(String(64), nullable=False)          # 论文 ID 排序后 MD5
+    clusters = Column(JSON, nullable=False)                   # 聚类信息
+    nodes = Column(JSON, nullable=False)                      # 原始节点列表（论文节点）
+    edges = Column(JSON, nullable=False)                      # 原始边列表（系统边）
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User")
