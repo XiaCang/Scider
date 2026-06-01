@@ -17,6 +17,7 @@ EXEMPT_PATHS = (
     "/api/tasks/",
     "/api/discover/search",  # 论文搜索（公开）
     "/api/discover/recommendations",  # 论文推荐（公开）
+    "/api/migration/status",  # 迁移状态查询（公开）
     "/uploads",  # 静态文件服务（PDF预览）
     "/docs",
     "/openapi.json",
