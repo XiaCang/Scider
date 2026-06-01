@@ -75,6 +75,7 @@ const handlePaperClick = async (paper: any) => {
       abstract: paper.abstract || paper.description || '',
       pdf_url: paper.pdf_url || '',
       doi: doi,
+      arxiv_id: paper.arxiv_id || '',
       url: semanticId ? `https://www.semanticscholar.org/paper/${semanticId}` : null,
       doi_url: doi ? `https://doi.org/${doi}` : null,
       status: 'PENDING',

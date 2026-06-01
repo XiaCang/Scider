@@ -45,6 +45,7 @@ class PaperItem(BaseModel):
     source_type: Optional[str] = Field(None, description="来源类型：conference | journal | arXiv | other")
     abstract: Optional[str] = Field(None, description="摘要")
     doi: Optional[str] = Field(None, description="DOI")
+    arxiv_id: Optional[str] = Field(None, description="arXiv ID")
     citation_count: Optional[int] = Field(None, description="引用次数")
     pdf_url: Optional[str] = Field(None, description="开放获取 PDF 链接")
     in_library: Optional[bool] = Field(None, description="是否已在用户文库中（仅上下游接口返回）")
@@ -179,6 +180,7 @@ class ImportRequest(BaseModel):
     authors: Optional[str] = Field(None, description="作者列表（逗号分隔）")
     abstract: Optional[str] = Field(None, description="摘要")
     doi: Optional[str] = Field(None, description="DOI")
+    arxiv_id: Optional[str] = Field(None, description="arXiv ID")
     year: Optional[int] = Field(None, description="发表年份")
     venue: Optional[str] = Field(None, description="发表会议/期刊")
     pdf_url: Optional[str] = Field(None, description="PDF 下载链接")
@@ -212,10 +214,17 @@ async def import_paper(body: ImportRequest, request: Request):
                 return JSONResponse(status_code=409, content=err(409, "论文已在文库中"))
 
         pdf_path, md5_hash, file_size = None, None, 0
+        # 收集所有可用的 PDF 下载链接：arXiv PDF 优先，其次 OA PDF
+        pdf_urls_to_try: list[str] = []
+        if body.arxiv_id:
+            pdf_urls_to_try.append(f"https://arxiv.org/pdf/{body.arxiv_id}.pdf")
         if body.pdf_url:
+            pdf_urls_to_try.append(body.pdf_url)
+
+        for url in pdf_urls_to_try:
             try:
                 async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                    resp = await client.get(body.pdf_url)
+                    resp = await client.get(url)
                     resp.raise_for_status()
                 content = resp.content
                 md5_hash = hashlib.md5(content).hexdigest()
@@ -225,9 +234,10 @@ async def import_paper(body: ImportRequest, request: Request):
                     with open(pdf_path, "wb") as f:
                         f.write(content)
                 file_size = len(content)
-                logger.info("discover.import pdf downloaded md5=%s size=%d", md5_hash, file_size)
+                logger.info("discover.import pdf downloaded url=%s md5=%s size=%d", url, md5_hash, file_size)
+                break  # 下载成功就退出循环
             except Exception as e:
-                logger.warning("discover.import pdf download failed url=%s error=%s", body.pdf_url, e)
+                logger.warning("discover.import pdf download failed url=%s error=%s", url, e)
 
         paper = Paper(
             title=body.title, authors=body.authors, abstract=body.abstract,
