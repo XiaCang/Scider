@@ -34,6 +34,7 @@ export interface LibraryPaper {
   abstract?: string
   pdf_url?: string
   doi?: string
+  arxiv_id?: string
   url?: string
   doi_url?: string
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link, Download, Plus } from '@element-plus/icons-vue'
+import { Link, Download, Plus, Promotion } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -25,19 +25,40 @@ const drawerVisible = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-// 获取论文链接（优先使用 Semantic Scholar URL，其次 DOI URL）
+// ── arXiv ──
+const arxivId = computed(() => props.paper?.arxiv_id || '')
+
+/** 可从 arXiv 构造 PDF 链接 */
+const arxivPdfUrl = computed(() => {
+  const id = arxivId.value
+  if (!id) return ''
+  return `https://arxiv.org/pdf/${id}.pdf`
+})
+
+/** arXiv 摘要页链接 */
+const arxivAbsUrl = computed(() => {
+  const id = arxivId.value
+  if (!id) return ''
+  return `https://arxiv.org/abs/${id}`
+})
+
+/** 实际可用的 PDF 链接：优先 arXiv PDF，其次 OA PDF */
+const effectivePdfUrl = computed(() => {
+  return arxivPdfUrl.value || props.paper?.pdf_url || ''
+})
+
+// ── 来源网址 ──
 const paperUrl = computed(() => {
   if (!props.paper) return null
 
-  // 优先使用直接提供的 url 字段
-  if (props.paper.url) {
-    return props.paper.url
-  }
+  // arXiv 论文直接跳 arXiv 摘要页，不跳 Semantic Scholar
+  if (arxivAbsUrl.value) return arxivAbsUrl.value
 
-  // 其次使用 doi_url
-  if (props.paper.doi_url) {
-    return props.paper.doi_url
-  }
+  // 使用直接提供的 url 字段
+  if (props.paper.url) return props.paper.url
+
+  // 使用 doi_url
+  if (props.paper.doi_url) return props.paper.doi_url
 
   // 如果有 semantic_id，构造 Semantic Scholar 链接
   if (props.paper.id && !props.paper.id.startsWith('local-')) {
@@ -45,9 +66,7 @@ const paperUrl = computed(() => {
   }
 
   // 最后尝试从 doi 构造
-  if (props.paper.doi) {
-    return `https://doi.org/${props.paper.doi}`
-  }
+  if (props.paper.doi) return `https://doi.org/${props.paper.doi}`
 
   return null
 })
@@ -59,6 +78,13 @@ const handleJumpToSource = () => {
   }
 }
 
+// ── 在浏览器中查看 PDF ──
+const handleOpenInBrowser = () => {
+  if (effectivePdfUrl.value) {
+    window.open(effectivePdfUrl.value, '_blank')
+  }
+}
+
 // ── 导入论文 ──
 const importing = ref(false)
 
@@ -67,24 +93,21 @@ const handleImport = async () => {
 
   importing.value = true
   try {
-    // importPaperApi 返回 ApiResponse<ImportPaperResult>
-    // 响应拦截器已处理 code≠0 的情况，成功时直接返回 response.data
     const res = await importPaperApi({
       title: props.paper.title,
       authors: props.paper.authors || null,
       abstract: props.paper.abstract || null,
       doi: props.paper.doi || null,
+      arxiv_id: props.paper.arxiv_id || null,
       year: props.paper.year || null,
       venue: props.paper.source || null,
       pdf_url: props.paper.pdf_url || null,
     })
 
-    // res 为 ApiResponse<ImportPaperResult>，data 为 ImportPaperResult
     ElMessage.success('论文已成功导入文库')
     emit('imported', (res as any)?.data?.paper_id || props.paper.id)
   } catch (err: any) {
     const msg = err?.message || '导入失败'
-    // 如果后端返回 409（论文已存在），也算成功
     if (msg.includes('已在文库中')) {
       ElMessage.info('该论文已在文库中')
       emit('imported', props.paper.id)
@@ -100,22 +123,22 @@ const handleImport = async () => {
 const downloading = ref(false)
 
 const handleDownloadPdf = async () => {
-  if (!props.paper?.pdf_url || downloading.value) return
+  const url = effectivePdfUrl.value
+  if (!url || downloading.value) return
 
   downloading.value = true
   try {
-    const response = await downloadDiscoverPdfApi(props.paper.pdf_url)
+    const response = await downloadDiscoverPdfApi(url)
     const blob = new Blob([response.data], { type: 'application/pdf' })
-    const url = window.URL.createObjectURL(blob)
+    const downloadUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
-    // 使用论文标题作为文件名
-    const safeName = (props.paper.title || 'paper').replace(/[/\\?%*:|"<>]/g, '_')
+    link.href = downloadUrl
+    const safeName = (props.paper!.title || 'paper').replace(/[/\\?%*:|"<>]/g, '_')
     link.download = `${safeName}.pdf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    window.URL.revokeObjectURL(downloadUrl)
     ElMessage.success('PDF 下载成功')
   } catch (err: any) {
     ElMessage.error(err?.message || 'PDF 下载失败')
@@ -124,10 +147,10 @@ const handleDownloadPdf = async () => {
   }
 }
 
-// 是否有 PDF 下载链接
-const hasPdfUrl = computed(() => !!props.paper?.pdf_url)
-// 论文是否已在文库中
+// ── 状态判断 ──
+const hasPdfUrl = computed(() => !!effectivePdfUrl.value)
 const isInLibrary = computed(() => props.paper?.in_library === true)
+const isArxiv = computed(() => !!arxivId.value)
 
 // 状态映射（中文显示）
 const statusTextMap: Record<string, string> = {
@@ -207,6 +230,16 @@ const statusClassMap: Record<string, string> = {
         >
           <el-icon><Link /></el-icon>
           跳转到来源网址
+        </el-button>
+
+        <el-button
+          v-if="isArxiv"
+          size="large"
+          :disabled="!arxivAbsUrl"
+          @click="handleOpenInBrowser"
+        >
+          <el-icon><Promotion /></el-icon>
+          在 arXiv 中查看
         </el-button>
 
         <el-button

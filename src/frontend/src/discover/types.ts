@@ -32,6 +32,8 @@ export interface SearchResult {
   abstract?: string
   /** DOI */
   doi?: string
+  /** arXiv ID */
+  arxiv_id?: string
   /** 是否已在用户文库中 */
   in_library?: boolean
 }
@@ -55,6 +57,8 @@ export interface CitationPaper {
   abstract?: string
   /** DOI */
   doi?: string
+  /** arXiv ID */
+  arxiv_id?: string
   /** 开放获取 PDF 链接 */
   pdf_url?: string
 }
@@ -81,6 +85,7 @@ export interface ImportRequest {
   authors?: string | null
   abstract?: string | null
   doi?: string | null
+  arxiv_id?: string | null
   year?: number | null
   venue?: string | null
   pdf_url?: string | null

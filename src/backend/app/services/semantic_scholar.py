@@ -126,6 +126,7 @@ def _fmt(p: dict) -> dict:
         "source_type": _source_type(p),
         "abstract": p.get("abstract"),
         "doi": (p.get("externalIds") or {}).get("DOI"),
+        "arxiv_id": (p.get("externalIds") or {}).get("ArXiv"),
         "citation_count": p.get("citationCount"),
         "pdf_url": (p.get("openAccessPdf") or {}).get("url"),
     }
