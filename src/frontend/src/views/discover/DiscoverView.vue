@@ -87,6 +87,19 @@ const handlePaperClick = async (paper: any) => {
   detailVisible.value = true
 }
 
+// 处理导入成功
+const onPaperImported = (paperId: string) => {
+  // 在结果列表中找到对应论文并标记为已入库
+  const item = filteredResults.value.find(p => p.id === paperId || p.semantic_id === paperId)
+  if (item) {
+    (item as any).in_library = true
+  }
+  // 更新当前选中论文
+  if (selectedPaper.value) {
+    selectedPaper.value.in_library = true
+  }
+}
+
 /* ── 推荐模型 ── */
 </script>
 
@@ -188,6 +201,7 @@ const handlePaperClick = async (paper: any) => {
     <PaperDetailSimple
       v-model="detailVisible"
       :paper="selectedPaper"
+      @imported="onPaperImported"
     />
   </section>
 </template>

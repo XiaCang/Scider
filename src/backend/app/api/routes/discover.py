@@ -6,6 +6,7 @@ discover.py — 论文发现模块路由
   POST /discover/import              单篇导入（JWT 鉴权，尝试下载 PDF）
   GET  /discover/references/{id}     上游参考文献（含文库标注）
   GET  /discover/citations/{id}      下游引用文献（含文库标注）
+  GET  /discover/pdf-proxy           代理下载外部 PDF（避免 CORS）
 """
 
 import asyncio
@@ -248,6 +249,53 @@ async def import_paper(body: ImportRequest, request: Request):
     else:
         logger.info("discover.import no pdf_url, paper created without parse task paper_id=%s", paper.id)
         return ok(data={"paper_id": paper.id, "task_id": None, "status": paper.status.value})
+
+
+# ---------------------------------------------------------------------------
+# PDF 代理下载
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/pdf-proxy",
+    summary="代理下载外部 PDF",
+    description="通过后端代理下载外部 PDF（避免前端跨域限制），要求用户已认证",
+)
+async def proxy_pdf(
+    request: Request,
+    pdf_url: str = Query(..., description="需要下载的 PDF 链接"),
+):
+    """代理下载外部 PDF 文件，避免前端直接请求外部资源时的跨域问题。"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+
+    logger.info("discover.pdf_proxy user_id=%s pdf_url=%s", str(user["id"]), pdf_url[:120])
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            resp = await client.get(pdf_url)
+            resp.raise_for_status()
+        content = resp.content
+
+        # 从 URL 中提取文件名
+        filename = os.path.basename(pdf_url.split("?")[0])
+        if not filename.endswith(".pdf"):
+            filename = "paper.pdf"
+
+        from fastapi.responses import Response
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(content)),
+            },
+        )
+    except httpx.TimeoutException:
+        logger.error("discover.pdf_proxy timeout url=%s", pdf_url[:120])
+        return JSONResponse(status_code=504, content=err(504, "下载 PDF 超时"))
+    except Exception as e:
+        logger.error("discover.pdf_proxy failed url=%s error=%s", pdf_url[:120], e)
+        return JSONResponse(status_code=502, content=err(502, f"下载 PDF 失败: {str(e)}"))
 
 
 # ---------------------------------------------------------------------------
