@@ -126,6 +126,24 @@ curl http://127.0.0.1:8000/api/tasks/<task-id>
 
 本项目的数据库版本管理使用 **Alembic**，迁移文件位于 `db/alembic/versions/`。
 
+### 🔄 自动迁移（推荐）
+
+**应用启动时会自动执行 `alembic upgrade head`**，无需手动操作。
+
+如果你在 `main.py` 的 `startup` 事件中看到以下日志，说明迁移已自动完成：
+
+```
+正在执行数据库迁移（alembic upgrade head）...
+数据库迁移完成
+```
+
+如果因为某些原因想跳过自动迁移，设置环境变量：
+
+```bash
+export SKIP_MIGRATIONS=true   # Linux/macOS
+$env:SKIP_MIGRATIONS="true"   # Windows PowerShell
+```
+
 ### 数据库驱动
 
 | 数据库 | 驱动 | 连接串示例 |
@@ -135,9 +153,54 @@ curl http://127.0.0.1:8000/api/tasks/<task-id>
 
 > 更换数据库时，只需修改 `.env` 中的 `DATABASE_URL` 并安装对应驱动即可。
 
-### 执行迁移
+### 运行时迁移 API（无需重启）
 
-先确认 `DATABASE_URL` 已正确设置（在 `.env` 中），然后：
+除了启动时自动迁移，还提供了 **运行时 HTTP API**，可在不重启应用的情况下触发迁移：
+
+#### 查看迁移状态
+
+```bash
+GET /api/migration/status
+```
+
+响应示例：
+```json
+{
+  "code": 0,
+  "data": {
+    "current_revision": "0010_add_graph_editing",
+    "head_revision": "0010_add_graph_editing",
+    "is_head": true,
+    "pending_migrations": []
+  }
+}
+```
+
+#### 触发迁移
+
+```bash
+POST /api/migration/upgrade
+Authorization: Bearer <token>
+```
+
+响应示例：
+```json
+{
+  "code": 0,
+  "data": {
+    "success": true,
+    "revision": "0010_add_graph_editing",
+    "message": "数据库已是最新版本，无需迁移"
+  }
+}
+```
+
+> **适用场景**：
+> - 部署流水线中：`curl -X POST http://localhost:8000/api/migration/upgrade`
+> - 横向扩缩容时：新实例启动自动迁移，无需手动操作
+> - 回滚时先降级数据库：`alembic downgrade -1`（仅 CLI 支持）
+
+### 手动执行迁移
 
 ```bash
 cd src/backend/db
