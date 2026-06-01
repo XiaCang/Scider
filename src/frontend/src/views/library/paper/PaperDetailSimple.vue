@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { Link } from '@element-plus/icons-vue'
-import { computed } from 'vue'
+import { Link, Download, Plus } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import type { LibraryPaper } from '../../../types/library'
+import { importPaperApi, downloadDiscoverPdfApi } from '../../../api/discover'
 
 interface Props {
   modelValue: boolean
@@ -11,6 +13,7 @@ interface Props {
 
 interface Emits {
   (e: 'update:modelValue', value: boolean): void
+  (e: 'imported', paperId: string): void
 }
 
 const props = defineProps<Props>()
@@ -25,27 +28,27 @@ const drawerVisible = computed({
 // 获取论文链接（优先使用 Semantic Scholar URL，其次 DOI URL）
 const paperUrl = computed(() => {
   if (!props.paper) return null
-  
+
   // 优先使用直接提供的 url 字段
   if (props.paper.url) {
     return props.paper.url
   }
-  
+
   // 其次使用 doi_url
   if (props.paper.doi_url) {
     return props.paper.doi_url
   }
-  
+
   // 如果有 semantic_id，构造 Semantic Scholar 链接
   if (props.paper.id && !props.paper.id.startsWith('local-')) {
     return `https://www.semanticscholar.org/paper/${props.paper.id}`
   }
-  
+
   // 最后尝试从 doi 构造
   if (props.paper.doi) {
     return `https://doi.org/${props.paper.doi}`
   }
-  
+
   return null
 })
 
@@ -55,6 +58,76 @@ const handleJumpToSource = () => {
     window.open(paperUrl.value, '_blank')
   }
 }
+
+// ── 导入论文 ──
+const importing = ref(false)
+
+const handleImport = async () => {
+  if (!props.paper || importing.value) return
+
+  importing.value = true
+  try {
+    // importPaperApi 返回 ApiResponse<ImportPaperResult>
+    // 响应拦截器已处理 code≠0 的情况，成功时直接返回 response.data
+    const res = await importPaperApi({
+      title: props.paper.title,
+      authors: props.paper.authors || null,
+      abstract: props.paper.abstract || null,
+      doi: props.paper.doi || null,
+      year: props.paper.year || null,
+      venue: props.paper.source || null,
+      pdf_url: props.paper.pdf_url || null,
+    })
+
+    // res 为 ApiResponse<ImportPaperResult>，data 为 ImportPaperResult
+    ElMessage.success('论文已成功导入文库')
+    emit('imported', (res as any)?.data?.paper_id || props.paper.id)
+  } catch (err: any) {
+    const msg = err?.message || '导入失败'
+    // 如果后端返回 409（论文已存在），也算成功
+    if (msg.includes('已在文库中')) {
+      ElMessage.info('该论文已在文库中')
+      emit('imported', props.paper.id)
+    } else {
+      ElMessage.error(msg)
+    }
+  } finally {
+    importing.value = false
+  }
+}
+
+// ── 下载 PDF ──
+const downloading = ref(false)
+
+const handleDownloadPdf = async () => {
+  if (!props.paper?.pdf_url || downloading.value) return
+
+  downloading.value = true
+  try {
+    const response = await downloadDiscoverPdfApi(props.paper.pdf_url)
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    // 使用论文标题作为文件名
+    const safeName = (props.paper.title || 'paper').replace(/[/\\?%*:|"<>]/g, '_')
+    link.download = `${safeName}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('PDF 下载成功')
+  } catch (err: any) {
+    ElMessage.error(err?.message || 'PDF 下载失败')
+  } finally {
+    downloading.value = false
+  }
+}
+
+// 是否有 PDF 下载链接
+const hasPdfUrl = computed(() => !!props.paper?.pdf_url)
+// 论文是否已在文库中
+const isInLibrary = computed(() => props.paper?.in_library === true)
 
 // 状态映射（中文显示）
 const statusTextMap: Record<string, string> = {
@@ -109,9 +182,10 @@ const statusClassMap: Record<string, string> = {
 
             <div class="meta-item">
               <span class="meta-label">状态：</span>
-              <span class="status-pill" :class="statusClassMap[paper.status]">
+              <span v-if="isInLibrary" class="status-pill" :class="statusClassMap[paper.status]">
                 {{ statusTextMap[paper.status] }}
               </span>
+              <span v-else class="status-pill is-external">外部来源</span>
             </div>
           </div>
         </div>
@@ -133,6 +207,27 @@ const statusClassMap: Record<string, string> = {
         >
           <el-icon><Link /></el-icon>
           跳转到来源网址
+        </el-button>
+
+        <el-button
+          type="success"
+          size="large"
+          :loading="importing"
+          :disabled="importing || isInLibrary"
+          @click="handleImport"
+        >
+          <el-icon><Plus /></el-icon>
+          {{ isInLibrary ? '已在文库中' : '导入我的文库' }}
+        </el-button>
+
+        <el-button
+          size="large"
+          :loading="downloading"
+          :disabled="!hasPdfUrl || downloading"
+          @click="handleDownloadPdf"
+        >
+          <el-icon><Download /></el-icon>
+          下载 PDF
         </el-button>
       </section>
     </div>
@@ -209,6 +304,40 @@ const statusClassMap: Record<string, string> = {
   max-width: 100%;
 }
 
+/* 状态标签 */
+.status-pill {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-pill.is-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.status-pill.is-brand {
+  background: rgba(74, 157, 154, 0.1);
+  color: #4a9d9a;
+}
+
+.status-pill.is-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.status-pill.is-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.status-pill.is-external {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+}
+
 /* 摘要区域 */
 .abstract-section {
   flex: 1;
@@ -235,10 +364,12 @@ const statusClassMap: Record<string, string> = {
   gap: 0.75rem;
   padding-top: 1rem;
   border-top: 1px solid var(--line-soft);
+  flex-wrap: wrap;
 }
 
 .action-section .el-button {
   flex: 1;
+  min-width: 140px;
 }
 
 /* 空状态 */

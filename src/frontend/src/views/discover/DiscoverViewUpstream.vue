@@ -106,6 +106,28 @@ const handlePaperClick = async (paper: any) => {
   detailVisible.value = true
 }
 
+// 处理导入成功
+const onPaperImported = (paperId: string) => {
+  // 在上游列表中查找并标记
+  const upstreamItem = filteredUpstreamPapers.value.find(
+    p => p.id === paperId || p.semantic_id === paperId
+  )
+  if (upstreamItem) {
+    upstreamItem.in_library = true
+  }
+  // 在下游列表中查找并标记
+  const downstreamItem = filteredDownstreamPapers.value.find(
+    p => p.id === paperId || p.semantic_id === paperId
+  )
+  if (downstreamItem) {
+    downstreamItem.in_library = true
+  }
+  // 更新当前选中论文
+  if (detailPaper.value) {
+    detailPaper.value.in_library = true
+  }
+}
+
 </script>
 
 <template>
@@ -275,6 +297,7 @@ const handlePaperClick = async (paper: any) => {
     <PaperDetailSimple
       v-model="detailVisible"
       :paper="detailPaper"
+      @imported="onPaperImported"
     />
 
   </section>
