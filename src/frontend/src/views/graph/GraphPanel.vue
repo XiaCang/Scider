@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
+import { Download, Document } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../store/folder'
 import { usePaperStore } from '../../store/paper'
 import type { PaperKeyPoints } from '../../types/library'
@@ -68,6 +69,11 @@ let llmCache = { key: '', nodes: [] as GraphNode[], links: [] as GraphLink[], ca
 
 // 当前使用的分类（用于图例）
 let currentCategories = defaultCategories
+
+// 导出功能所需状态
+const isExporting = ref(false)
+let currentNodes: GraphNode[] = []
+let currentLinks: GraphLink[] = []
 
 // 生成缓存键（文件夹ID + 论文数量）
 function getCacheKey() {
@@ -342,6 +348,10 @@ async function loadLLMGraph(forceRefresh = false) {
 
 // ---- 图表渲染 ----
 const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
+  // 保存当前数据供导出使用
+  currentNodes = nodes
+  currentLinks = links
+
   if (!chartRef.value) return
   if (!chartInstance) chartInstance = echarts.init(chartRef.value)
 
@@ -511,6 +521,106 @@ const handleNavigateToPaper = (paperId: string) => {
   router.push({ name: 'paper-pdf', params: { paperId } }).catch(() => ElMessage.error('页面跳转失败'))
 }
 
+// ---- 导出功能实现 ----
+const handleExportImage = async (format: 'png' | 'svg') => {
+  if (!chartInstance) {
+    ElMessage.warning('图谱尚未加载完成')
+    return
+  }
+  isExporting.value = true
+  try {
+    // 短暂延迟确保渲染稳定
+    await new Promise(resolve => setTimeout(resolve, 100))
+    const url = chartInstance.getDataURL({
+      type: format,
+      pixelRatio: 2,
+      backgroundColor: '#fff'
+    })
+    const link = document.createElement('a')
+    link.download = `knowledge-graph-${graphType.value}.${format}`
+    link.href = url
+    link.click()
+    ElMessage.success(`导出 ${format.toUpperCase()} 成功`)
+  } catch (error) {
+    console.error('导出图片失败:', error)
+    ElMessage.error('导出图片失败')
+  } finally {
+    isExporting.value = false
+  }
+}
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const handleExportData = (cmd: 'json' | 'csv') => {
+  if (!currentNodes.length && !currentLinks.length) {
+    ElMessage.warning('当前没有图谱数据可导出')
+    return
+  }
+
+  if (cmd === 'json') {
+    const exportObj = {
+      graphType: graphType.value,
+      timestamp: new Date().toISOString(),
+      nodes: currentNodes.map(n => ({
+        id: n.id,
+        name: n.name,
+        type: n.type,
+        category: n.category,
+        paperId: n.paperId,
+        paperTitle: n.paperTitle,
+        content: n.content,
+        authors: n.paperInfo?.authors,
+        year: n.paperInfo?.year,
+        source: n.paperInfo?.source
+      })),
+      links: currentLinks.map(l => ({
+        source: l.source,
+        target: l.target,
+        relationType: l.relationType,
+        reason: l.reason
+      }))
+    }
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' })
+    downloadBlob(blob, `knowledge-graph-${graphType.value}-${Date.now()}.json`)
+    ElMessage.success('导出 JSON 成功')
+  } else if (cmd === 'csv') {
+    // 节点 CSV
+    const nodesCsvRows = [
+      ['id', 'name', 'type', 'category', 'paperId', 'authors', 'year', 'source'],
+      ...currentNodes.map(n => [
+        n.id,
+        n.name,
+        n.type,
+        n.category,
+        n.paperId || '',
+        n.paperInfo?.authors || '',
+        n.paperInfo?.year || '',
+        n.paperInfo?.source || ''
+      ])
+    ]
+    const nodesCsv = nodesCsvRows.map(row => row.join(',')).join('\n')
+    
+    // 边 CSV
+    const linksCsvRows = [
+      ['source', 'target', 'relationType', 'reason'],
+      ...currentLinks.map(l => [l.source, l.target, l.relationType, l.reason || ''])
+    ]
+    const linksCsv = linksCsvRows.map(row => row.join(',')).join('\n')
+    
+    // 添加 BOM 处理中文
+    downloadBlob(new Blob(['\uFEFF' + nodesCsv], { type: 'text/csv' }), `nodes-${graphType.value}-${Date.now()}.csv`)
+    downloadBlob(new Blob(['\uFEFF' + linksCsv], { type: 'text/csv' }), `links-${graphType.value}-${Date.now()}.csv`)
+    ElMessage.success('导出 CSV 文件成功')
+  }
+}
+
 onMounted(async () => {
   if (paperStore.papers.length === 0) await paperStore.loadPapers()
   await loadSimilarityGraph()
@@ -554,6 +664,32 @@ onUnmounted(() => {
           </el-checkbox>
         </div>
       </div>
+
+      <div class="header-right">
+        <el-dropdown trigger="click" @command="handleExportImage">
+          <el-button type="primary" plain size="small" :loading="isExporting">
+            <el-icon><Download /></el-icon> 导出图片
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="png">PNG 图片</el-dropdown-item>
+              <el-dropdown-item command="svg">SVG 矢量图</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-dropdown trigger="click" @command="handleExportData">
+          <el-button type="info" plain size="small">
+            <el-icon><Document /></el-icon> 导出数据
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="json">JSON 数据</el-dropdown-item>
+              <el-dropdown-item command="csv">CSV 数据（节点+边）</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
     </header>
 
     <div class="graph-canvas-wrapper">
@@ -581,7 +717,7 @@ onUnmounted(() => {
 .graph-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   padding: 1rem 0.5rem 1rem 0;
   margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--line-soft, #e8edf2);
@@ -593,6 +729,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.header-right {
+  display: flex;
+  gap: 12px;
 }
 
 .graph-type-switch {
