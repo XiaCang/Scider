@@ -331,6 +331,114 @@ curl -X POST http://127.0.0.1:8000/api/papers/upload \
 
 ---
 
-测试
+## 10. AI 问答场景化测试
+
+项目包含一套完整的 AI 问答场景化测试套件，覆盖标准问题集、WebSocket 流式推送、多轮对话上下文连贯性、以及 Celery 异步任务状态轮询。
+
+### 10.1 测试套件一览
+
+| 文件 | 说明 | 测试项 |
+|------|------|--------|
+| `tests/test_qa_scenario.py` | 标准问题集测试 | 13 道题 × 4 维度（事实提取/总结归纳/批判分析/交叉引用），含相关性评分 & 响应时间 SLA |
+| `tests/test_ws_conversation.py` | WebSocket 流式 + 多轮对话测试 | 7 项（连接/流式推送/上下文连贯/并发/清除历史/边界/断线重连） |
+| `tests/test_task_async_push.py` | Celery 异步任务推送测试 | Ping 任务轮询、状态流转、边界情况 |
+| `tests/run_qa_scenario_tests.py` | 统一运行入口 | 选择性/全量运行 |
+
+### 10.2 前置条件
+
+```bash
+# 1. 启动基础设施（MySQL + Redis）
+cd src/backend
+docker compose up -d mysql redis
+
+# 2. 执行数据库迁移
+cd src/backend/db
+alembic upgrade head
+
+# 3. 启动 FastAPI 后端
+cd src/backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 4. 启动 Celery Worker（新终端）
+cd src/backend
+celery -A app.worker:celery_app worker --loglevel=info --pool=solo --concurrency=1
+
+# 5. 确保有已解析完成的论文（通过前端上传 PDF，等待状态变为 CONFIRMED）
+```
+
+### 10.3 运行测试
+
+```bash
+# 统一运行（所有测试）
+cd src/backend
+python tests/run_qa_scenario_tests.py
+
+# 选择性运行
+python tests/run_qa_scenario_tests.py --qa-only    # 仅标准问题集
+python tests/run_qa_scenario_tests.py --ws-only     # 仅 WebSocket 测试
+python tests/run_qa_scenario_tests.py --task-only   # 仅异步任务测试
+
+# 或直接运行单个文件
+python tests/test_qa_scenario.py
+python tests/test_ws_conversation.py
+python tests/test_task_async_push.py
+
+# 也可以用 pytest（标准问题集）
+pytest tests/test_qa_scenario.py -v --tb=short
+```
+
+### 10.4 WebSocket 流式对话协议
+
+**连接地址：**
+```
+ws://localhost:8000/api/ws/chat?token=<JWT_TOKEN>&paper_id=<PAPER_ID>
+```
+
+**消息格式：**
+
+| 方向 | type | 说明 |
+|------|------|------|
+| 客户端 → 服务端 | `question` | `{"type":"question","content":"你的问题"}` |
+| 客户端 → 服务端 | `clear` | `{"type":"clear"}` 清除对话历史 |
+| 服务端 → 客户端 | `token` | `{"type":"token","content":"部分回答","index":0}` 流式推送 |
+| 服务端 → 客户端 | `done` | `{"type":"done","content":"完整回答","sources":[...]}` 完成 |
+| 服务端 → 客户端 | `error` | `{"type":"error","content":"错误信息"}` |
+
+### 10.5 标准问题集分类
+
+| 类别 | 题数 | 示例 |
+|------|------|------|
+| 事实提取 (FACT) | 4 | "这篇论文的主要研究问题是什么？" |
+| 总结归纳 (SUMM) | 3 | "请用三句话概括这篇论文的核心贡献。" |
+| 批判分析 (CRIT) | 3 | "这篇论文的局限性是什么？" |
+| 交叉引用 (CROSS) | 2 | "结合我做的笔记，这篇论文和之前阅读的论文有什么联系？" |
+
+### 10.6 评分与 SLA 指标
+
+- **相关性评分**: 0-5 分（基于回答长度、关键词覆盖、来源引用）
+- **响应时间 SLA**: ≤5s（目标 60%）/ ≤10s（目标 85%）/ ≤30s（目标 95%）
+- **综合评分**: 通过率(40%) + 相关性(40%) + 速度(20%)
+
+---
+
+## 11. OpenAPI 文档（Apifox / Postman 导入）
+
+已预生成 OpenAPI 3.1.0 规范文件，可直接导入 API 调试工具：
+
+```
+src/backend/openapi.json
+```
+
+**导入方式：**
+- **Apifox**: 新建项目 → 导入 → OpenAPI/Swagger → 选择该文件
+- **Postman**: File → Import → Upload Files → 选择该文件
+
+如需重新生成（例如修改路由后），在 `src/backend` 目录下执行：
+
+```bash
+python export_openapi.py
+```
+
+> 注意：WebSocket 端点 `/api/ws/chat` 不在 OpenAPI 规范中（Swagger 不支持描述 WebSocket），请参考 §10.4 的协议说明手动在 Apifox 中创建 WebSocket 调试。
 
 #

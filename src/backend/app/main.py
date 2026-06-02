@@ -17,6 +17,7 @@ from app.api.routes.folders import router as folders_router
 from app.api.routes.graph import router as graph_router
 from app.api.routes.graph_edit import router as graph_edit_router
 from app.api.routes.notes import router as notes_router
+from app.api.routes.chat_ws import router as chat_ws_router
 from app.api.routes.migration_router import router as migration_router
 from app.core.config import settings
 from middleware.jwt_middleware import JWTAuthMiddleware
@@ -95,6 +96,7 @@ app.include_router(folders_router, prefix=settings.API_PREFIX)
 app.include_router(graph_router, prefix=settings.API_PREFIX)
 app.include_router(graph_edit_router, prefix=settings.API_PREFIX)
 app.include_router(notes_router, prefix=settings.API_PREFIX)
+app.include_router(chat_ws_router, prefix=settings.API_PREFIX)
 app.include_router(migration_router, prefix=settings.API_PREFIX)
 app.include_router(auth_router)
 app.include_router(user_router)
