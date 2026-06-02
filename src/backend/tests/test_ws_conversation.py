@@ -28,6 +28,8 @@ import urllib.request
 import urllib.error
 from typing import Optional
 
+import pytest
+
 BASE_URL = "http://localhost:8000"
 WS_BASE_URL = "ws://localhost:8000"
 
@@ -40,6 +42,28 @@ except ImportError:
     import subprocess
     subprocess.check_call([sys.executable, "-m", "pip", "install", "websockets"])
     import websockets
+
+
+# ---------------------------------------------------------------------------
+# 健康检查（用于 skipif）
+# ---------------------------------------------------------------------------
+
+def _is_backend_alive() -> bool:
+    """检查后端服务是否正在运行，返回 True/False 而不退出。"""
+    try:
+        req = urllib.request.Request(f"{BASE_URL}/health")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            return data.get("status") == "ok"
+    except Exception:
+        return False
+
+
+# 所有 WebSocket 测试共享的跳过条件：后端服务不可用时跳过（而非 sys.exit）
+_needs_backend = pytest.mark.skipif(
+    not _is_backend_alive(),
+    reason="后端服务未运行 (http://localhost:8000)，跳过 WebSocket 测试",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +102,7 @@ def _get_token_and_paper() -> tuple:
         resp = _get("/health", None)
         assert resp.get("status") == "ok", "后端服务异常"
     except Exception as e:
-        print(f"❌ 后端服务未启动: {e}")
-        sys.exit(1)
+        raise RuntimeError(f"❌ 后端服务未启动: {e}")
 
     # 认证
     token = None
@@ -92,8 +115,7 @@ def _get_token_and_paper() -> tuple:
         password = os.getenv("TEST_PASSWORD", "your_password")
         resp = _post("/api/user/login", {"email": email, "password": password})
         if resp.get("code") != 0:
-            print(f"❌ 登录失败: {resp.get('msg')}")
-            sys.exit(1)
+            raise RuntimeError(f"❌ 登录失败: {resp.get('msg')}")
         token = resp["data"]["token"]
 
     # 获取论文
@@ -101,8 +123,7 @@ def _get_token_and_paper() -> tuple:
     papers = resp.get("data", [])
     confirmed = [p for p in papers if p.get("status") == "CONFIRMED"]
     if not confirmed:
-        print("❌ 无 CONFIRMED 论文")
-        sys.exit(1)
+        raise RuntimeError("❌ 无 CONFIRMED 论文")
 
     return token, confirmed[0]["id"]
 
@@ -488,9 +509,8 @@ class WSTestSuite:
 # pytest 入口
 # ---------------------------------------------------------------------------
 
-import pytest
 
-
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_connection():
     token, paper_id = _get_token_and_paper()
@@ -498,6 +518,7 @@ async def test_ws_connection():
     assert await suite.test_connection()
 
 
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_streaming():
     token, paper_id = _get_token_and_paper()
@@ -505,6 +526,7 @@ async def test_ws_streaming():
     assert await suite.test_streaming_push()
 
 
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_multi_turn():
     token, paper_id = _get_token_and_paper()
@@ -512,6 +534,7 @@ async def test_ws_multi_turn():
     assert await suite.test_multi_turn_context()
 
 
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_concurrent():
     token, paper_id = _get_token_and_paper()
@@ -519,6 +542,7 @@ async def test_ws_concurrent():
     assert await suite.test_concurrent_sessions()
 
 
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_clear_context():
     token, paper_id = _get_token_and_paper()
@@ -526,6 +550,7 @@ async def test_ws_clear_context():
     assert await suite.test_clear_context()
 
 
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_edge_cases():
     token, paper_id = _get_token_and_paper()
@@ -533,6 +558,7 @@ async def test_ws_edge_cases():
     assert await suite.test_edge_cases()
 
 
+@_needs_backend
 @pytest.mark.asyncio
 async def test_ws_reconnection():
     token, paper_id = _get_token_and_paper()
