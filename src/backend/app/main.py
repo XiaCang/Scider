@@ -1,4 +1,6 @@
 import os
+import sys
+import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,12 +18,15 @@ from app.api.routes.graph import router as graph_router
 from app.api.routes.graph_edit import router as graph_edit_router
 from app.api.routes.notes import router as notes_router
 from app.api.routes.chat_ws import router as chat_ws_router
+from app.api.routes.migration_router import router as migration_router
 from app.core.config import settings
 from middleware.jwt_middleware import JWTAuthMiddleware
 from module.user.controller.auth_router import router as auth_router
 from module.user.controller.user_router import router as user_router
 from module.user.controller.avatar_router import router as avatar_router
 from module.user.controller.llm_provider_router import router as llm_provider_router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -31,6 +36,38 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+
+@app.on_event("startup")
+async def run_db_migrations():
+    """
+    应用启动时自动执行数据库迁移，确保 schema 与代码一致。
+    可通过环境变量 SKIP_MIGRATIONS=true 跳过。
+    """
+    if os.getenv("SKIP_MIGRATIONS", "").lower() in ("true", "1", "yes"):
+        logger.info("SKIP_MIGRATIONS=true，跳过数据库迁移")
+        return
+
+    logger.info("正在执行数据库迁移（alembic upgrade head）...")
+    try:
+        from alembic.config import Config
+        from alembic import command
+
+        # alembic.ini 位于 db/alembic.ini
+        alembic_ini = Path(__file__).resolve().parent.parent / "db" / "alembic.ini"
+        if not alembic_ini.exists():
+            logger.warning("未找到 %s，跳过自动迁移", alembic_ini)
+            return
+
+        alembic_cfg = Config(str(alembic_ini))
+        # 将工作目录临时切换到 db/ 目录（env.py 中的 .env 加载依赖于相对路径）
+        old_cwd = Path.cwd()
+        os.chdir(str(alembic_ini.parent))
+        command.upgrade(alembic_cfg, "head")
+        os.chdir(str(old_cwd))
+        logger.info("数据库迁移完成")
+    except Exception as e:
+        logger.warning("数据库迁移失败（应用仍可启动，但 schema 可能不匹配）: %s", e)
 
 app.add_middleware(JWTAuthMiddleware)
 
@@ -60,6 +97,7 @@ app.include_router(graph_router, prefix=settings.API_PREFIX)
 app.include_router(graph_edit_router, prefix=settings.API_PREFIX)
 app.include_router(notes_router, prefix=settings.API_PREFIX)
 app.include_router(chat_ws_router, prefix=settings.API_PREFIX)
+app.include_router(migration_router, prefix=settings.API_PREFIX)
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(avatar_router)

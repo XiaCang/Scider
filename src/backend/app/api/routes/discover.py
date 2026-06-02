@@ -6,6 +6,7 @@ discover.py — 论文发现模块路由
   POST /discover/import              单篇导入（JWT 鉴权，尝试下载 PDF）
   GET  /discover/references/{id}     上游参考文献（含文库标注）
   GET  /discover/citations/{id}      下游引用文献（含文库标注）
+  GET  /discover/pdf-proxy           代理下载外部 PDF（避免 CORS）
 """
 
 import asyncio
@@ -44,6 +45,7 @@ class PaperItem(BaseModel):
     source_type: Optional[str] = Field(None, description="来源类型：conference | journal | arXiv | other")
     abstract: Optional[str] = Field(None, description="摘要")
     doi: Optional[str] = Field(None, description="DOI")
+    arxiv_id: Optional[str] = Field(None, description="arXiv ID")
     citation_count: Optional[int] = Field(None, description="引用次数")
     pdf_url: Optional[str] = Field(None, description="开放获取 PDF 链接")
     in_library: Optional[bool] = Field(None, description="是否已在用户文库中（仅上下游接口返回）")
@@ -178,6 +180,7 @@ class ImportRequest(BaseModel):
     authors: Optional[str] = Field(None, description="作者列表（逗号分隔）")
     abstract: Optional[str] = Field(None, description="摘要")
     doi: Optional[str] = Field(None, description="DOI")
+    arxiv_id: Optional[str] = Field(None, description="arXiv ID")
     year: Optional[int] = Field(None, description="发表年份")
     venue: Optional[str] = Field(None, description="发表会议/期刊")
     pdf_url: Optional[str] = Field(None, description="PDF 下载链接")
@@ -211,10 +214,17 @@ async def import_paper(body: ImportRequest, request: Request):
                 return JSONResponse(status_code=409, content=err(409, "论文已在文库中"))
 
         pdf_path, md5_hash, file_size = None, None, 0
+        # 收集所有可用的 PDF 下载链接：arXiv PDF 优先，其次 OA PDF
+        pdf_urls_to_try: list[str] = []
+        if body.arxiv_id:
+            pdf_urls_to_try.append(f"https://arxiv.org/pdf/{body.arxiv_id}.pdf")
         if body.pdf_url:
+            pdf_urls_to_try.append(body.pdf_url)
+
+        for url in pdf_urls_to_try:
             try:
                 async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                    resp = await client.get(body.pdf_url)
+                    resp = await client.get(url)
                     resp.raise_for_status()
                 content = resp.content
                 md5_hash = hashlib.md5(content).hexdigest()
@@ -224,9 +234,10 @@ async def import_paper(body: ImportRequest, request: Request):
                     with open(pdf_path, "wb") as f:
                         f.write(content)
                 file_size = len(content)
-                logger.info("discover.import pdf downloaded md5=%s size=%d", md5_hash, file_size)
+                logger.info("discover.import pdf downloaded url=%s md5=%s size=%d", url, md5_hash, file_size)
+                break  # 下载成功就退出循环
             except Exception as e:
-                logger.warning("discover.import pdf download failed url=%s error=%s", body.pdf_url, e)
+                logger.warning("discover.import pdf download failed url=%s error=%s", url, e)
 
         paper = Paper(
             title=body.title, authors=body.authors, abstract=body.abstract,
@@ -248,6 +259,53 @@ async def import_paper(body: ImportRequest, request: Request):
     else:
         logger.info("discover.import no pdf_url, paper created without parse task paper_id=%s", paper.id)
         return ok(data={"paper_id": paper.id, "task_id": None, "status": paper.status.value})
+
+
+# ---------------------------------------------------------------------------
+# PDF 代理下载
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/pdf-proxy",
+    summary="代理下载外部 PDF",
+    description="通过后端代理下载外部 PDF（避免前端跨域限制），要求用户已认证",
+)
+async def proxy_pdf(
+    request: Request,
+    pdf_url: str = Query(..., description="需要下载的 PDF 链接"),
+):
+    """代理下载外部 PDF 文件，避免前端直接请求外部资源时的跨域问题。"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse(status_code=401, content=err(401, "未认证"))
+
+    logger.info("discover.pdf_proxy user_id=%s pdf_url=%s", str(user["id"]), pdf_url[:120])
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            resp = await client.get(pdf_url)
+            resp.raise_for_status()
+        content = resp.content
+
+        # 从 URL 中提取文件名
+        filename = os.path.basename(pdf_url.split("?")[0])
+        if not filename.endswith(".pdf"):
+            filename = "paper.pdf"
+
+        from fastapi.responses import Response
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(content)),
+            },
+        )
+    except httpx.TimeoutException:
+        logger.error("discover.pdf_proxy timeout url=%s", pdf_url[:120])
+        return JSONResponse(status_code=504, content=err(504, "下载 PDF 超时"))
+    except Exception as e:
+        logger.error("discover.pdf_proxy failed url=%s error=%s", pdf_url[:120], e)
+        return JSONResponse(status_code=502, content=err(502, f"下载 PDF 失败: {str(e)}"))
 
 
 # ---------------------------------------------------------------------------

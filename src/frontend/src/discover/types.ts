@@ -28,6 +28,14 @@ export interface SearchResult {
   reason?: string
   /** 摘要简介（兼容旧推荐接口） */
   description?: string
+  /** 完整摘要 */
+  abstract?: string
+  /** DOI */
+  doi?: string
+  /** arXiv ID */
+  arxiv_id?: string
+  /** 是否已在用户文库中 */
+  in_library?: boolean
 }
 
 /** 上下游论文 */
@@ -45,6 +53,14 @@ export interface CitationPaper {
   in_library?: boolean
   /** 摘要简介（兼容旧数据） */
   description?: string
+  /** 完整摘要 */
+  abstract?: string
+  /** DOI */
+  doi?: string
+  /** arXiv ID */
+  arxiv_id?: string
+  /** 开放获取 PDF 链接 */
+  pdf_url?: string
 }
 
 /** Discover tab 模式 */
@@ -69,6 +85,7 @@ export interface ImportRequest {
   authors?: string | null
   abstract?: string | null
   doi?: string | null
+  arxiv_id?: string | null
   year?: number | null
   venue?: string | null
   pdf_url?: string | null
