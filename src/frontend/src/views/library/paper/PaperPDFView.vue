@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, ChatDotSquare, Plus, Delete as DeleteIcon } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, ChatDotSquare, Plus, Delete as DeleteIcon, ArrowLeftBold, FolderOpened, Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -16,6 +16,7 @@ import {
   fetchPaperNotesApi,
   createNoteApi,
   updateNoteApi,
+  deleteNoteApi,
   fetchNoteDetailApi,
 } from '../../../api/library'
 import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
@@ -56,6 +57,14 @@ const noteContent = ref('')
 const noteTitle = ref('')
 const noteSaving = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+const noteView = ref<'list' | 'edit'>('list')
+
+// 返回笔记列表
+const showNoteList = () => {
+  noteView.value = 'list'
+  activeNoteId.value = null
+  activeNote.value = null
+}
 
 // ============ 侧栏显隐 ============
 const showNoteSidebar = ref(true)
@@ -147,26 +156,27 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener('mouseup', onMouseUp)
 }
 
+// 组件卸载守卫，防止异步操作在卸载后执行
+let _isUnmounted = false
+
 // ============ 笔记操作 ============
 const loadNotes = async () => {
   try {
     const resp = await fetchPaperNotesApi(paperId.value)
     const data = ('data' in resp ? (resp as any).data : resp) as any
     noteList.value = data.items || []
-    if (noteList.value.length > 0) {
-      await selectNote(noteList.value[0].id)
-    } else {
-      activeNoteId.value = null
-      activeNote.value = null
-      noteContent.value = ''
-      noteTitle.value = ''
-    }
+    noteView.value = 'list'
+    activeNoteId.value = null
+    activeNote.value = null
+    noteContent.value = ''
+    noteTitle.value = ''
   } catch (e) {
     console.error('加载笔记列表失败:', e)
   }
 }
 
 const selectNote = async (noteId: string) => {
+  noteView.value = 'edit'
   activeNoteId.value = noteId
   try {
     const resp = await fetchNoteDetailApi(noteId)
@@ -219,7 +229,7 @@ const deleteNote = async (noteId: string) => {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
     })
-    // API 暂未提供删除接口，前端先移除
+    await deleteNoteApi(noteId)
     noteList.value = noteList.value.filter(n => n.id !== noteId)
     if (activeNoteId.value === noteId) {
       if (noteList.value.length > 0) {
@@ -241,6 +251,7 @@ const autoSaveNote = async () => {
   if (!activeNoteId.value || !noteContent.value.trim()) return
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
+    if (_isUnmounted) return
     noteSaving.value = true
     try {
       await updateNoteApi(activeNoteId.value!, {
@@ -248,6 +259,7 @@ const autoSaveNote = async () => {
         contentHtml: noteContent.value,
         contentFormat: 'markdown',
       })
+      if (_isUnmounted) return
       // 更新 noteList 中的标题和摘录
       const item = noteList.value.find(n => n.id === activeNoteId.value)
       if (item) {
@@ -256,10 +268,14 @@ const autoSaveNote = async () => {
         item.updatedAt = new Date().toISOString()
       }
     } catch (e) {
-      ElMessage.error('自动保存失败')
+      if (!_isUnmounted) {
+        ElMessage.error('自动保存失败')
+      }
       console.error(e)
     } finally {
-      noteSaving.value = false
+      if (!_isUnmounted) {
+        noteSaving.value = false
+      }
     }
   }, 500)
 }
@@ -662,6 +678,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  _isUnmounted = true
+  if (saveTimer) clearTimeout(saveTimer)
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeyDown)
   if (pagesContainer.value) {
@@ -806,22 +824,30 @@ onUnmounted(() => {
         />
       </div>
 
-      <!-- PDF连续滚动区域 -->
-      <div class="pdf-content" ref="pagesContainer">
-        <div v-if="pdfLoading" class="pdf-loading">
+      <!-- PDF 加载/错误/空状态 -->
+      <div v-if="pdfLoading" class="pdf-content pdf-content--state">
+        <div class="pdf-loading">
           <el-icon class="is-loading" :size="48"><Document /></el-icon>
           <p>正在加载PDF...</p>
         </div>
-        <div v-else-if="pdfError" class="pdf-error">
+      </div>
+      <div v-else-if="pdfError" class="pdf-content pdf-content--state">
+        <div class="pdf-error">
           <el-icon :size="48"><Document /></el-icon>
           <p>{{ pdfError }}</p>
           <el-button type="primary" @click="loadPaperData">重试</el-button>
         </div>
-        <div v-else-if="!pdfUrl" class="pdf-empty">
+      </div>
+      <div v-else-if="!pdfUrl" class="pdf-content pdf-content--state">
+        <div class="pdf-empty">
           <el-icon :size="48"><Document /></el-icon>
           <p>暂无PDF文件</p>
         </div>
       </div>
+
+      <!-- PDF连续滚动区域（始终在 DOM 中，通过 v-show 控制显隐 -->
+      <!-- 不含 Vue 子节点，纯 DOM 操作，避免与 VNode 冲突） -->
+      <div class="pdf-content" ref="pagesContainer" v-show="!pdfLoading && !pdfError && pdfUrl"></div>
     </main>
 
     <!-- 笔记栏拖拽分隔条 -->
@@ -838,58 +864,79 @@ onUnmounted(() => {
       :class="{ 'is-resizing': isResizing }"
       :style="{ width: noteSidebarWidth + 'px' }"
     >
-      <div class="note-header">
-        <h3 class="note-section-title">笔记</h3>
-        <div class="note-header-actions">
-          <span v-if="noteSaving" class="save-status">保存中...</span>
-          <span v-else-if="activeNoteId" class="save-status">已保存</span>
-          <el-button size="small" text @click="createNote">
-            <el-icon :size="14"><Plus /></el-icon>
-            新建
-          </el-button>
-        </div>
-      </div>
-
-      <!-- 笔记列表 -->
-      <div class="note-list" v-if="noteList.length > 0">
-        <div
-          v-for="item in noteList"
-          :key="item.id"
-          class="note-list-item"
-          :class="{ active: item.id === activeNoteId }"
-          @click="selectNote(item.id)"
-        >
-          <div class="note-list-item-title">{{ item.title || '无标题' }}</div>
-          <div class="note-list-item-excerpt">{{ item.excerpt || '空笔记' }}</div>
-          <div class="note-list-item-meta">
-            <span>{{ formatTime(item.updatedAt) }}</span>
-            <el-button
-              size="small"
-              text
-              @click.stop="deleteNote(item.id)"
-            >
-              <el-icon :size="12"><DeleteIcon /></el-icon>
+      <!-- ====== 笔记列表视图 ====== -->
+      <template v-if="noteView === 'list'">
+        <div class="note-header">
+          <h3 class="note-section-title">笔记</h3>
+          <div class="note-header-actions">
+            <el-button size="small" text @click="createNote">
+              <el-icon :size="14"><Plus /></el-icon>
+              新建
             </el-button>
           </div>
         </div>
-      </div>
 
-      <!-- 当前笔记编辑器 -->
-      <div v-if="activeNoteId" class="note-input-area">
-        <el-input
-          v-model="noteTitle"
-          size="small"
-          placeholder="笔记标题"
-          class="note-title-input"
-        />
-        <MarkdownEditor
-          v-model="noteContent"
-          placeholder="记录你对这篇论文的想法...（支持 Markdown，内容会自动保存）"
-        />
-      </div>
-      <div v-else class="note-input-area note-empty">
-        <p>暂无笔记，点击"新建"创建</p>
-      </div>
+        <!-- 笔记列表 -->
+        <div v-if="noteList.length > 0" class="note-list-view">
+          <div
+            v-for="item in noteList"
+            :key="item.id"
+            class="note-list-item"
+            @click="selectNote(item.id)"
+          >
+            <div class="note-list-item-title">{{ item.title || '无标题' }}</div>
+            <div class="note-list-item-excerpt">{{ item.excerpt || '空笔记' }}</div>
+            <div class="note-list-item-meta">
+              <span>{{ formatTime(item.updatedAt) }}</span>
+              <el-button
+                size="small"
+                text
+                @click.stop="deleteNote(item.id)"
+              >
+                <el-icon :size="12"><DeleteIcon /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <div v-else class="note-empty-view">
+          <p>暂无笔记，点击"新建"创建</p>
+        </div>
+      </template>
+
+      <!-- ====== 笔记编辑视图 ====== -->
+      <template v-if="noteView === 'edit' && activeNoteId">
+        <div class="note-header">
+          <el-button text size="small" @click="showNoteList">
+            <el-icon><ArrowLeftBold /></el-icon>
+          </el-button>
+          <h3 class="note-section-title note-section-title--flex">编辑笔记</h3>
+          <div class="note-header-actions">
+            <span v-if="noteSaving" class="save-status">保存中...</span>
+            <span v-else class="save-status">已保存</span>
+            <el-button size="small" text @click.stop="deleteNote(activeNoteId!)">
+              <el-icon :size="14"><DeleteIcon /></el-icon>
+            </el-button>
+          </div>
+        </div>
+
+        <div class="note-edit-area">
+          <el-input
+            v-model="noteTitle"
+            size="small"
+            placeholder="笔记标题"
+            class="note-title-input"
+          />
+
+          <div class="note-editor-wrapper">
+            <MarkdownEditor
+              v-model="noteContent"
+              :paper-id="paperId"
+              :note-id="activeNoteId"
+              placeholder="记录你对这篇论文的想法...（支持 Markdown，内容会自动保存）"
+            />
+          </div>
+        </div>
+      </template>
     </aside>
 
     <!-- 右键上下文菜单 -->
@@ -1110,28 +1157,21 @@ onUnmounted(() => {
 }
 
 /* ── 笔记列表 ── */
-.note-list {
-  max-height: 200px;
+.note-list-view {
+  flex: 1;
   overflow-y: auto;
-  border-bottom: 1px solid var(--line-soft);
-  flex-shrink: 0;
+  min-height: 0;
 }
 
-.note-list-item {
-  padding: 8px 12px;
+.note-list-view .note-list-item {
+  padding: 12px 14px;
   cursor: pointer;
   border-bottom: 1px solid #f0f0f0;
   transition: background 0.12s;
 }
 
-.note-list-item:hover {
+.note-list-view .note-list-item:hover {
   background: #f5f7fa;
-}
-
-.note-list-item.active {
-  background: #ecf5ff;
-  border-left: 3px solid var(--brand);
-  padding-left: 9px;
 }
 
 .note-list-item-title {
@@ -1159,6 +1199,15 @@ onUnmounted(() => {
   font-size: 0.65rem;
   color: #ccc;
   margin-top: 2px;
+}
+
+.note-empty-view {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bbb;
+  font-size: 0.82rem;
 }
 
 .note-title-input {
@@ -1218,64 +1267,55 @@ onUnmounted(() => {
   color: var(--text-primary);
   margin: 0;
 }
+.note-section-title--flex {
+  flex: 1;
+  margin-left: 4px;
+}
 .save-status {
   font-size: 0.7rem;
   color: var(--brand);
   opacity: 0.8;
 }
-.note-input-area {
+
+/* ── 笔记编辑区 ── */
+.note-edit-area {
   flex: 1;
-  padding: 0.55rem 0.8rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  padding: 0.4rem 0.8rem;
 }
 
-.note-input-area :deep(.md-editor) {
+.note-edit-area .note-title-input {
+  margin-bottom: 6px;
+}
+
+/* ── 编辑器容器 ── */
+.note-editor-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.note-editor-wrapper :deep(.md-editor) {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-/* 分栏模式 */
-.note-input-area :deep(.mode-split .md-preview-section) {
+/* 分栏/预览模式 - 适配新布局 */
+.note-editor-wrapper :deep(.mode-split .md-preview-section),
+.note-editor-wrapper :deep(.mode-live .md-live) {
   flex: 1;
   min-height: 0;
 }
 
-.note-input-area :deep(.mode-split .md-preview) {
+.note-editor-wrapper :deep(.mode-split .md-preview) {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-}
-
-/* 实时预览模式 */
-.note-input-area :deep(.mode-live .md-live) {
-  flex: 1;
-  min-height: 0;
-}
-.note-info {
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--line-soft);
-  margin-top: auto;
-}
-.info-text {
-  font-size: 0.7rem;
-  color: var(--text-tertiary);
-}
-.note-sidebar.mobile {
-  position: fixed;
-  top: 60px;
-  right: 0;
-  bottom: 0;
-  z-index: 100;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-  transform: translateX(100%);
-}
-.note-sidebar.mobile.visible {
-  transform: translateX(0);
 }
 
 /* 浮动搜索浮层 */

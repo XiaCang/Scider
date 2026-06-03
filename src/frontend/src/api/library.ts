@@ -174,7 +174,13 @@ export const updateNoteApi = (noteId: string, data: {
   request.patch<ApiResponse<PaperNote>>(`/notes/${noteId}`, data)
 
 /**
- * 笔记图片上传
+ * 删除笔记
+ */
+export const deleteNoteApi = (noteId: string) =>
+  request.delete<ApiResponse<null>>(`/notes/${noteId}`)
+
+/**
+ * 上传笔记图片
  */
 export const uploadNoteImageApi = (
   paperId: string,
@@ -186,9 +192,14 @@ export const uploadNoteImageApi = (
   return request.post<ApiResponse<NoteUploadImageResponse>>(
     `/notes/uploads?paperId=${paperId}&noteId=${noteId}`,
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
   )
 }
+
+/**
+ * 获取笔记图片列表
+ */
+export const fetchNoteImagesApi = (noteId: string) =>
+  request.get<ApiResponse<{ total: number; items: NoteImage[] }>>(`/notes/${noteId}/images`)
 
 // ==================== PDF上传相关接口 ====================
 
