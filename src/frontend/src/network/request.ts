@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios'
-import type { AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosRequestConfig } from 'axios'
 import { authStorage } from '../utils/auth_storage'
 import { ElMessage } from 'element-plus'
 
@@ -43,10 +43,9 @@ function extractErrorMessage(error: AxiosError<{ message?: string; msg?: string 
 
 instance.interceptors.response.use(
   (response) => {
-    // 对于 blob 响应，不检查 JSON 结构，直接返回数据
     if (response.config.responseType === 'blob') {
       // 检查 Content-Type 是否为 JSON（说明后端返回了错误）
-      const contentType = response.headers['content-type'] || ''
+      const contentType = (response.headers['content-type'] as string) || ''
       if (contentType.includes('application/json')) {
         // 将 blob 转为文本以读取错误信息
         return new Promise((_, reject) => {
