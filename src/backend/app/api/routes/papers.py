@@ -187,7 +187,13 @@ async def get_paper_pdf_info(
     from app.core.config import settings
     
     upload_dir = Path(settings.UPLOAD_DIR).resolve()
-    pdf_path = Path(paper.pdf_path).resolve()
+    raw_pdf_path = paper.pdf_path
+    
+    # 如果是相对路径，基于当前工作目录转为绝对路径
+    if not os.path.isabs(raw_pdf_path):
+        raw_pdf_path = os.path.join(os.getcwd(), raw_pdf_path)
+    
+    pdf_path = Path(raw_pdf_path).resolve()
     
     # 计算相对于uploads目录的路径
     try:
@@ -198,10 +204,10 @@ async def get_paper_pdf_info(
         pdf_filename = pdf_path.name
         pdf_url = f"/uploads/{pdf_filename}"
     
-    print(f"[DEBUG] PDF path: {paper.pdf_path}")
-    print(f"[DEBUG] Upload dir: {upload_dir}")
-    print(f"[DEBUG] Relative path: {relative_path if 'relative_path' in locals() else 'N/A'}")
-    print(f"[DEBUG] PDF URL: {pdf_url}")
+    # 同时检查PDF文件是否存在
+    if not pdf_path.exists():
+        logger.warning("pdf-info: PDF文件不存在 path=%s", pdf_path)
+        # 不立即报错，前端仍可尝试通过 /pdf-file 接口获取
     
     # ── 4. 获取PDF页数（可选，前端可以自行获取） ──
     # 这里暂时返回0，前端vue-pdf-embed会自动获取页数
@@ -558,12 +564,21 @@ async def get_pdf_file(
 
     pdf_path = paper.pdf_path
     if not os.path.exists(pdf_path):
-        return error(msg="PDF文件不存在", code=404, data=None, status_code=404)
+        logger.warning("PDF文件不存在: %s (paper_id=%s)", pdf_path, paper_id)
+        return error(msg="PDF文件不存在或已被删除", code=404, data=None, status_code=404)
+
+    # 确保 pdf_path 是绝对路径（兼容相对路径存储的情况）
+    if not os.path.isabs(pdf_path):
+        pdf_path = os.path.join(os.getcwd(), pdf_path)
+
+    if not os.path.exists(pdf_path):
+        logger.warning("PDF文件不存在(尝试绝对路径后): %s", pdf_path)
+        return error(msg="PDF文件不存在或已被删除", code=404, data=None, status_code=404)
 
     filename = f"{paper.title}.pdf" if paper.title else "paper.pdf"
     return FileResponse(
         path=pdf_path,
-        media_type="application/octet-stream",  # 避免 IDM 等下载工具拦截
+        media_type="application/pdf",  # 使用正确的 PDF MIME 类型
         filename=filename,
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
