@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { Promotion, Delete, ChatDotSquare } from '@element-plus/icons-vue'
-import { sendChatMessageApi } from '../api/chat'
+import { createChatConnection } from '../api/chat'
 import type { ChatMessage } from '../types/library'
 
 const props = defineProps<{
@@ -13,75 +13,111 @@ const inputText = ref('')
 const sending = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 
+// 流式构建中的消息 ID
+let streamingMsgId = ''
+
+let chatConnection: ReturnType<typeof createChatConnection> | null = null
+
+onMounted(() => {
+  chatConnection = createChatConnection(props.paperId, {
+    onToken: (token) => {
+      // 流式 token 追加
+      const last = messages.value[messages.value.length - 1]
+      if (last && last.id === streamingMsgId) {
+        last.content += token
+      } else {
+        messages.value.push({
+          id: streamingMsgId,
+          role: 'assistant',
+          content: token,
+          createdAt: new Date().toISOString(),
+        })
+      }
+      scrollToBottom()
+    },
+    onDone: (fullContent, _sources) => {
+      // 流式完成，标记为已结束
+      const last = messages.value[messages.value.length - 1]
+      if (last && last.id === streamingMsgId) {
+        last.content = fullContent
+      }
+      sending.value = false
+      streamingMsgId = ''
+      scrollToBottom()
+    },
+    onError: (error) => {
+      if (streamingMsgId) {
+        const last = messages.value[messages.value.length - 1]
+        if (last && last.id === streamingMsgId) {
+          last.content += `\n\n**${error}**`
+        }
+        streamingMsgId = ''
+      } else {
+        messages.value.push({
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `⚠️ ${error}`,
+          createdAt: new Date().toISOString(),
+        })
+      }
+      sending.value = false
+      scrollToBottom()
+    },
+  })
+})
+
+onUnmounted(() => {
+  chatConnection?.close()
+  chatConnection = null
+})
+
 const sendMessage = async () => {
   const text = inputText.value.trim()
-  if (!text || sending.value) return
+  if (!text || sending.value || !chatConnection) return
 
-  const userMsg: ChatMessage = {
+  messages.value.push({
     id: Date.now().toString(),
     role: 'user',
     content: text,
     createdAt: new Date().toISOString(),
-  }
-  messages.value.push(userMsg)
+  })
   inputText.value = ''
   sending.value = true
+  streamingMsgId = (Date.now() + 1).toString()
 
-  try {
-    const reply = await sendChatMessageApi(props.paperId, text)
-    messages.value.push(reply)
-  } catch {
-    messages.value.push({
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '（请求失败，请重试）',
-      createdAt: new Date().toISOString(),
-    })
-  } finally {
-    sending.value = false
-  }
-
+  chatConnection.send(text)
   await nextTick()
   scrollToBottom()
 }
 
-/** 从外部追加上下文（右键选中文本提问） */
 const askWithContext = async (selectedText: string) => {
-  const userMsg: ChatMessage = {
+  if (!chatConnection) return
+  const question = `关于这段文字：「${selectedText.slice(0, 200)}」，请解释一下。`
+  messages.value.push({
     id: Date.now().toString(),
     role: 'user',
-    content: `关于这段文字：「${selectedText.slice(0, 200)}」，请解释一下。`,
+    content: question,
     createdAt: new Date().toISOString(),
-  }
-  messages.value.push(userMsg)
+  })
   sending.value = true
+  streamingMsgId = (Date.now() + 1).toString()
 
-  try {
-    const reply = await sendChatMessageApi(props.paperId, selectedText)
-    messages.value.push(reply)
-  } catch {
-    messages.value.push({
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '（请求失败，请重试）',
-      createdAt: new Date().toISOString(),
-    })
-  } finally {
-    sending.value = false
-  }
-
+  chatConnection.send(question)
   await nextTick()
   scrollToBottom()
 }
 
 const clearMessages = () => {
   messages.value = []
+  chatConnection?.clear()
 }
 
 const scrollToBottom = () => {
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-  }
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+  })
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -125,7 +161,7 @@ defineExpose({ askWithContext })
         <div class="ai-msg-label">{{ msg.role === 'user' ? '你' : 'AI' }}</div>
         <div class="ai-msg-content">{{ msg.content }}</div>
       </div>
-      <div v-if="sending" class="ai-msg assistant">
+      <div v-if="sending && !streamingMsgId" class="ai-msg assistant">
         <div class="ai-msg-label">AI</div>
         <div class="ai-msg-content ai-thinking">思考中...</div>
       </div>

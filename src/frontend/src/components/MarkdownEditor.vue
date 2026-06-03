@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -12,12 +13,16 @@ import Highlight from '@tiptap/extension-highlight'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
 import {
-  List, Sort, Picture, Cpu, CollectionTag, Link,
+  List, Sort, Picture, Cpu, CollectionTag, Link, FolderOpened, Close, Plus,
 } from '@element-plus/icons-vue'
+import type { NoteImage } from '../types/library'
+import { uploadNoteImageApi, fetchNoteImagesApi } from '../api/library'
 
 const props = defineProps<{
   modelValue: string
   placeholder?: string
+  paperId?: string
+  noteId?: string
 }>()
 
 const emit = defineEmits<{
@@ -40,7 +45,14 @@ const turndown = new TurndownService({
 
 function markdownToHtml(markdown: string): string {
   if (!markdown.trim()) return ''
-  return marked.parse(markdown, { breaks: true }) as string
+  // 解码 HTML 实体防止累积（如 > → &gt; → &amp;gt;）
+  const decoded = markdown
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+  return marked.parse(decoded, { breaks: true }) as string
 }
 
 function htmlToMarkdown(html: string): string {
@@ -132,6 +144,57 @@ const setMode = (mode: PreviewMode) => {
 // 撤销 / 重做
 const undo = () => editor.value?.chain().focus().undo().run()
 const redo = () => editor.value?.chain().focus().redo().run()
+
+// ---- 图片上传与浏览 ----
+const uploadingImage = ref(false)
+const showImagePanel = ref(false)
+const noteImages = ref<NoteImage[]>([])
+
+const doUploadImage = async (file: File) => {
+  if (!props.paperId || !props.noteId) {
+    // 无 noteId 时退化到原始插入图片功能
+    const url = window.prompt('输入图片链接：')
+    if (url) editor.value?.chain().focus().setImage({ src: url }).run()
+    return
+  }
+  uploadingImage.value = true
+  try {
+    const resp = await uploadNoteImageApi(props.paperId, props.noteId, file)
+    const data = ('data' in resp ? (resp as any).data : resp) as any
+    const imgData = data.data || data
+    // Tiptap live 模式：直接插入图片
+    if (editor.value) {
+      editor.value.chain().focus().setImage({ src: imgData.url }).run()
+    }
+    ElMessage.success('图片上传成功')
+  } catch (e) {
+    ElMessage.error('图片上传失败')
+    console.error(e)
+  } finally {
+    uploadingImage.value = false
+  }
+}
+
+const openImagePanel = async () => {
+  showImagePanel.value = !showImagePanel.value
+  if (showImagePanel.value && props.noteId) {
+    try {
+      const resp = await fetchNoteImagesApi(props.noteId)
+      const data = ('data' in resp ? (resp as any).data : resp) as any
+      const imgData = data.data || data
+      noteImages.value = imgData.items || []
+    } catch (e) {
+      console.error('获取图片列表失败:', e)
+    }
+  }
+}
+
+const insertNoteImage = (url: string) => {
+  if (editor.value) {
+    editor.value.chain().focus().setImage({ src: url }).run()
+  }
+  showImagePanel.value = false
+}
 
 // 分栏模式：textarea 输入同步
 const splitValue = ref(props.modelValue)
@@ -265,9 +328,21 @@ const onSplitInput = (e: Event) => {
       <div class="md-separator" />
 
       <div class="md-toolbar-group">
-        <el-tooltip content="插入图片" placement="top" :show-after="400">
-          <button class="md-btn" @click="insertImage" tabindex="-1">
-            <el-icon :size="15"><Picture /></el-icon>
+        <el-tooltip content="上传图片" placement="top" :show-after="400">
+          <label class="md-btn md-btn--upload" :class="{ 'is-loading': uploadingImage }" tabindex="-1">
+            <el-icon :size="15"><Plus /></el-icon>
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              :disabled="uploadingImage"
+              @change="(e: any) => { const f = e.target?.files?.[0]; if (f) { doUploadImage(f); e.target.value = ''; } }"
+            />
+          </label>
+        </el-tooltip>
+        <el-tooltip content="从已上传图片插入" placement="top" :show-after="400">
+          <button class="md-btn" :class="{ 'is-active': showImagePanel }" @click="openImagePanel" tabindex="-1">
+            <el-icon :size="15"><FolderOpened /></el-icon>
           </button>
         </el-tooltip>
         <el-tooltip content="插入链接" placement="top" :show-after="400">
@@ -297,8 +372,33 @@ const onSplitInput = (e: Event) => {
       </div>
     </div>
 
+    <!-- 图片浏览面板 -->
+    <div v-if="showImagePanel" class="md-image-panel">
+      <div class="md-image-panel-header">
+        <span>已上传图片</span>
+        <button class="md-image-panel-close" @click="showImagePanel = false">
+          <el-icon :size="12"><Close /></el-icon>
+        </button>
+      </div>
+      <div v-if="noteImages.length === 0" class="md-image-panel-empty">
+        暂无图片，请先上传
+      </div>
+      <div v-else class="md-image-panel-grid">
+        <div
+          v-for="img in noteImages"
+          :key="img.id"
+          class="md-image-card"
+          @click="insertNoteImage(img.url)"
+          :title="img.filename"
+        >
+          <img :src="img.url" :alt="img.filename" />
+          <div class="md-image-card-name">{{ img.filename || 'image' }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 所见即所得模式 -->
-    <div v-if="previewMode === 'live'" class="md-live">
+    <div v-if="previewMode === 'live' && editor" class="md-live">
       <EditorContent :editor="editor" class="tiptap-editor" />
     </div>
 
@@ -384,6 +484,15 @@ const onSplitInput = (e: Event) => {
   color: #1a73e8;
 }
 
+.md-btn--upload {
+  position: relative;
+  cursor: pointer;
+}
+.md-btn--upload.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .mode-btn {
   width: auto;
   padding: 0 8px;
@@ -393,6 +502,74 @@ const onSplitInput = (e: Event) => {
 
 .md-toolbar-spacer {
   flex: 1;
+}
+
+/* ── 图片浏览面板 ── */
+.md-image-panel {
+  border-bottom: 1px solid var(--line-soft);
+  background: #f9fafb;
+  flex-shrink: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.md-image-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #667085;
+  border-bottom: 1px solid #eef2f6;
+}
+.md-image-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: #999;
+  display: flex;
+  align-items: center;
+}
+.md-image-panel-close:hover { color: #333; }
+.md-image-panel-empty {
+  text-align: center;
+  color: #bbb;
+  font-size: 0.75rem;
+  padding: 16px 0;
+}
+.md-image-panel-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+}
+.md-image-card {
+  width: calc(50% - 3px);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: white;
+}
+.md-image-card:hover {
+  border-color: var(--brand);
+  box-shadow: 0 2px 8px rgba(74, 157, 154, 0.15);
+}
+.md-image-card img {
+  width: 100%;
+  height: 70px;
+  object-fit: cover;
+  display: block;
+}
+.md-image-card-name {
+  font-size: 0.62rem;
+  color: #8899a8;
+  padding: 2px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 所见即所得编辑区 */

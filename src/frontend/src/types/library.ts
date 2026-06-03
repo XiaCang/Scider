@@ -56,18 +56,20 @@ export interface PaperNote {
   id: string
   paperId: string
   title: string
-  contentHtml: string
-  contentText?: string
+  contentHtml: string | null
+  contentText?: string | null
   contentFormat: string
   images?: NoteImage[]
-  createdAt: string
-  updatedAt: string
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export interface NoteImage {
   id: string
   url: string
+  filename?: string
   orderIndex: number
+  createdAt?: string | null
 }
 
 export interface NoteListItem {
