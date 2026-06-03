@@ -115,7 +115,7 @@ const clearMessages = () => {
 }
 
 const scrollToBottom = () => {
-  nextTick(() => {
+  void nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }

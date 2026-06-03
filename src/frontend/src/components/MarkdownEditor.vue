@@ -13,7 +13,7 @@ import Highlight from '@tiptap/extension-highlight'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
 import {
-  List, Sort, Picture, Cpu, CollectionTag, Link, FolderOpened, Close, Plus,
+  List, Sort, Cpu, CollectionTag, Link, FolderOpened, Close, Plus,
 } from '@element-plus/icons-vue'
 import type { NoteImage } from '../types/library'
 import { uploadNoteImageApi, fetchNoteImagesApi } from '../api/library'
@@ -126,11 +126,6 @@ const toggleCode = () => editor.value?.chain().focus().toggleCode().run()
 const toggleCodeBlock = () => editor.value?.chain().focus().toggleCodeBlock().run()
 const toggleBlockquote = () => editor.value?.chain().focus().toggleBlockquote().run()
 const toggleHighlight = () => editor.value?.chain().focus().toggleHighlight().run()
-
-const insertImage = () => {
-  const url = window.prompt('输入图片链接：')
-  if (url) editor.value?.chain().focus().setImage({ src: url }).run()
-}
 
 const setLink = () => {
   const url = window.prompt('输入链接地址：')

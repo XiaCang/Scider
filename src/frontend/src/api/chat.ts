@@ -17,7 +17,7 @@ export function createChatConnection(paperId: string, callbacks: ChatEventCallba
   const token = authStorage.getToken()
   if (!token) {
     callbacks.onError('未登录，请重新登录')
-    return { send: () => {}, close: () => {}, connected: false }
+    return { send: () => {}, clear: () => {}, close: () => {}, connected: false }
   }
 
   const url = `${WS_BASE}/ws/chat?token=${encodeURIComponent(token)}&paper_id=${encodeURIComponent(paperId)}`
