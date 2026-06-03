@@ -339,6 +339,7 @@ const handleScroll = () => {
 
 // ============ 渲染任务管理 ============
 let renderGeneration = 0
+const RENDER_BATCH_SIZE = 5 // 每批渲染页数，避免阻塞UI
 
 const renderAllPagesWithScale = async (targetScale: number) => {
   const doc = pdfDoc.value
@@ -362,6 +363,8 @@ const renderAllPagesWithScale = async (targetScale: number) => {
   } else {
     pagesContainer.value.querySelectorAll('.pdf-page-inner').forEach(el => el.remove())
   }
+
+  let renderedCount = 0
 
   for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
     if (gen !== renderGeneration) return
@@ -433,6 +436,13 @@ const renderAllPagesWithScale = async (targetScale: number) => {
       await textLayer.render()
     } catch (e) {
       page.cleanup()
+    }
+
+    renderedCount++
+
+    // 每渲染完一批，让出主线程以保持 UI 响应
+    if (renderedCount % RENDER_BATCH_SIZE === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0))
     }
   }
 }
@@ -559,7 +569,7 @@ const loadPdfDocument = async () => {
   pdfLoading.value = true
   pdfError.value = ''
   try {
-    const loadingTask = pdfjsLib.getDocument({url:pdfUrl.value,useSystemFonts:false})
+    const loadingTask = pdfjsLib.getDocument({ url: pdfUrl.value, useSystemFonts: false })
     const doc = await loadingTask.promise
     pdfDoc.value = markRaw(doc)
     totalPages.value = pdfDoc.value.numPages
@@ -573,7 +583,9 @@ const loadPdfDocument = async () => {
     zoomScale.value = fitScale
     firstPage.cleanup()
 
+    // 渲染完成后才移除 loading 状态
     await renderAllPagesWithScale(zoomScale.value)
+    pdfLoading.value = false
 
     if (pagesContainer.value) {
       pagesContainer.value.addEventListener('scroll', handleScroll)
@@ -584,7 +596,6 @@ const loadPdfDocument = async () => {
   } catch (err) {
     console.error('PDF 加载失败:', err)
     pdfError.value = 'PDF 文件加载失败，请检查文件是否有效'
-  } finally {
     pdfLoading.value = false
   }
 }
@@ -604,6 +615,8 @@ const loadPaperData = async () => {
     }
     if (!pdfInfo || !pdfInfo.pdfUrl) throw new Error('PDF信息不完整')
     paperTitle.value = pdfInfo.title || '未命名论文'
+
+    // 获取 PDF 文件流
     try {
       if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
       const pdfBlob = await fetchPaperPdfFileApi(paperId.value)
@@ -612,18 +625,22 @@ const loadPaperData = async () => {
       pdfUrl.value = pdfObjectUrl
     } catch (err) {
       console.error('PDF文件流加载失败:', err)
-      pdfError.value = 'PDF文件加载失败'
+      pdfError.value = 'PDF文件加载失败，请检查后端服务是否正常'
       pdfLoading.value = false
       return
     }
+
+    // 加载并渲染 PDF 文档（内部管理 loading 状态）
     await loadPdfDocument()
-    // 加载笔记列表
-    await loadNotes()
+
+    // 加载笔记列表（仅当 PDF 加载成功时）
+    if (!pdfError.value) {
+      await loadNotes()
+    }
   } catch (error) {
     pdfError.value = error instanceof Error ? error.message : '加载失败'
     ElMessage.error('加载论文失败: ' + pdfError.value)
     console.error(error)
-  } finally {
     pdfLoading.value = false
   }
 }
@@ -790,7 +807,7 @@ onUnmounted(() => {
       </div>
 
       <!-- PDF连续滚动区域 -->
-      <div class="pdf-content" ref="pagesContainer" v-once>
+      <div class="pdf-content" ref="pagesContainer">
         <div v-if="pdfLoading" class="pdf-loading">
           <el-icon class="is-loading" :size="48"><Document /></el-icon>
           <p>正在加载PDF...</p>

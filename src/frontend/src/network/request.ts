@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios'
-import type { AxiosRequestConfig } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 import { authStorage } from '../utils/auth_storage'
 import { ElMessage } from 'element-plus'
 
@@ -43,6 +43,30 @@ function extractErrorMessage(error: AxiosError<{ message?: string; msg?: string 
 
 instance.interceptors.response.use(
   (response) => {
+    // 对于 blob 响应，不检查 JSON 结构，直接返回数据
+    if (response.config.responseType === 'blob') {
+      // 检查 Content-Type 是否为 JSON（说明后端返回了错误）
+      const contentType = response.headers['content-type'] || ''
+      if (contentType.includes('application/json')) {
+        // 将 blob 转为文本以读取错误信息
+        return new Promise((_, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            try {
+              const errData = JSON.parse(reader.result as string)
+              const errMsg = errData.msg || errData.message || '请求失败'
+              reject(new Error(errMsg))
+            } catch {
+              reject(new Error('PDF 文件加载失败'))
+            }
+          }
+          reader.onerror = () => reject(new Error('PDF 文件加载失败'))
+          reader.readAsText(response.data as Blob)
+        })
+      }
+      return response.data
+    }
+
     const body = response.data as { code: number; msg?: string; message?: string } | undefined
 
     // 后端返回了业务错误码 (code !== 0)

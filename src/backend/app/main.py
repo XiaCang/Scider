@@ -50,22 +50,15 @@ async def run_db_migrations():
 
     logger.info("正在执行数据库迁移（alembic upgrade head）...")
     try:
-        from alembic.config import Config
-        from alembic import command
+        # 使用 SQLAlchemy create_all 同步表结构，避免 env.py 中 asyncio.run() 与已有事件循环冲突
+        from db.session import get_async_engine
+        from db.models import Base
 
-        # alembic.ini 位于 db/alembic.ini
-        alembic_ini = Path(__file__).resolve().parent.parent / "db" / "alembic.ini"
-        if not alembic_ini.exists():
-            logger.warning("未找到 %s，跳过自动迁移", alembic_ini)
-            return
-
-        alembic_cfg = Config(str(alembic_ini))
-        # 将工作目录临时切换到 db/ 目录（env.py 中的 .env 加载依赖于相对路径）
-        old_cwd = Path.cwd()
-        os.chdir(str(alembic_ini.parent))
-        command.upgrade(alembic_cfg, "head")
-        os.chdir(str(old_cwd))
-        logger.info("数据库迁移完成")
+        engine = get_async_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await engine.dispose()
+        logger.info("数据库迁移完成（通过 create_all 同步 schema）")
     except Exception as e:
         logger.warning("数据库迁移失败（应用仍可启动，但 schema 可能不匹配）: %s", e)
 
