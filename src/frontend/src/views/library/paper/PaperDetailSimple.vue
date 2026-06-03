@@ -78,10 +78,10 @@ const handleJumpToSource = () => {
   }
 }
 
-// ── 在浏览器中查看 PDF ──
-const handleOpenInBrowser = () => {
-  if (effectivePdfUrl.value) {
-    window.open(effectivePdfUrl.value, '_blank')
+// ── 在 arXiv 中查看 ──
+const handleOpenArxiv = () => {
+  if (arxivAbsUrl.value) {
+    window.open(arxivAbsUrl.value, '_blank')
   }
 }
 
@@ -236,7 +236,7 @@ const statusClassMap: Record<string, string> = {
           v-if="isArxiv"
           size="large"
           :disabled="!arxivAbsUrl"
-          @click="handleOpenInBrowser"
+          @click="handleOpenArxiv"
         >
           <el-icon><Promotion /></el-icon>
           在 arXiv 中查看
