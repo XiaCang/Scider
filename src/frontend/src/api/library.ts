@@ -1,6 +1,6 @@
 import request from '../network/request'
 
-import type {LibraryPaper, PaperKeyPoints, PaperNote, NoteListItem, NoteUploadImageResponse, PaperPdfInfo } from '../types/library'
+import type { LibraryPaper, PaperKeyPoints, PaperNote, NoteListItem, NoteUploadImageResponse, NoteImage, PaperPdfInfo } from '../types/library'
 import type { Folder } from '../types/folder'
 import type { ApiResponse } from '../types/auth'
 

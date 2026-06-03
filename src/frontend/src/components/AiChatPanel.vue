@@ -36,10 +36,12 @@ onMounted(() => {
       scrollToBottom()
     },
     onDone: (fullContent, _sources) => {
-      // 流式完成，标记为已结束
-      const last = messages.value[messages.value.length - 1]
-      if (last && last.id === streamingMsgId) {
-        last.content = fullContent
+      // 流式完成：只有 done.content 非空时才覆盖（否则保留 onToken 累积的内容）
+      if (fullContent) {
+        const last = messages.value[messages.value.length - 1]
+        if (last && last.id === streamingMsgId) {
+          last.content = fullContent
+        }
       }
       sending.value = false
       streamingMsgId = ''
@@ -113,7 +115,7 @@ const clearMessages = () => {
 }
 
 const scrollToBottom = () => {
-  nextTick(() => {
+  void nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
