@@ -9,6 +9,7 @@ from module.user.service.auth_service import (
 )
 from utils.response import success, error
 from utils.redis_client import get_redis
+from utils.rate_limit import incr_and_check
 import random
 import os
 import logging
@@ -17,6 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
+
+# rate limit defaults (can be overridden via env)
+EMAIL_LIMIT = int(os.getenv("LOGIN_EMAIL_LIMIT", "5"))
+EMAIL_PERIOD = int(os.getenv("LOGIN_EMAIL_PERIOD", "900"))  # seconds (15m)
+IP_LIMIT = int(os.getenv("LOGIN_IP_LIMIT", "10"))
+IP_PERIOD = int(os.getenv("LOGIN_IP_PERIOD", "3600"))  # seconds (1h)
 
 
 class RegisterIn(BaseModel):
@@ -66,9 +73,30 @@ async def register(payload: RegisterIn):
 
 
 @router.post("/api/user/login")
-async def login(payload: LoginIn):
+async def login(payload: LoginIn, request: Request):
     try:
+        # rate limit checks (per-account and per-IP)
+        r = get_redis()
+        ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+        if isinstance(ip, str) and "," in ip:
+            ip = ip.split(",")[0].strip()
+        limited = False
+        try:
+            limited_email, _ = await incr_and_check(r, f"rl:login:email:{payload.email}", EMAIL_LIMIT, EMAIL_PERIOD)
+            limited_ip, _ = await incr_and_check(r, f"rl:login:ip:{ip}", IP_LIMIT, IP_PERIOD)
+            limited = limited_email or limited_ip
+        except Exception:
+            logger.exception("rate limit check failed")
+
+        if limited:
+            return error(msg="操作过于频繁，请稍后再试", code=429, data=None, status_code=200)
+
         token, user = await authenticate_user(payload.email, payload.password)
+        # on successful login, clear account-specific counter
+        try:
+            await r.delete(f"rl:login:email:{payload.email}")
+        except Exception:
+            logger.exception("failed to clear login rate limit key")
         data = {"token": token, "userInfo": {"userId": user.get("id"), "username": user.get("name")}}
         return success(data=data, msg="登录成功", code=0)
     except ValueError:
@@ -76,9 +104,30 @@ async def login(payload: LoginIn):
 
 
 @router.post("/api/user/token")
-async def token(form_data: OAuth2PasswordRequestForm = Depends()):
+async def token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     try:
+        # rate limit checks for token endpoint (OAuth2 password)
+        r = get_redis()
+        email = form_data.username
+        ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+        if isinstance(ip, str) and "," in ip:
+            ip = ip.split(",")[0].strip()
+        limited = False
+        try:
+            limited_email, _ = await incr_and_check(r, f"rl:login:email:{email}", EMAIL_LIMIT, EMAIL_PERIOD)
+            limited_ip, _ = await incr_and_check(r, f"rl:login:ip:{ip}", IP_LIMIT, IP_PERIOD)
+            limited = limited_email or limited_ip
+        except Exception:
+            logger.exception("rate limit check failed")
+
+        if limited:
+            return error(msg="操作过于频繁，请稍后再试", code=429, data=None, status_code=200)
+
         token, user = await authenticate_user(form_data.username, form_data.password)
+        try:
+            await r.delete(f"rl:login:email:{email}")
+        except Exception:
+            logger.exception("failed to clear login rate limit key")
         data = {"token": token, "userInfo": {"userId": user.get("id"), "username": user.get("name")}}
         return success(data=data, msg="登录成功", code=0)
     except ValueError:
@@ -87,10 +136,26 @@ async def token(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 @router.post("/api/user/send-code")
-async def send_code(payload: SendCodeIn):
+async def send_code(payload: SendCodeIn, request: Request):
+    # rate limit for sending verification codes (per-email and per-IP)
+    r = get_redis()
+    ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+    if isinstance(ip, str) and "," in ip:
+        ip = ip.split(",")[0].strip()
+    EMAIL_VERIFY_LIMIT = int(os.getenv("VERIFY_EMAIL_LIMIT", "5"))
+    EMAIL_VERIFY_PERIOD = int(os.getenv("VERIFY_EMAIL_PERIOD", "3600"))
+    IP_VERIFY_LIMIT = int(os.getenv("VERIFY_IP_LIMIT", "10"))
+    IP_VERIFY_PERIOD = int(os.getenv("VERIFY_IP_PERIOD", "3600"))
+    try:
+        limited_email, _ = await incr_and_check(r, f"rl:verify:email:{payload.email}", EMAIL_VERIFY_LIMIT, EMAIL_VERIFY_PERIOD)
+        limited_ip, _ = await incr_and_check(r, f"rl:verify:ip:{ip}", IP_VERIFY_LIMIT, IP_VERIFY_PERIOD)
+        if limited_email or limited_ip:
+            return error(msg="发送验证码操作过于频繁，请稍后再试", code=429, data=None, status_code=200)
+    except Exception:
+        logger.exception("verify rate limit check failed")
+
     # generate 6-digit code and store in redis with 5-minute expiry
     code = str(random.randint(0, 999999)).zfill(6)
-    r = get_redis()
     key = f"verify:{payload.email}"
     try:
         await r.set(key, code, ex=300)
