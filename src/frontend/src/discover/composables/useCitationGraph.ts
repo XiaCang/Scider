@@ -37,6 +37,8 @@ export function useCitationGraph() {
       citation_count: (item.citation_count as number) || 0,
       in_library: !!item.in_library,
       description: (item.abstract as string) || (item.description as string) || '',
+      doi: (item.doi as string) || '',
+      arxiv_id: (item.arxiv_id as string) || '',
     }
   }
 

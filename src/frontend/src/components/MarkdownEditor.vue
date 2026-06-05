@@ -13,10 +13,11 @@ import Highlight from '@tiptap/extension-highlight'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
 import {
-  List, Sort, Cpu, CollectionTag, Link, FolderOpened, Close, Plus,
+  List, Sort, Cpu, CollectionTag, Link, Upload, PictureFilled,
 } from '@element-plus/icons-vue'
 import type { NoteImage } from '../types/library'
 import { uploadNoteImageApi, fetchNoteImagesApi } from '../api/library'
+import { resolveBackendUrl } from '../utils/url'
 
 const props = defineProps<{
   modelValue: string
@@ -52,7 +53,10 @@ function markdownToHtml(markdown: string): string {
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-  return marked.parse(decoded, { breaks: true }) as string
+  let html = marked.parse(decoded, { breaks: true }) as string
+  // 将后端相对路径图片 URL（/uploads/...）补全为绝对 URL
+  html = html.replace(/(<img[^>]+src\s*=\s*["'])\/uploads\//g, `$1${resolveBackendUrl('/uploads/')}`)
+  return html
 }
 
 function htmlToMarkdown(html: string): string {
@@ -149,7 +153,7 @@ const doUploadImage = async (file: File) => {
   if (!props.paperId || !props.noteId) {
     // 无 noteId 时退化到原始插入图片功能
     const url = window.prompt('输入图片链接：')
-    if (url) editor.value?.chain().focus().setImage({ src: url }).run()
+    if (url) editor.value?.chain().focus().setImage({ src: url, alt: file.name }).run()
     return
   }
   uploadingImage.value = true
@@ -159,7 +163,7 @@ const doUploadImage = async (file: File) => {
     const imgData = data.data || data
     // Tiptap live 模式：直接插入图片
     if (editor.value) {
-      editor.value.chain().focus().setImage({ src: imgData.url }).run()
+      editor.value.chain().focus().setImage({ src: resolveBackendUrl(imgData.url), alt: imgData.filename || file.name }).run()
     }
     ElMessage.success('图片上传成功')
   } catch (e) {
@@ -170,9 +174,9 @@ const doUploadImage = async (file: File) => {
   }
 }
 
-const openImagePanel = async () => {
-  showImagePanel.value = !showImagePanel.value
-  if (showImagePanel.value && props.noteId) {
+const openImageDialog = async () => {
+  showImagePanel.value = true
+  if (props.noteId) {
     try {
       const resp = await fetchNoteImagesApi(props.noteId)
       const data = ('data' in resp ? (resp as any).data : resp) as any
@@ -184,9 +188,9 @@ const openImagePanel = async () => {
   }
 }
 
-const insertNoteImage = (url: string) => {
+const insertNoteImage = (img: NoteImage) => {
   if (editor.value) {
-    editor.value.chain().focus().setImage({ src: url }).run()
+    editor.value.chain().focus().setImage({ src: resolveBackendUrl(img.url), alt: img.filename || 'image' }).run()
   }
   showImagePanel.value = false
 }
@@ -325,7 +329,7 @@ const onSplitInput = (e: Event) => {
       <div class="md-toolbar-group">
         <el-tooltip content="上传图片" placement="top" :show-after="400">
           <label class="md-btn md-btn--upload" :class="{ 'is-loading': uploadingImage }" tabindex="-1">
-            <el-icon :size="15"><Plus /></el-icon>
+            <el-icon :size="15"><Upload /></el-icon>
             <input
               type="file"
               accept="image/*"
@@ -335,9 +339,9 @@ const onSplitInput = (e: Event) => {
             />
           </label>
         </el-tooltip>
-        <el-tooltip content="从已上传图片插入" placement="top" :show-after="400">
-          <button class="md-btn" :class="{ 'is-active': showImagePanel }" @click="openImagePanel" tabindex="-1">
-            <el-icon :size="15"><FolderOpened /></el-icon>
+        <el-tooltip content="插入图片" placement="top" :show-after="400">
+          <button class="md-btn" @click="openImageDialog" tabindex="-1">
+            <el-icon :size="15"><PictureFilled /></el-icon>
           </button>
         </el-tooltip>
         <el-tooltip content="插入链接" placement="top" :show-after="400">
@@ -367,30 +371,34 @@ const onSplitInput = (e: Event) => {
       </div>
     </div>
 
-    <!-- 图片浏览面板 -->
-    <div v-if="showImagePanel" class="md-image-panel">
-      <div class="md-image-panel-header">
-        <span>已上传图片</span>
-        <button class="md-image-panel-close" @click="showImagePanel = false">
-          <el-icon :size="12"><Close /></el-icon>
-        </button>
+    <!-- 图片选择弹窗 -->
+    <el-dialog
+      v-model="showImagePanel"
+      title="选择图片"
+      width="580px"
+      top="8vh"
+      append-to-body
+      destroy-on-close
+    >
+      <div v-if="noteImages.length === 0" class="md-dialog-empty">
+        <el-icon :size="32" style="color:#ccc;margin-bottom:8px"><PictureFilled /></el-icon>
+        <p>暂无图片，请先上传</p>
       </div>
-      <div v-if="noteImages.length === 0" class="md-image-panel-empty">
-        暂无图片，请先上传
-      </div>
-      <div v-else class="md-image-panel-grid">
+      <div v-else class="md-dialog-grid">
         <div
           v-for="img in noteImages"
           :key="img.id"
-          class="md-image-card"
-          @click="insertNoteImage(img.url)"
+          class="md-dialog-card"
+          @click="insertNoteImage(img)"
           :title="img.filename"
         >
-          <img :src="img.url" :alt="img.filename" />
-          <div class="md-image-card-name">{{ img.filename || 'image' }}</div>
+          <div class="md-dialog-card-img">
+            <img :src="resolveBackendUrl(img.url)" :alt="img.filename" loading="lazy" />
+          </div>
+          <div class="md-dialog-card-name">{{ img.filename || 'image' }}</div>
         </div>
       </div>
-    </div>
+    </el-dialog>
 
     <!-- 所见即所得模式 -->
     <div v-if="previewMode === 'live' && editor" class="md-live">
@@ -499,72 +507,65 @@ const onSplitInput = (e: Event) => {
   flex: 1;
 }
 
-/* ── 图片浏览面板 ── */
-.md-image-panel {
-  border-bottom: 1px solid var(--line-soft);
-  background: #f9fafb;
-  flex-shrink: 0;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.md-image-panel-header {
+/* ── 图片选择弹窗 ── */
+.md-dialog-empty {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  padding: 6px 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #667085;
-  border-bottom: 1px solid #eef2f6;
+  justify-content: center;
+  padding: 48px 0;
+  color: #aaa;
+  font-size: 0.85rem;
 }
-.md-image-panel-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px;
-  color: #999;
-  display: flex;
-  align-items: center;
+.md-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
-.md-image-panel-close:hover { color: #333; }
-.md-image-panel-empty {
-  text-align: center;
-  color: #bbb;
-  font-size: 0.75rem;
-  padding: 16px 0;
-}
-.md-image-panel-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px;
-}
-.md-image-card {
-  width: calc(50% - 3px);
-  border-radius: 6px;
+.md-dialog-card {
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s;
   background: white;
 }
-.md-image-card:hover {
-  border-color: var(--brand);
-  box-shadow: 0 2px 8px rgba(74, 157, 154, 0.15);
+.md-dialog-card:hover {
+  border-color: var(--brand, #4a9d9a);
+  box-shadow: 0 4px 14px rgba(74, 157, 154, 0.18);
+  transform: translateY(-1px);
 }
-.md-image-card img {
+.md-dialog-card:active {
+  transform: translateY(0);
+}
+.md-dialog-card-img {
+  position: relative;
   width: 100%;
-  height: 70px;
+  padding-top: 66%;
+  background: #f5f5f5;
+  overflow: hidden;
+}
+.md-dialog-card-img img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.25s;
 }
-.md-image-card-name {
-  font-size: 0.62rem;
-  color: #8899a8;
-  padding: 2px 6px;
+.md-dialog-card:hover .md-dialog-card-img img {
+  transform: scale(1.05);
+}
+.md-dialog-card-name {
+  font-size: 0.72rem;
+  color: #667085;
+  padding: 6px 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 /* 所见即所得编辑区 */

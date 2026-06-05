@@ -29,6 +29,8 @@ export function useSearch() {
       pdf_url: item.pdf_url as string,
       reason: item.reason as string,
       description: (item.abstract as string) || (item.description as string) || '',
+      doi: (item.doi as string) || '',
+      arxiv_id: (item.arxiv_id as string) || '',
     }
   }
 
