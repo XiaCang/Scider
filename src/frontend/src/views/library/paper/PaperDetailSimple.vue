@@ -4,7 +4,8 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import type { LibraryPaper } from '../../../types/library'
-import { importPaperApi, downloadDiscoverPdfApi } from '../../../api/discover'
+import { downloadDiscoverPdfApi } from '../../../api/discover'
+import { uploadPaperApi } from '../../../api/library'
 
 interface Props {
   modelValue: boolean
@@ -93,22 +94,26 @@ const handleImport = async () => {
 
   importing.value = true
   try {
-    const res = await importPaperApi({
-      title: props.paper.title,
-      authors: props.paper.authors || null,
-      abstract: props.paper.abstract || null,
-      doi: props.paper.doi || null,
-      arxiv_id: props.paper.arxiv_id || null,
-      year: props.paper.year || null,
-      venue: props.paper.source || null,
-      pdf_url: props.paper.pdf_url || null,
-    })
+    // 1. 前端下载 PDF
+    const pdfUrl = effectivePdfUrl.value
+    if (!pdfUrl) {
+      ElMessage.warning('暂无 PDF 链接可下载')
+      return
+    }
+    const blob = await downloadDiscoverPdfApi(pdfUrl)
+    const safeName = (props.paper.title || 'paper').replace(/[/\\?%*:|"<>]/g, '_')
+    const pdfFile = new File([blob], `${safeName}.pdf`, { type: 'application/pdf' })
+
+    // 2. 上传到服务器解析
+    const uploadResp = await uploadPaperApi(pdfFile)
+    const uploadData: any = ('data' in uploadResp ? (uploadResp as any).data : uploadResp)
+    const paperId = uploadData.data?.paper_id || uploadData.paper_id
 
     ElMessage.success('论文已成功导入文库')
-    emit('imported', (res as any)?.data?.paper_id || props.paper.id)
+    emit('imported', paperId)
   } catch (err: any) {
     const msg = err?.message || '导入失败'
-    if (msg.includes('已在文库中')) {
+    if (msg.includes('已在文库中') || msg.includes('已存在')) {
       ElMessage.info('该论文已在文库中')
       emit('imported', props.paper.id)
     } else {
@@ -128,8 +133,7 @@ const handleDownloadPdf = async () => {
 
   downloading.value = true
   try {
-    const response = await downloadDiscoverPdfApi(url)
-    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const blob = await downloadDiscoverPdfApi(url)
     const downloadUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = downloadUrl
