@@ -2,10 +2,7 @@
 Celery task: compute embedding via OpenAI-compatible API and upsert into MySQL (paper_embedding.embedding JSON).
 """
 
-import asyncio
 import logging
-import sys
-from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import select
@@ -13,32 +10,23 @@ from sqlalchemy import select
 from app.celery_app import celery_app
 from app.core.config import settings
 from app.core.embedding_client import create_embedding
+from db.session_sync import get_session
+from db.models import Paper, KeyPoints, PaperEmbedding
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_backend_root_in_path() -> None:
-    backend_root = Path(__file__).resolve().parents[2]
-    s = str(backend_root)
-    if s not in sys.path:
-        sys.path.insert(0, s)
-
-
-async def _fetch_paper_embed_text(paper_id: str) -> str:
-    """Load title/abstract/keypoints from Paper/KeyPoints for embedding."""
-    _ensure_backend_root_in_path()
-    from db.models import KeyPoints, Paper
-    from db.session import get_session
-
-    async with get_session() as session:
-        result = await session.execute(select(Paper).where(Paper.id == paper_id))
-        paper = result.scalar_one_or_none()
+def _fetch_paper_embed_text(paper_id: str) -> str:
+    """Load title/abstract/keypoints from Paper/KeyPoints for embedding (synchronous)."""
+    with get_session() as session:
+        paper = session.get(Paper, paper_id)
         if paper is None:
             return ""
 
         parts = [paper.title or "", paper.abstract or ""]
-        kp_result = await session.execute(select(KeyPoints).where(KeyPoints.paper_id == paper_id))
-        kp = kp_result.scalar_one_or_none()
+        kp = session.execute(
+            select(KeyPoints).where(KeyPoints.paper_id == paper_id)
+        ).scalar_one_or_none()
         if kp:
             parts.extend(
                 [
@@ -51,26 +39,24 @@ async def _fetch_paper_embed_text(paper_id: str) -> str:
         return "\n".join(p for p in parts if p).strip()
 
 
-async def _upsert_paper_embedding(paper_id: str, embedding: list[float]) -> None:
-    from db.models import PaperEmbedding
-    from db.session import get_session
-
+def _upsert_paper_embedding(paper_id: str, embedding: list[float]) -> None:
+    """Insert or update embedding record (synchronous)."""
     payload = [float(x) for x in embedding]
 
-    async with get_session() as session:
-        async with session.begin():
-            row = await session.get(PaperEmbedding, paper_id)
-            if row is None:
-                session.add(
-                    PaperEmbedding(
-                        paper_id=paper_id,
-                        embedding=payload,
-                        model_name=settings.EMBEDDING_MODEL,
-                    )
+    with get_session() as session:
+        row = session.get(PaperEmbedding, paper_id)
+        if row is None:
+            session.add(
+                PaperEmbedding(
+                    paper_id=paper_id,
+                    embedding=payload,
+                    model_name=settings.EMBEDDING_MODEL,
                 )
-            else:
-                row.embedding = payload
-                row.model_name = settings.EMBEDDING_MODEL
+            )
+        else:
+            row.embedding = payload
+            row.model_name = settings.EMBEDDING_MODEL
+        session.commit()
 
 
 @celery_app.task(
@@ -90,7 +76,7 @@ def embed_paper_task(self, paper_id: str, embed_text: Optional[str] = None) -> d
 
     text = (embed_text or "").strip()
     if not text:
-        text = asyncio.run(_fetch_paper_embed_text(paper_id))
+        text = _fetch_paper_embed_text(paper_id)
 
     if not text:
         logger.error("[Embed] no text for paper_id=%s", paper_id)
@@ -103,7 +89,7 @@ def embed_paper_task(self, paper_id: str, embed_text: Optional[str] = None) -> d
         raise self.retry(exc=exc)
 
     try:
-        asyncio.run(_upsert_paper_embedding(paper_id, vector))
+        _upsert_paper_embedding(paper_id, vector)
     except Exception as exc:
         logger.exception("[Embed] MySQL upsert failed paper_id=%s", paper_id)
         raise self.retry(exc=exc)

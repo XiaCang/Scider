@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import logging
 import os
+from typing import List
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Request, UploadFile
@@ -394,71 +395,95 @@ async def update_paper_note(
 @router.post("/upload")
 async def upload_pdf(
     request: Request,
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(..., description="最多5个PDF文件"),
     session: AsyncSession = Depends(get_db),
 ):
+    """
+    批量上传PDF文件，一次最多5个。
+    返回每个文件的上传结果，包含 paper_id, task_id 等。
+    """
     # ── 1. JWT 认证检查 ──
     user = getattr(request.state, "user", None)
     if not user:
         return error(msg="未认证", code=401, data=None, status_code=401)
 
-    # ── 2. 文件类型校验 ──
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        return error(msg="仅支持 PDF 文件", code=400, data=None, status_code=400)
+    # ── 2. 数量限制 ──
+    if len(files) > 5:
+        return error(msg="一次最多上传5个PDF文件", code=400, data=None, status_code=400)
 
-    # ── 3. 读取文件内容并校验大小 ──
-    content = await file.read()
-    max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
-    if len(content) > max_size:
-        return error(
-            msg=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE_MB}MB",
-            code=400,
-            data=None,
-            status_code=400,
+    results = []          # 存储每个文件的上传结果
+    tasks = []            # 存储异步任务对象（暂未使用）
+
+    for file in files:
+        # 单个文件处理逻辑（复用原有逻辑）
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "msg": "仅支持 PDF 文件"
+            })
+            continue
+
+        content = await file.read()
+        max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        if len(content) > max_size:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "msg": f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE_MB}MB"
+            })
+            continue
+
+        md5_hash = hashlib.md5(content).hexdigest()
+        existing = await get_paper_by_md5(session, md5_hash)
+        if existing:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "msg": "该论文已存在，请勿重复上传",
+                "paper_id": existing.id   # 可选，告知已存在的论文ID
+            })
+            continue
+
+        # 存储文件
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+        storage_filename = f"{md5_hash}.pdf"
+        storage_path = os.path.join(settings.UPLOAD_DIR, storage_filename)
+        async with aiofiles.open(storage_path, "wb") as f:
+            await f.write(content)
+
+        title = file.filename.replace(".pdf", "") if file.filename else "untitled"
+        paper = await create_paper(
+            session=session,
+            user_id=str(user["id"]),
+            title=title,
+            pdf_path=storage_path,
+            md5_hash=md5_hash,
+            file_size=len(content),
         )
 
-    # ── 4. MD5 去重 ──
-    md5_hash = hashlib.md5(content).hexdigest()
-    existing = await get_paper_by_md5(session, md5_hash)
-    if existing:
-        return error(msg="该论文已存在，请勿重复上传", code=409, data=None, status_code=409)
+        # 触发异步解析任务
+        from app.tasks.parse_task import parse_pdf_task
+        task = parse_pdf_task.delay(paper.id, storage_path)
 
-    # ── 5. 确保存储目录存在 ──
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-
-    # ── 6. 存储文件（以 MD5 命名） ──
-    storage_filename = f"{md5_hash}.pdf"
-    storage_path = os.path.join(settings.UPLOAD_DIR, storage_filename)
-    async with aiofiles.open(storage_path, "wb") as f:
-        await f.write(content)
-
-    # ── 7. 写入数据库 ──
-    title = file.filename.replace(".pdf", "") if file.filename else "untitled"
-    paper = await create_paper(
-        session=session,
-        user_id=str(user["id"]),
-        title=title,
-        pdf_path=storage_path,
-        md5_hash=md5_hash,
-        file_size=len(content),
-    )
-
-    # ── 8. 触发异步解析任务链 ──
-    from app.tasks.parse_task import parse_pdf_task
-
-    task = parse_pdf_task.delay(paper.id, storage_path)
-
-    return success(
-        data={
-            "paper_id": paper.id,
+        results.append({
             "filename": file.filename,
+            "success": True,
+            "paper_id": paper.id,
+            "task_id": task.id,
             "file_size": len(content),
             "md5": md5_hash,
             "status": paper.status.value,
-            "task_id": task.id,
+        })
+
+    return success(
+        data={
+            "total": len(files),
+            "success_count": sum(1 for r in results if r["success"]),
+            "results": results
         },
-        msg="上传成功，后台解析中",
+        msg=f"已处理{len(files)}个文件，成功{sum(1 for r in results if r['success'])}个",
         code=0,
         status_code=200,
     )

@@ -36,7 +36,7 @@ class Settings:
 
     # Shared LLM call settings
     LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "120"))   # seconds
-    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
+    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8192"))
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
     # ──────────────────────────────────────────────
@@ -53,6 +53,8 @@ class Settings:
     # ──────────────────────────────────────────────
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
     MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+    MAX_UPLOAD_FILES = int(os.getenv("MAX_UPLOAD_FILES", "10"))
+    MAX_BATCH_UPLOAD_SIZE_MB = int(os.getenv("MAX_BATCH_UPLOAD_SIZE_MB", "200"))
 
     # ──────────────────────────────────────────────
     # Q&A settings

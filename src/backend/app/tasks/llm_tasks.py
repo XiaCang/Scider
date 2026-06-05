@@ -1,164 +1,45 @@
-"""
-llm_tasks.py — Celery 任务：调用大模型提取论文四要素并写入数据库。
-
-任务流程：
-  1. 将 Paper.status 更新为 EXTRACTING
-  2. 调用大模型，获取 JSON 格式四要素
-  3. 解析 JSON 并截断至 200 字符
-  4. 写入/更新 KeyPoints 表
-  5. 将 Paper.status 更新为 PENDING_CONFIRMATION
-  失败时将 Paper.status 更新为 FAILED 并记录错误
-"""
-
-import asyncio
+# app/tasks/llm_tasks.py
 import json
 import logging
 import re
-import sys
-from pathlib import Path
-
+from celery import Task
 from app.celery_app import celery_app
 from app.core.llm_client import chat_completion
 from app.core.prompts import EXTRACT_SYSTEM_PROMPT, build_user_prompt
+from db.session_sync import get_session
+from db.crud_paper_sync import get_paper_by_id, update_paper_status
+from db.crud_keypoints_sync import save_confirmed_key_points
+from db.models import PaperStatus
 
 logger = logging.getLogger(__name__)
 
-
-def _ensure_backend_root_in_path() -> None:
-    """
-    Ensure `src/backend` is in sys.path so `import db...` works
-    under different worker launch locations/environments.
-    """
-    backend_root = Path(__file__).resolve().parents[2]
-    backend_root_str = str(backend_root)
-    if backend_root_str not in sys.path:
-        sys.path.insert(0, backend_root_str)
-
-# ─── JSON 解析 ────────────────────────────────────────────────────────────────
-
 def _parse_json_response(raw: str) -> dict:
-    """
-    从模型原始回复中提取元数据和四要素 JSON。
-
-    - 兼容模型将 JSON 包在 ```json … ``` 代码块内的情况。
-    - 对每个字段截断至 200 字符，确保符合数据库约束。
-    - 若缺少必须字段则抛出 ValueError。
-    """
     text = raw.strip()
-
-    # 去除可能存在的 Markdown 代码块标记
     fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
     if fenced:
         text = fenced.group(1).strip()
-
     data = json.loads(text)
 
-    # 必需的四要素字段
     required_kp = {"background", "methodology", "innovation", "conclusion"}
     missing_kp = required_kp - set(data.keys())
     if missing_kp:
         raise ValueError(f"LLM 返回 JSON 缺少四要素字段: {missing_kp}")
 
-    # 截断四要素至 200 字符
     for key in required_kp:
         data[key] = str(data.get(key) or "").strip()[:200] or "暂无相关信息"
 
-    # 处理元数据字段（可选）
-    metadata_fields = {"title", "authors", "year", "source"}
-    for field in metadata_fields:
-        if field in data:
-            if field == "year":
-                # 年份必须是整数或null
-                try:
-                    data[field] = int(data[field]) if data[field] is not None else None
-                except (ValueError, TypeError):
-                    data[field] = None
-            elif field in ("authors", "source"):
-                # 字符串字段，限制长度
-                data[field] = str(data[field]).strip()[:500] if data[field] else None
-            elif field == "title":
-                data[field] = str(data[field]).strip()[:1000] if data[field] else None
-
+    if "title" in data:
+        data["title"] = str(data["title"]).strip()[:1000] or None
+    if "authors" in data:
+        data["authors"] = str(data["authors"]).strip()[:500] or None
+    if "year" in data:
+        try:
+            data["year"] = int(data["year"]) if data["year"] else None
+        except (ValueError, TypeError):
+            data["year"] = None
+    if "source" in data:
+        data["source"] = str(data["source"]).strip()[:500] or None
     return data
-
-
-# ─── 异步数据库操作 ────────────────────────────────────────────────────────────
-
-async def _set_paper_extracting(paper_id: str) -> None:
-    """将 Paper.status 设为 EXTRACTING。"""
-    from sqlalchemy import select
-    _ensure_backend_root_in_path()
-    from db.session import get_session
-    from db.models import Paper, PaperStatus
-
-    async with get_session() as session:
-        async with session.begin():
-            result = await session.execute(select(Paper).where(Paper.id == paper_id))
-            paper = result.scalar_one_or_none()
-            if paper:
-                paper.status = PaperStatus.EXTRACTING
-
-
-async def _persist_result(paper_id: str, key_points: dict) -> None:
-    """将元数据和四要素写入数据库，并将 Paper.status 更新为 PENDING_CONFIRMATION。"""
-    from sqlalchemy import select
-    _ensure_backend_root_in_path()
-    from db.session import get_session
-    from db.models import Paper, KeyPoints, PaperStatus
-
-    async with get_session() as session:
-        async with session.begin():
-            # 更新 Paper 状态和元数据
-            p_result = await session.execute(select(Paper).where(Paper.id == paper_id))
-            paper = p_result.scalar_one_or_none()
-            if paper is None:
-                logger.error("Paper %s 不存在，跳过写入", paper_id)
-                return
-            
-            paper.status = PaperStatus.PENDING_CONFIRMATION
-            
-            # 更新元数据（如果LLM提取到了）
-            if key_points.get("title"):
-                paper.title = key_points["title"]
-            if key_points.get("authors"):
-                paper.authors = key_points["authors"]
-            if key_points.get("year") is not None:
-                paper.year = key_points["year"]
-            if key_points.get("source"):
-                paper.source = key_points["source"]
-
-            # Upsert KeyPoints
-            kp_result = await session.execute(
-                select(KeyPoints).where(KeyPoints.paper_id == paper_id)
-            )
-            kp = kp_result.scalar_one_or_none()
-            if kp is None:
-                kp = KeyPoints(paper_id=paper_id)
-                session.add(kp)
-
-            kp.background = key_points["background"]
-            kp.methodology = key_points["methodology"]
-            kp.innovation = key_points["innovation"]
-            kp.conclusion = key_points["conclusion"]
-            kp.is_confirmed = False
-
-
-async def _set_paper_failed(paper_id: str) -> None:
-    """将 Paper.status 设为 FAILED。"""
-    from sqlalchemy import select
-    _ensure_backend_root_in_path()
-    from db.session import get_session
-    from db.models import Paper, PaperStatus
-
-    async with get_session() as session:
-        async with session.begin():
-            result = await session.execute(select(Paper).where(Paper.id == paper_id))
-            paper = result.scalar_one_or_none()
-            if paper:
-                paper.status = PaperStatus.FAILED
-
-
-# ─── Celery Task ──────────────────────────────────────────────────────────────
 
 @celery_app.task(
     name="app.tasks.llm.extract_key_points",
@@ -166,64 +47,73 @@ async def _set_paper_failed(paper_id: str) -> None:
     max_retries=2,
     default_retry_delay=30,
 )
-def extract_key_points_task(self, paper_id: str, paper_text: str) -> dict:
-    """
-    提取论文四要素的 Celery 任务。
-
-    Args:
-        paper_id:   Paper 表中的记录 ID。
-        paper_text: 论文文本（摘要 + 正文，或纯摘要）。
-
-    Returns:
-        含四要素字段的字典（成功），或含 "error" 字段的字典（永久失败）。
-    """
+def extract_key_points_task(self: Task, paper_id: str, paper_text: str) -> dict:
     logger.info("[LLM Task] 开始提取四要素 paper_id=%s", paper_id)
 
-    # Step 1: 标记为提取中
+    # 标记为 EXTRACTING
     try:
-        asyncio.run(_set_paper_extracting(paper_id))
+        with get_session() as session:
+            update_paper_status(session, paper_id, PaperStatus.EXTRACTING)
     except Exception as exc:
         logger.warning("更新 EXTRACTING 状态失败（非致命）: %s", exc)
 
-    # Step 2: 调用大模型
+    # 调用大模型
     try:
         user_prompt = build_user_prompt(paper_text)
         raw = chat_completion(EXTRACT_SYSTEM_PROMPT, user_prompt)
-        logger.debug("[LLM Task] 原始回复 (前 300 字): %s", raw[:300])
+        logger.debug("[LLM Task] 原始回复 (前300字): %s", raw[:300])
     except Exception as exc:
         logger.exception("[LLM Task] 大模型调用失败 paper_id=%s", paper_id)
-        try:
-            asyncio.run(_set_paper_failed(paper_id))
-        except Exception:
-            pass
+        if self.request.retries >= self.max_retries:
+            with get_session() as session:
+                update_paper_status(session, paper_id, PaperStatus.FAILED)
         raise self.retry(exc=exc)
 
-    # Step 3: 解析 JSON
+    # 解析 JSON
     try:
         key_points = _parse_json_response(raw)
     except (json.JSONDecodeError, ValueError) as exc:
         logger.exception("[LLM Task] JSON 解析失败 paper_id=%s", paper_id)
-        try:
-            asyncio.run(_set_paper_failed(paper_id))
-        except Exception:
-            pass
+        if self.request.retries >= self.max_retries:
+            with get_session() as session:
+                update_paper_status(session, paper_id, PaperStatus.FAILED)
         raise self.retry(exc=exc)
 
-    # Step 4: 写入数据库
+    # 写入数据库（使用同步 CRUD）
     try:
-        asyncio.run(_persist_result(paper_id, key_points))
+        with get_session() as session:
+            # 先更新元数据和四要素（保存未确认状态）
+            paper = get_paper_by_id(session, paper_id)
+            if paper:
+                if key_points.get("title"):
+                    paper.title = key_points["title"]
+                if key_points.get("authors"):
+                    paper.authors = key_points["authors"]
+                if key_points.get("year") is not None:
+                    paper.year = key_points["year"]
+                if key_points.get("source"):
+                    paper.source = key_points["source"]
+                paper.status = PaperStatus.PENDING_CONFIRMATION
+                # 使用 upsert_key_points 或直接操作
+                from db.crud_paper_sync import upsert_key_points
+                upsert_key_points(
+                    session, paper_id,
+                    background=key_points["background"],
+                    methodology=key_points["methodology"],
+                    innovation=key_points["innovation"],
+                    conclusion=key_points["conclusion"]
+                )
+                session.commit()
     except Exception as exc:
         logger.exception("[LLM Task] 写入数据库失败 paper_id=%s", paper_id)
-        try:
-            asyncio.run(_set_paper_failed(paper_id))
-        except Exception:
-            pass
+        if self.request.retries >= self.max_retries:
+            with get_session() as session:
+                update_paper_status(session, paper_id, PaperStatus.FAILED)
         raise self.retry(exc=exc)
 
-    # Step 5: 自动投递向量化任务（即使未确认也让论文尽早入图）
+    # 触发向量化任务
     try:
         from app.tasks.embedding_tasks import embed_paper_task
-
         embed_paper_task.delay(paper_id)
         logger.info("[LLM Task] 已投递向量化任务 paper_id=%s", paper_id)
     except Exception as exc:
