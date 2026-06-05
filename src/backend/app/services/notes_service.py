@@ -169,20 +169,13 @@ async def update_note(session: AsyncSession, note_id: str, title: Optional[str],
         note.title = title
         changed = True
     if content_html is not None:
+        # Only update the stored HTML/text. Do NOT modify NoteImage rows here.
+        # Changing image records during a PATCH can unintentionally remove images
+        # when the client omits image tags. Keep image management separate
+        # (handled by upload endpoint or explicit admin operations).
         safe_html = sanitize_html(content_html)
         note.content_html = safe_html
         note.content_text = html_to_text(safe_html)
-        # synchronize images: remove old, re-add
-        # delete existing images
-        from sqlalchemy import delete
-        await session.execute(delete(NoteImage).where(NoteImage.note_id == note.id))
-        # add new images
-        img_srcs = extract_image_srcs(note.content_html or "")
-        order = 0
-        for src in img_srcs:
-            img = NoteImage(note_id=note.id, url=src, filename=Path(src).name, order_index=order)
-            session.add(img)
-            order += 1
         changed = True
     if content_format is not None:
         note.content_format = content_format
