@@ -357,11 +357,11 @@ alembic upgrade head
 
 # 3. 启动 FastAPI 后端
 cd src/backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 4. 启动 Celery Worker（新终端）
 cd src/backend
-celery -A app.worker:celery_app worker --loglevel=info --pool=solo --concurrency=1
+python -m celery -A app.worker:celery_app worker --loglevel=info 
 
 # 5. 确保有已解析完成的论文（通过前端上传 PDF，等待状态变为 CONFIRMED）
 ```

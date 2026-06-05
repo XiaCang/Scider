@@ -90,6 +90,41 @@ export interface UploadPaperResponse {
   task_id: string
 }
 
+export interface BatchUploadResultItem {
+  filename: string
+  success: boolean
+  msg?: string
+  paper_id?: string
+  task_id?: string
+  file_size?: number
+  md5?: string
+  status?: string
+}
+
+export interface BatchUploadResponse {
+  total: number
+  success_count: number
+  results: BatchUploadResultItem[]
+}
+
+/**
+ * 批量上传PDF论文（最多5个）
+ */
+export const batchUploadPapersApi = (files: File[]) => {
+  const formData = new FormData()
+  files.forEach(file => {
+    formData.append('files', file)
+  })
+  return request.post<ApiResponse<BatchUploadResponse>>(
+    '/papers/upload',
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }
+  )
+}
+
+
 // ==================== 论文与文件夹关联接口 ====================
 
 /**
