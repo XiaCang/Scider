@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, reactive, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
-import { Download, Document, Plus } from '@element-plus/icons-vue'
+import { Plus, Connection, PictureFilled, DataLine } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../store/folder'
 import { usePaperStore } from '../../store/paper'
 import type { PaperKeyPoints } from '../../types/library'
@@ -328,10 +328,10 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   })
 
   const nodeCount = nodes.length
-  let forceConfig: any = { repulsion: 1000, gravity: 0.03, edgeLength: [180, 350], friction: 0.65, initIterations: 250, layoutAnimation: true }
-  if (nodeCount > 50) forceConfig = { repulsion: 1500, gravity: 0.02, edgeLength: [200, 400], friction: 0.7, initIterations: 300, layoutAnimation: true }
-  if (nodeCount < 20) forceConfig = { repulsion: 800, gravity: 0.05, edgeLength: [150, 250], friction: 0.6, initIterations: 200, layoutAnimation: true }
-  if (graphType.value === 'llm') forceConfig = { ...forceConfig, repulsion: 1200, gravity: 0.02, edgeLength: [180, 400] }
+  let forceConfig: any = { repulsion: 800, gravity: 0.08, edgeLength: [120, 280], friction: 0.6, initIterations: 300, layoutAnimation: true }
+  if (nodeCount > 50) forceConfig = { repulsion: 1200, gravity: 0.05, edgeLength: [150, 350], friction: 0.65, initIterations: 400, layoutAnimation: true }
+  if (nodeCount < 20) forceConfig = { repulsion: 600, gravity: 0.1, edgeLength: [100, 200], friction: 0.55, initIterations: 250, layoutAnimation: true }
+  if (graphType.value === 'llm') forceConfig = { ...forceConfig, repulsion: 1000, gravity: 0.04, edgeLength: [140, 320] }
 
   const option: echarts.EChartsOption = {
     tooltip: {
@@ -362,10 +362,12 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
     },
     legend: { data: currentCategories.map(c => c.name), orient: 'vertical', right: 15, top: 15, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 10, padding: [12,16] },
     series: [{
-      type: 'graph', layout: 'force', data: nodes.map(n => ({ ...n, symbol: getSymbolByType(n.type), symbolSize: (n.type === 'paper' ? 55 : 38) + Math.min(nodeConnCount[n.id] || 0, 12), itemStyle: { borderWidth: n.type === 'paper' ? 3 : 2, borderColor: '#fff', shadowBlur: n.type === 'paper' ? 15 : 8, shadowColor: 'rgba(0,0,0,0.12)' }, x: (n as any).x, y: (n as any).y })),
+      type: 'graph', layout: 'force', data: nodes.map(n => ({ ...n, symbol: getSymbolByType(n.type), symbolSize: (n.type === 'paper' ? 52 : 36) + Math.min(nodeConnCount[n.id] || 0, 12), itemStyle: { borderWidth: n.type === 'paper' ? 3 : 2, borderColor: '#fff', shadowBlur: n.type === 'paper' ? 14 : 8, shadowColor: 'rgba(0,0,0,0.1)', borderRadius: n.type === 'paper' ? 4 : 2 }, x: (n as any).x, y: (n as any).y })),
       links: links.map(l => {
         const style = relationStyleMap[l.relationType] || relationStyleMap.custom
         const edgeId = (l as any).id || `edge_${l.source}_${l.target}_${l.relationType}`
+        const isBidirectional = links.some(other => other.source === l.target && other.target === l.source)
+        const curveness = isBidirectional ? 0.12 : 0
         return { 
           id: edgeId,
           source: l.source, 
@@ -373,9 +375,10 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           lineStyle: { 
             type: style.type, 
             color: style.color, 
-            curveness: l.relationType === 'ownership' ? 0.05 : 0.25, 
+            curveness, 
             width: l.relationType === 'ownership' ? 2.5 : 1.8, 
-            opacity: 0.8 
+            opacity: 0.8,
+            cap: 'round',
           }, 
           label: { show: false }, 
           relationType: l.relationType, 
@@ -383,9 +386,14 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
         }
       }),
       categories: currentCategories, roam: true, draggable: true, force: forceConfig,
-      emphasis: { focus: 'adjacency', itemStyle: { shadowBlur: 20, shadowColor: 'rgba(74,157,154,0.4)' }, label: { fontWeight: 700 } },
-      label: { show: true, position: 'right', fontSize: 11, fontWeight: 500, color: '#2c3e50', distance: 10, formatter: (params: any) => params.data.type === 'paper' ? params.name : (params.name.length > 10 ? params.name.substring(0,10)+'…' : params.name) },
-      blur: { itemStyle: { opacity: 0.15 }, lineStyle: { opacity: 0.05 }, label: { show: false } }
+      emphasis: {
+        focus: 'adjacency',
+        itemStyle: { shadowBlur: 24, shadowColor: 'rgba(74,157,154,0.5)', borderWidth: 3 },
+        label: { fontWeight: 700 },
+        lineStyle: { width: 3, opacity: 1 },
+      },
+      label: { show: true, position: 'right', fontSize: 12, fontWeight: 500, color: '#2c3e50', distance: 12, formatter: (params: any) => params.data.type === 'paper' ? params.name : (params.name.length > 10 ? params.name.substring(0,10)+'…' : params.name) },
+      blur: { itemStyle: { opacity: 0.12 }, lineStyle: { opacity: 0.04 }, label: { show: false } }
     }],
   }
   chartInstance.setOption(option, { notMerge: true })
@@ -564,33 +572,66 @@ onUnmounted(() => {
 <template>
   <div class="graph-panel">
     <header class="graph-header">
-      <div class="header-left">
-        <el-radio-group v-model="graphType" size="small" class="graph-type-switch">
-          <el-radio-button label="similarity">相似度图谱</el-radio-button>
-          <el-radio-button label="llm">主题聚类</el-radio-button>
-        </el-radio-group>
-        <div v-if="graphType === 'similarity'" class="graph-filters">
-          <el-checkbox v-model="similarityFilters.background" size="small" class="filter-chip"><span class="filter-icon" style="background:#6b8e8e" />研究背景</el-checkbox>
-          <el-checkbox v-model="similarityFilters.method" size="small" class="filter-chip"><span class="filter-icon" style="background:#e8b86d" />研究方法</el-checkbox>
-          <el-checkbox v-model="similarityFilters.innovation" size="small" class="filter-chip"><span class="filter-icon" style="background:#c17767" />创新点</el-checkbox>
-          <el-checkbox v-model="similarityFilters.conclusion" size="small" class="filter-chip"><span class="filter-icon" style="background:#4a9d9a" />结论</el-checkbox>
+      <div class="header-row">
+        <div class="header-left">
+          <el-radio-group v-model="graphType" size="small" class="graph-type-switch">
+            <el-radio-button label="similarity">相似度图谱</el-radio-button>
+            <el-radio-button label="llm">主题聚类</el-radio-button>
+          </el-radio-group>
+          <div class="header-divider" />
+          <div v-if="graphType === 'similarity'" class="graph-filters">
+            <label class="filter-chip" :class="{ active: similarityFilters.background }" @click.prevent="similarityFilters.background = !similarityFilters.background">
+              <span class="filter-dot" style="background:#6b8e8e" />研究背景
+            </label>
+            <label class="filter-chip" :class="{ active: similarityFilters.method }" @click.prevent="similarityFilters.method = !similarityFilters.method">
+              <span class="filter-dot" style="background:#e8b86d" />研究方法
+            </label>
+            <label class="filter-chip" :class="{ active: similarityFilters.innovation }" @click.prevent="similarityFilters.innovation = !similarityFilters.innovation">
+              <span class="filter-dot" style="background:#c17767" />创新点
+            </label>
+            <label class="filter-chip" :class="{ active: similarityFilters.conclusion }" @click.prevent="similarityFilters.conclusion = !similarityFilters.conclusion">
+              <span class="filter-dot" style="background:#4a9d9a" />结论
+            </label>
+          </div>
         </div>
-      </div>
-      <div class="header-right">
-        <el-button type="primary" plain size="small" @click="openAddNodeDialog" :disabled="!isLLMMode">
-          <el-icon><Plus /></el-icon> 添加节点
-        </el-button>
-        <el-button :type="isLinkingMode ? 'danger' : 'default'" size="small" @click="toggleLinkingMode" :disabled="!isLLMMode">
-          {{ isLinkingMode ? '取消连线' : '添加边' }}
-        </el-button>
-        <el-dropdown trigger="click" @command="handleExportImage">
-          <el-button type="primary" plain size="small"><el-icon><Download /></el-icon> 导出图片</el-button>
-          <template #dropdown><el-dropdown-menu><el-dropdown-item command="png">PNG 图片</el-dropdown-item><el-dropdown-item command="svg">SVG 矢量图</el-dropdown-item></el-dropdown-menu></template>
-        </el-dropdown>
-        <el-dropdown trigger="click" @command="handleExportData">
-          <el-button type="info" plain size="small"><el-icon><Document /></el-icon> 导出数据</el-button>
-          <template #dropdown><el-dropdown-menu><el-dropdown-item command="json">JSON 数据</el-dropdown-item><el-dropdown-item command="csv">CSV 数据</el-dropdown-item></el-dropdown-menu></template>
-        </el-dropdown>
+        <div class="header-right">
+          <el-tooltip content="添加自定义节点" placement="top" :show-after="500">
+            <el-button size="small" class="toolbar-btn" @click="openAddNodeDialog" :disabled="!isLLMMode">
+              <el-icon><Plus /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip :content="isLinkingMode ? '取消连线模式' : '添加关联边'" placement="top" :show-after="500">
+            <el-button size="small" class="toolbar-btn" :class="{ 'linking-active': isLinkingMode }" @click="toggleLinkingMode" :disabled="!isLLMMode">
+              <el-icon><Connection /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="导出图片" placement="top" :show-after="500">
+            <el-dropdown trigger="click" @command="handleExportImage" class="toolbar-dropdown">
+              <el-button size="small" class="toolbar-btn">
+                <el-icon><PictureFilled /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="png">PNG 图片</el-dropdown-item>
+                  <el-dropdown-item command="svg">SVG 矢量图</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </el-tooltip>
+          <el-tooltip content="导出数据" placement="top" :show-after="500">
+            <el-dropdown trigger="click" @command="handleExportData" class="toolbar-dropdown">
+              <el-button size="small" class="toolbar-btn">
+                <el-icon><DataLine /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="json">JSON 数据</el-dropdown-item>
+                  <el-dropdown-item command="csv">CSV 数据</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </el-tooltip>
+        </div>
       </div>
     </header>
 
@@ -641,65 +682,171 @@ onUnmounted(() => {
 }
 
 .graph-header {
+  flex-shrink: 0;
+  padding: 0.75rem 0;
+}
+
+.header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 0.5rem 1rem 0;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--line-soft, #e8edf2);
-  flex-shrink: 0;
+  gap: 1rem;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line-soft, #e8edf2);
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 .header-left {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.header-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--line-soft, #e0e6ed);
+  flex-shrink: 0;
 }
 
 .header-right {
   display: flex;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.header-right > * {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  line-height: 1;
+}
+
+.graph-type-switch :deep(.el-radio-button) {
+  margin-right: 6px;
+}
+
+.graph-type-switch :deep(.el-radio-button:last-child) {
+  margin-right: 0;
+}
+
+.graph-type-switch :deep(.el-radio-button) {
+  margin-right: 6px;
+}
+
+.graph-type-switch :deep(.el-radio-button:last-child) {
+  margin-right: 0;
 }
 
 .graph-type-switch :deep(.el-radio-button__inner) {
-  padding: 6px 20px;
-  border-radius: 40px;
+  padding: 5px 16px;
+  border-radius: 20px;
   border: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.8);
+  background: transparent;
   font-weight: 500;
+  font-size: 13px;
+  color: var(--text-secondary, #666);
   transition: all 0.2s ease;
+  box-shadow: none;
 }
 
 .graph-type-switch :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
   background: #4a9d9a;
   border-color: #4a9d9a;
   color: white;
-  box-shadow: 0 2px 8px rgba(74, 157, 154, 0.25);
+  box-shadow: 0 2px 8px rgba(74, 157, 154, 0.3);
 }
 
 .graph-filters {
   display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-chip {
-  padding: 0 8px 0 4px;
-  border-radius: 32px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--line-soft);
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--line-soft, #e0e6ed);
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  line-height: 1.4;
+}
+
+.filter-chip:hover {
+  border-color: #c0c8d2;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.filter-chip.active {
+  background: rgba(74, 157, 154, 0.08);
+  border-color: rgba(74, 157, 154, 0.4);
+  color: var(--text-primary, #333);
+  font-weight: 500;
+}
+
+.filter-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.filter-chip.active .filter-dot {
+  transform: scale(1.3);
+}
+
+.toolbar-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft, #e0e6ed);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary, #666);
   transition: all 0.2s ease;
 }
 
-.filter-icon {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: middle;
+.toolbar-btn:hover:not(:disabled) {
+  background: rgba(74, 157, 154, 0.08);
+  border-color: rgba(74, 157, 154, 0.3);
+  color: #4a9d9a;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.linking-active {
+  background: rgba(193, 119, 103, 0.1);
+  border-color: rgba(193, 119, 103, 0.5);
+  color: #c17767;
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(193, 119, 103, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(193, 119, 103, 0.1); }
+}
+
+.toolbar-dropdown :deep(.el-button) {
+  margin-left: 0;
 }
 
 .graph-canvas-wrapper {
@@ -713,7 +860,11 @@ onUnmounted(() => {
   inset: 0;
   border: 1px solid var(--line-soft);
   border-radius: 20px;
-  background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
+  background-size: 28px 28px, 28px 28px, 100% 100%;
   overflow: hidden;
 }
 
@@ -726,16 +877,35 @@ onUnmounted(() => {
   .graph-panel {
     padding: 0 1rem 1rem;
   }
-  .graph-header {
-    padding: 0.75rem 0;
+  .header-row {
+    padding: 6px 10px;
+    flex-wrap: wrap;
+  }
+  .header-left {
+    gap: 8px;
+  }
+  .header-divider {
+    display: none;
   }
   .filter-chip {
-    padding: 0 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .graph-type-switch :deep(.el-radio-button) {
+  margin-right: 6px;
+}
+
+.graph-type-switch :deep(.el-radio-button:last-child) {
+  margin-right: 0;
+}
+
+.graph-type-switch :deep(.el-radio-button__inner) {
+    padding: 4px 10px;
     font-size: 12px;
   }
-  .graph-type-switch :deep(.el-radio-button__inner) {
-    padding: 4px 12px;
-    font-size: 12px;
+  .toolbar-btn {
+    width: 30px;
+    height: 30px;
   }
 }
 </style>
