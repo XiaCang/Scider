@@ -162,7 +162,7 @@ const statusClassMap: Record<string, string> = {
 
         <div class="keypoints-list">
           <!-- 研究背景 -->
-          <div class="keypoint-card card-bg">
+          <div class="keypoint-card">
             <label class="keypoint-label">
               研究背景
             </label>
@@ -177,7 +177,7 @@ const statusClassMap: Record<string, string> = {
           </div>
 
           <!-- 研究方法 -->
-          <div class="keypoint-card card-method">
+          <div class="keypoint-card">
             <label class="keypoint-label">
               研究方法
             </label>
@@ -192,7 +192,7 @@ const statusClassMap: Record<string, string> = {
           </div>
 
           <!-- 创新点 -->
-          <div class="keypoint-card card-innovation">
+          <div class="keypoint-card">
             <label class="keypoint-label">
               创新点
             </label>
@@ -207,7 +207,7 @@ const statusClassMap: Record<string, string> = {
           </div>
 
           <!-- 结论 -->
-          <div class="keypoint-card card-conclusion">
+          <div class="keypoint-card">
             <label class="keypoint-label">
               结论
             </label>
@@ -342,29 +342,23 @@ const statusClassMap: Record<string, string> = {
 }
 
 .keypoint-card {
-  border-radius: 10px;
   padding: 1rem 1.1rem 1.1rem;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  background: var(--bg-solid);
 }
 
-/* 四色左边框 */
-.card-bg {
-  background: #f0f7ff;
-  border-left: 4px solid #409eff;
+.keypoint-card:first-child {
+  border-radius: 10px 10px 0 0;
 }
-.card-method {
-  background: #f0faf0;
-  border-left: 4px solid #67c23a;
+
+.keypoint-card:last-child {
+  border-radius: 0 0 10px 10px;
 }
-.card-innovation {
-  background: #fff7e6;
-  border-left: 4px solid #e6a23c;
-}
-.card-conclusion {
-  background: #f5f0ff;
-  border-left: 4px solid #9b59b6;
+
+.keypoint-card:not(:last-child) {
+  border-bottom: 2px solid var(--brand-soft);
 }
 
 .keypoint-label {
