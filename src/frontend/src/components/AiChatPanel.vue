@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { Promotion, Delete, ChatDotSquare, InfoFilled, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { Promotion } from '@element-plus/icons-vue'
 import { createChatConnection } from '../api/chat'
-import type { ChatMessage, PaperKeyPoints } from '../types/library'
-import { fetchPaperByIdApi } from '../api/library'
+import type { ChatMessage } from '../types/library'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
@@ -29,41 +28,8 @@ const inputText = ref('')
 const sending = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 
-// 四要素相关
-const keyPointsPanelVisible = ref(false)
-const keyPoints = ref<PaperKeyPoints>({
-  background: '',
-  method: '',
-  innovation: '',
-  conclusion: '',
-})
-const loadingKeyPoints = ref(false)
-let keyPointsLoaded = false
-
 let streamingMsgId = ''
 let chatConnection: ReturnType<typeof createChatConnection> | null = null
-
-const preloadKeyPoints = async () => {
-  if (keyPointsLoaded) return
-  try {
-    const res = await fetchPaperByIdApi(props.paperId)
-    const paperData = (res as any).data?.data || (res as any).data
-    const fetchedKeyPoints = paperData?.keyPoints || {}
-    keyPoints.value = {
-      background: fetchedKeyPoints.background || '',
-      method: fetchedKeyPoints.method || '',
-      innovation: fetchedKeyPoints.innovation || '',
-      conclusion: fetchedKeyPoints.conclusion || '',
-    }
-    keyPointsLoaded = true
-  } catch (error) {
-    console.error('预加载四要素失败:', error)
-  }
-}
-
-const toggleKeyPointsPanel = () => {
-  keyPointsPanelVisible.value = !keyPointsPanelVisible.value
-}
 
 onMounted(() => {
   chatConnection = createChatConnection(props.paperId, {
@@ -111,8 +77,6 @@ onMounted(() => {
       scrollToBottom()
     },
   })
-
-  preloadKeyPoints()
 })
 
 onUnmounted(() => {
@@ -176,66 +140,11 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 
-defineExpose({ askWithContext })
+defineExpose({ askWithContext, clearMessages })
 </script>
 
 <template>
   <div class="ai-chat-panel">
-    <div class="ai-header">
-      <el-icon :size="16"><ChatDotSquare /></el-icon>
-      <span>AI 对话</span>
-      <div class="ai-header-actions">
-        <el-button
-          size="small"
-          text
-          class="ai-header-btn"
-          @click="toggleKeyPointsPanel"
-        >
-          <el-icon :size="14"><InfoFilled /></el-icon>
-          论文四要素
-          <el-icon :size="12" style="margin-left: 4px">
-            <ArrowDown v-if="!keyPointsPanelVisible" />
-            <ArrowUp v-else />
-          </el-icon>
-        </el-button>
-        <el-button
-          v-if="messages.length > 0"
-          size="small"
-          text
-          class="ai-header-btn"
-          @click="clearMessages"
-        >
-          <el-icon :size="14"><Delete /></el-icon>
-        </el-button>
-      </div>
-    </div>
-
-    <!-- 四要素面板 -->
-    <transition name="slide-fade">
-      <div v-if="keyPointsPanelVisible" class="keypoints-panel">
-        <div v-loading="loadingKeyPoints" class="keypoints-container">
-          <div v-if="!loadingKeyPoints" class="keypoints-list">
-            <div class="keypoint-card">
-              <div class="keypoint-label">研究背景</div>
-              <div class="keypoint-content">{{ keyPoints.background || '暂无内容' }}</div>
-            </div>
-            <div class="keypoint-card">
-              <div class="keypoint-label">研究方法</div>
-              <div class="keypoint-content">{{ keyPoints.method || '暂无内容' }}</div>
-            </div>
-            <div class="keypoint-card">
-              <div class="keypoint-label">创新点</div>
-              <div class="keypoint-content">{{ keyPoints.innovation || '暂无内容' }}</div>
-            </div>
-            <div class="keypoint-card">
-              <div class="keypoint-label">结论</div>
-              <div class="keypoint-content">{{ keyPoints.conclusion || '暂无内容' }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
-
     <div class="ai-messages" ref="messagesContainer">
       <div v-if="messages.length === 0" class="ai-empty">
         <p>对论文内容有疑问？</p>
@@ -293,26 +202,6 @@ defineExpose({ askWithContext })
   background: white;
   overflow-y: auto;
   scrollbar-gutter: stable;
-}
-
-.ai-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  flex-shrink: 0;
-  z-index: 10;
-  background: white;
-}
-
-.ai-header-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 4px;
 }
 
 .ai-messages {
@@ -386,68 +275,6 @@ defineExpose({ askWithContext })
   font-size: 0.82rem;
   line-height: 1.5;
   resize: none;
-}
-
-/* 四要素面板样式 */
-.keypoints-panel {
-  border-bottom: 1px solid var(--line-soft);
-  background: #fafbfc;
-  max-height: 52vh;
-  overflow-y: auto;
-}
-
-.keypoints-container {
-  padding: 12px 16px;
-}
-
-.keypoints-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.keypoint-card {
-  padding: 10px 12px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.keypoint-card:not(:last-child) {
-  border-bottom: 1px solid #eee;
-}
-
-.keypoint-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #888;
-  margin-bottom: 4px;
-  letter-spacing: 0.3px;
-}
-
-.keypoint-content {
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: #3a3a3a;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* 过渡动画 */
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: all 0.2s ease;
-}
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  transform: translateY(-8px);
-  opacity: 0;
-}
-.slide-fade-enter-to,
-.slide-fade-leave-from {
-  transform: translateY(0);
-  opacity: 1;
 }
 
 /* Markdown 渲染样式 */
