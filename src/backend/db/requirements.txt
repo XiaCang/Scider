@@ -2,4 +2,3 @@ SQLAlchemy>=1.4
 alembic
 asyncmy
 aiomysql
-PyMySQL

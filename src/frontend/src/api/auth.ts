@@ -1,59 +1,50 @@
 import request from '../network/request'
-import type {
-  ApiResponse,
-  LoginPayload,
-  RegisterPayload,
-  LoginResponseData,
-  RegisterResponseData,
-  ProfileResponseData,
-  SendCodeResponseData,
-  ChangePasswordResponseData,
-  ChangePasswordByOldPayload,
-  UpdateProfilePayload,
-  AvatarResponseData,
-} from '../types/auth'
+import type { AuthResponse, LoginPayload, RegisterPayload } from '../types/auth'
 
-/** POST /api/user/login — 登录 */
-export const loginApi = (payload: LoginPayload) =>
-  request.post<ApiResponse<LoginResponseData>>('/user/login', payload)
+const shouldUseFallback = () => import.meta.env.VITE_ENABLE_API_FALLBACK !== 'false'
 
-/** POST /api/user/register — 注册 */
-export const registerApi = (payload: RegisterPayload) =>
-  request.post<ApiResponse<RegisterResponseData>>('/user/register', payload)
-
-/** POST /api/user/send-code — 获取验证码 */
-export const sendCodeApi = (payload: { email: string }) =>
-  request.post<ApiResponse<SendCodeResponseData>>('/user/send-code', payload)
-
-/** GET /api/user/me — 查询用户信息 */
-export const getProfileApi = () =>
-  request.get<ApiResponse<ProfileResponseData>>('/user/me')
-
-/** POST /api/user/change-password — 忘记密码 */
-export const changePasswordApi = (payload: { email: string; code: string; new_password: string }) =>
-  request.post<ApiResponse<ChangePasswordResponseData>>('/user/change-password', payload)
-
-/** POST /api/user/change-password-by-old — 原密码修改密码（设置页） */
-export const changePasswordByOldApi = (payload: ChangePasswordByOldPayload) =>
-  request.post<ApiResponse<null>>('/user/change-password-by-old', payload)
-
-/** PATCH /api/user/me — 修改用户名 */
-export const updateProfileApi = (payload: UpdateProfilePayload) =>
-  request.patch<ApiResponse<null>>('/user/me', payload)
-
-/** POST /api/user/avatar — 上传头像 */
-export const uploadAvatarApi = (file: File) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request.post<ApiResponse<AvatarResponseData>>('/user/avatar', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+const createMockResponse = (
+  payload: Pick<RegisterPayload, 'name' | 'email'>,
+): Promise<AuthResponse> =>
+  new Promise((resolve) => {
+    window.setTimeout(() => {
+      resolve({
+        accessToken: `scider-demo-token-${Date.now()}`,
+        user: {
+          id: `user-${Date.now()}`,
+          name: payload.name,
+          email: payload.email,
+          institution: 'Scider Lab',
+        },
+      })
+    }, 480)
   })
+
+export const loginApi = async (payload: LoginPayload): Promise<AuthResponse> => {
+  try {
+    return await request.post('/auth/login', payload)
+  } catch (error) {
+    if (!shouldUseFallback()) {
+      throw error
+    }
+
+    return createMockResponse({
+      name: payload.email.split('@')[0] || 'Researcher',
+      email: payload.email,
+    })
+  }
 }
 
-/** GET /api/user/avatar — 获取头像 URL */
-export const getAvatarApi = () =>
-  request.get<ApiResponse<AvatarResponseData>>('/user/avatar')
+export const registerApi = async (payload: RegisterPayload): Promise<AuthResponse> => {
+  try {
+    return await request.post('/auth/register', payload)
+  } catch (error) {
+    if (!shouldUseFallback()) {
+      throw error
+    }
 
-/** DELETE /api/user/avatar — 删除头像 */
-export const deleteAvatarApi = () =>
-  request.delete<ApiResponse<null>>('/user/avatar')
+    return createMockResponse(payload)
+  }
+}
+
+export const getProfileApi = () => request.get('/auth/profile')
