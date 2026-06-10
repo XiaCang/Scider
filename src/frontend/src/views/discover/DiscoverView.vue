@@ -8,6 +8,35 @@ import { yearOptions, venueOptions, sortOptions } from '../../discover/constants
 import type { LibraryPaper } from '../../types/library'
 import { fetchPaperByIdApi } from '../../api/library'
 import { ElMessage } from 'element-plus'
+import GuideTour from '../../components/GuideTour.vue'
+import { useGuide } from '../../hooks/useGuide'
+
+// ── 引导 tour ──
+const guide = useGuide({
+  pageKey: 'discover',
+  steps: [
+    {
+      selector: '.bar-input',
+      title: '搜索论文',
+      description: '在搜索框中输入关键词、作者名或论文标题，即可在全球论文学术库中检索相关文献。',
+      placement: 'bottom',
+    },
+    {
+      selector: '.pill:first-child',
+      title: '筛选条件',
+      description: '点击筛选按钮可按年份范围、来源期刊和排序方式精确过滤搜索结果，帮你快速定位目标论文。',
+      placement: 'bottom',
+    },
+    {
+      selector: '.paper-card-wrapper:first-child',
+      title: '查看论文信息',
+      description: '搜索结果以卡片形式展示。点击任意论文卡片会弹出详情抽屉，你可以浏览摘要信息并将感兴趣的论文导入文库。',
+      placement: 'left',
+    },
+  ],
+})
+
+const { currentStep, isActive, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 const {
   keyword,
@@ -203,6 +232,18 @@ const onPaperImported = (paperId: string) => {
       v-model="detailVisible"
       :paper="selectedPaper"
       @imported="onPaperImported"
+    />
+
+    <!-- 页面引导 tour -->
+    <GuideTour
+      :step="currentStepData"
+      :step-number="currentStep + 1"
+      :total-steps="totalSteps"
+      :is-first="isFirst"
+      :is-last="isLast"
+      @next="next"
+      @prev="prev"
+      @skip="skip"
     />
   </section>
 </template>

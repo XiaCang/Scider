@@ -86,6 +86,18 @@
       :folders="folderStore.folders"
       @confirm="handleConfirmCopy"
     />
+
+    <!-- 页面引导 tour -->
+    <GuideTour
+      :step="currentStepData"
+      :step-number="currentStep + 1"
+      :total-steps="totalSteps"
+      :is-first="isFirst"
+      :is-last="isLast"
+      @next="next"
+      @prev="prev"
+      @skip="skip"
+    />
   </div>
 </template>
 
@@ -101,6 +113,8 @@ import PaperCardList from './paper/PaperListItem.vue'
 import PdfUploadDialog from '../../components/PdfUploadDialog.vue'
 import ParsingProgressPopover from '../../components/ParsingProgressPopover.vue'
 import CopyToFolderDialog from '../../components/CopyToFolderDialog.vue'
+import GuideTour from '../../components/GuideTour.vue'
+import { useGuide } from '../../hooks/useGuide'
 import { usePaperStore } from '../../store/paper'
 import { useFolderStore } from '../../store/folder'
 
@@ -108,6 +122,45 @@ const route = useRoute()
 const router = useRouter()
 const paperStore = usePaperStore()
 const folderStore = useFolderStore()
+
+// ── 引导 tour ──
+const guide = useGuide({
+  pageKey: 'library',
+  steps: [
+    {
+      selector: '.left-panel',
+      title: '文件夹管理',
+      description: '左侧文件夹树帮助你分类管理论文。点击右上角 + 按钮可新建文件夹，右键文件夹可进行重命名、移动等操作。',
+      placement: 'right',
+    },
+    {
+      selector: '.upload-btn',
+      title: '上传 PDF 论文',
+      description: '点击这里上传你的 PDF 论文文件，系统会自动解析论文元数据并提取四维度关键点（背景、方法、创新点、结论）。',
+      placement: 'bottom',
+    },
+    {
+      selector: '.library-search',
+      title: '搜索论文',
+      description: '在搜索框中输入关键词，可按标题快速过滤当前文件夹中的论文。',
+      placement: 'bottom',
+    },
+    {
+      selector: '.paper-card:first-child',
+      title: '查看论文详情',
+      description: '点击任意论文卡片，右侧会弹出详情抽屉。你可以在其中查看和编辑论文的四维度关键点，确认后即可预览 PDF。',
+      placement: 'left',
+    },
+    {
+      selector: '.select-all-btn',
+      title: '批量操作',
+      description: '勾选论文后，上方会显示已选数量。你可以批量删除论文，或将它们复制到其他文件夹中。',
+      placement: 'bottom',
+    },
+  ],
+})
+
+const { currentStep, isActive, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 const searchQuery = ref('')
 const paperDetailVisible = ref(false)
