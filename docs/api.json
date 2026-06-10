@@ -1,0 +1,3704 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "默认模块",
+    "description": "文件夹的增删改查接口。所有接口均需 JWT 认证（Authorization: Bearer <token>）。\n\n**前置条件**：先调用 `POST /api/user/login` 获取 token。\n",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "papers"
+    },
+    {
+      "name": "tasks"
+    },
+    {
+      "name": "论文发现"
+    },
+    {
+      "name": "discover"
+    },
+    {
+      "name": "folders"
+    }
+  ],
+  "paths": {
+    "/api/papers/{paper_id}/key-points": {
+      "patch": {
+        "summary": "保存四要素并确认、触发向量化",
+        "deprecated": false,
+        "description": "保存四要素并确认、触发向量化",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer <JWT>，登录接口返回的 data.token",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "description": "application/json",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "example": {
+                "keyPoints": {
+                  "background": "…",
+                  "method": "…",
+                  "innovation": "…",
+                  "conclusion": "…"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/papers/upload": {
+      "post": {
+        "summary": "上传 PDF 论文",
+        "deprecated": false,
+        "description": "上传 PDF 格式的学术论文。服务端会依次执行：\n\n**同步阶段（请求内完成）：**\n1. JWT 鉴权\n2. 文件扩展名校验（仅 .pdf）\n3. 文件大小校验（上限 50MB）\n4. MD5 内容哈希去重（重复返回 409）\n5. 存储文件至 `uploads/papers/{md5}.pdf`\n6. 写入 paper 表（status: pending_parsing）\n\n**异步阶段（后台 Celery 任务链）：**\n7. `parse_pdf_task` — 用 PyMuPDF 提取纯文本\n   (PENDING_PARSING → PARSING → PENDING_EXTRACTION)\n8. `extract_key_points_task` — 调用大模型提取四要素并写入 KeyPoints 表\n   (PENDING_EXTRACTION → EXTRACTING → PENDING_CONFIRMATION)\n\n返回的 `task_id` 可用于 `GET /api/tasks/{task_id}` 查询解析进度。\n",
+        "tags": [
+          "papers"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PDF 文件（仅支持 .pdf，最大 50MB）",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "上传成功，后台解析中",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "上传成功，后台解析中"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paper_id": {
+                          "type": "string",
+                          "description": "论文记录 ID",
+                          "example": "a1b2c3d4e5f6..."
+                        },
+                        "filename": {
+                          "type": "string",
+                          "description": "原始文件名",
+                          "example": "paper.pdf"
+                        },
+                        "file_size": {
+                          "type": "integer",
+                          "description": "文件大小（字节）",
+                          "example": 1048576
+                        },
+                        "md5": {
+                          "type": "string",
+                          "description": "文件内容 MD5 哈希",
+                          "example": "d41d8cd98f00b204e9800998ecf8427e"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "论文状态，初始为 pending_parsing",
+                          "example": "pending_parsing"
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "description": "后台解析任务的 ID，可用于查询进度",
+                          "example": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "文件格式错误或超出大小限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "仅支持 PDF 文件"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string",
+                      "example": "Not authenticated"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "论文已存在（MD5 重复）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "该论文已存在，请勿重复上传"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/user/login": {
+      "post": {
+        "summary": "登录",
+        "deprecated": false,
+        "description": "用户使用邮箱和密码进行身份验证。验证通过后会返回 Token供后续接口鉴权使用。\n- 验证逻辑：先根据 email 查询用户，若用户存在，则使用 bcrypt.compare(password, hash) 将明文密码与数据库密文进行比对。\n- 安全提示：无论邮箱不存在还是密码错误，建议统一返回“邮箱或密码错误”，以防恶意枚举账号。",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              },
+              "example": {
+                "email": "1282312174@qq.com",
+                "password": "218218wcj"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "token": {
+                          "type": "string"
+                        },
+                        "userInfo": {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": "string"
+                            },
+                            "username": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "userId",
+                            "username"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "token",
+                        "userInfo"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "登录成功",
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "userInfo": {
+                      "userId": "65f2b1a...",
+                      "username": "张三"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/register": {
+      "post": {
+        "summary": "注册",
+        "deprecated": false,
+        "description": "用户通过邮箱、用户名和密码创建新账号。密码在存储前会经过 bcrypt 加密处理，确保数据库安全。\n用户名不作为区分用户的主键，仅仅是一个昵称",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "description": "符合格式且唯一"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "六位以上密码"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "仅作为昵称"
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "验证码"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password",
+                  "name",
+                  "code"
+                ]
+              },
+              "example": {
+                "email": "qyhzgz@126.com",
+                "password": "123456",
+                "name": "water",
+                "code": "202152"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "string",
+                          "description": "数据库生成的唯一用户ID"
+                        },
+                        "username": {
+                          "type": "string",
+                          "description": "用户注册的用户名"
+                        },
+                        "email": {
+                          "type": "string",
+                          "description": "用户注册的密码"
+                        }
+                      },
+                      "required": [
+                        "userId",
+                        "username",
+                        "email"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "注册成功",
+                  "data": {
+                    "userId": "65f2b1a...",
+                    "username": "张三",
+                    "email": "zhangsan@example.com"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/me": {
+      "get": {
+        "summary": "查询用户信息",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMzhmYjMwZWI3MWY0OWFjYjk5M2NlYWVjYjZhNzY5YiIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3NzczNDMwMjN9.yldPpDMTqbD3bPgnwYr0Dxd-H9FwQtsMHjBz-GXjF08",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "name"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "userId": "65f2b1a...",
+                    "username": "张三",
+                    "email": "zhangsan@example.com"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "用户名修改",
+        "deprecated": false,
+        "description": "用户名修改",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk4NjgwMTF9.EOUWFxEaOWfpZZ_20LXmfUVhSm_Z_l7VZtWeGu5uNYA",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "example": {
+                "name": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/user/send-code": {
+      "post": {
+        "summary": "获取验证码",
+        "deprecated": false,
+        "description": "根据邮箱，发送六位随机验证码,验证码供注册和重置密码使用，使用一次后即作废",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              },
+              "example": {
+                "email": "1282312174@qq.com"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "sent": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "sent"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "验证码已生成并存储",
+                  "data": {
+                    "email": "1282312174@qq.com",
+                    "sent": true
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/change-password": {
+      "post": {
+        "summary": "忘记密码",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "new_password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "code",
+                  "new_password"
+                ]
+              },
+              "example": {
+                "email": "1282312174@qq.com",
+                "code": "461216",
+                "new_password": "111string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "userId",
+                        "email"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "密码已更新",
+                  "data": {
+                    "userId": "706cd32cad954a949ffdd257c6ee8d88",
+                    "email": "1282312174@qq.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/user/avatar": {
+      "post": {
+        "summary": "头像上传",
+        "deprecated": false,
+        "description": "- 主要行为：\n  - 服务端保存到 `UPLOAD_DIR/avatars/` 下（文件名按 md5+user_id + ext 形式去重/保存）；\n  - 更新 `User.avatar_path` / `User.avatar_url` 字段；\n  - 若已有旧头像会尝试删除旧文件（若与新文件不同）。",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk3MjEzNTh9.4Ws_LXxOgtB8tU6RKlK2lCR9EDEOjVKnFHa5-l3qCIM",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "description": "要上传的头像文件（支持后缀 `.png`, `.jpg`, `.jpeg`, `.webp`，大小受 `MAX_UPLOAD_SIZE_MB` 限制）",
+                    "example": "cmMtdXBsb2FkLTE3Nzk2OTIwMzYwODQtMg==/屏幕截图 2026-05-09 143335.png",
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "avatarUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "avatarUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "上传成功",
+                  "data": {
+                    "avatarUrl": "/uploads/avatars/abc123def.png"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "头像url获取",
+        "deprecated": false,
+        "description": "返回当前登录用户的 `avatarUrl`（如果无头像，返回空或 `null`）",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "avatarUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "avatarUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "ok",
+                  "data": {
+                    "avatarUrl": "/uploads/avatars/abc123def.png"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "头像删除",
+        "deprecated": false,
+        "description": "- 方法：DELETE\n- 路径：`/api/user/avatar`\n- 权限：登录用户（只能删除自己的头像）\n- 描述：删除用户头像文件并清空 DB 中的 `avatar_path` / `avatar_url`。",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "删除成功",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/user/llm-providers": {
+      "post": {
+        "summary": "apikey添加",
+        "deprecated": false,
+        "description": "- 方法：POST\n- 路径：`/api/user/llm-providers`\n- 权限：登录用户\n- Body（JSON）：",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk3MjQ5ODl9.a-pyhBnjZxDzXmh-kJasW6Nb8WAmlWOs5Udic7oFCcc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "base_url": {
+                    "type": "string"
+                  },
+                  "api_key": {
+                    "type": "string",
+                    "description": "存加密后的apikey"
+                  },
+                  "default_model": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "provider",
+                  "base_url",
+                  "api_key",
+                  "default_model",
+                  "enabled"
+                ]
+              },
+              "example": {
+                "name": "OpenAI",
+                "provider": "openai",
+                "base_url": "https://.openai.com",
+                "api_key": "sk-xxdddfx",
+                "default_model": "gpt-5",
+                "enabled": true
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "api_key_masked": {
+                          "type": "string"
+                        },
+                        "default_model": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "api_key_masked",
+                        "default_model",
+                        "enabled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "created",
+                  "data": {
+                    "id": 2,
+                    "name": "OpenAI",
+                    "api_key_masked": "sk_****xxx",
+                    "default_model": "gpt-4",
+                    "enabled": true
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "全部apikey获取",
+        "deprecated": false,
+        "description": "权限：当前登录用户\n列出当前用户所持有的所有apikey",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmMyZDBiYTUxYjI0M2EyYTZkODAyMjI1ZDcyM2JkZiIsImVtYWlsIjoiMzQ5MzczNTgzOEBxcS5jb20iLCJleHAiOjE3Nzk3MzI5MjF9.XfrMap0_m_dWXg-lkceU4qrfo2xNILo9B_JV5O37JXs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "base_url": {
+                            "type": "string"
+                          },
+                          "api_key_masked": {
+                            "type": "string"
+                          },
+                          "default_model": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "user_id": {
+                            "type": "null"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "ok",
+                      "data": [
+                        {
+                          "id": 1,
+                          "name": "OpenAI",
+                          "provider": "openai",
+                          "base_url": "https://api.openai.com",
+                          "api_key_masked": "sk_****abcd",
+                          "default_model": "gpt-4",
+                          "enabled": true,
+                          "user_id": null,
+                          "created_at": "2026-05-01T12:00:00Z"
+                        }
+                      ]
+                    }
+                  },
+                  "2": {
+                    "summary": "成功示例 2",
+                    "value": {
+                      "code": 0,
+                      "msg": "查询成功",
+                      "data": [
+                        {
+                          "id": "53440878ff9d495f841b74e56eba13a1",
+                          "name": "OpenAI",
+                          "provider": "openai",
+                          "base_url": "https://.openai.com",
+                          "default_model": "gpt-5",
+                          "enabled": true,
+                          "api_key_masked": "******ddfx",
+                          "user_id": "08c5449bd77d42adb03b3d0bc302cbf1"
+                        },
+                        {
+                          "id": "bef918035d5f4f9fb49116f0d766b9a0",
+                          "name": "OpenAI",
+                          "provider": "openai",
+                          "base_url": "https://api.openai.com",
+                          "default_model": "gpt-4",
+                          "enabled": true,
+                          "api_key_masked": "**-xxx",
+                          "user_id": "08c5449bd77d42adb03b3d0bc302cbf1"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/user/llm-providers/{id}": {
+      "patch": {
+        "summary": "apikey更新",
+        "deprecated": false,
+        "description": "- 方法：PATCH\n- 路径：`/api/user/llm-providers/{id}`\n- 权限：登录用户（只能更新自己创建或有权限的 Provider）\n\n这里apikey更新包括1.更新内容 2.更新唯一选中启用的apikey，一个key的enabled被设为true的话，自动将该用户其他key的enabled设为false",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "bef918035d5f4f9fb49116f0d766b9a0",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmMyZDBiYTUxYjI0M2EyYTZkODAyMjI1ZDcyM2JkZiIsImVtYWlsIjoiMzQ5MzczNTgzOEBxcS5jb20iLCJleHAiOjE3Nzk3MzI5MjF9.XfrMap0_m_dWXg-lkceU4qrfo2xNILo9B_JV5O37JXs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "base_url": {
+                    "type": "string"
+                  },
+                  "api_key": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "更新唯一选中启用的apikey，一个key的enabled被设为true的话，自动将该用户其他key的enabled设为false"
+                  }
+                },
+                "required": [
+                  "name",
+                  "base_url",
+                  "api_key",
+                  "enabled"
+                ]
+              },
+              "example": {
+                "name": "OpenAI Updated-old22222",
+                "base_url": "https://api.openai.com/v2",
+                "api_key": "sk-new",
+                "enabled": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "更新成功",
+                      "data": {
+                        "id": "53440878ff9d495f841b74e56eba13a1"
+                      }
+                    }
+                  },
+                  "2": {
+                    "summary": "修改失败（无权限）",
+                    "value": {
+                      "code": 403,
+                      "msg": "无权限修改该 provider",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "apikey删除",
+        "deprecated": false,
+        "description": "- 方法：DELETE\n- 路径：`/api/user/llm-providers/{id}`\n- 权限：登录用户（只能删除自己有权限的 Provider）",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "这里的id指的是apikey的id",
+            "required": true,
+            "example": "bef918035d5f4f9fb49116f0d766b9a0",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmMyZDBiYTUxYjI0M2EyYTZkODAyMjI1ZDcyM2JkZiIsImVtYWlsIjoiMzQ5MzczNTgzOEBxcS5jb20iLCJleHAiOjE3Nzk3MzI5MjF9.XfrMap0_m_dWXg-lkceU4qrfo2xNILo9B_JV5O37JXs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "deleted",
+                      "data": null
+                    }
+                  },
+                  "2": {
+                    "summary": "删除失败（无权限）",
+                    "value": {
+                      "code": 403,
+                      "msg": "无权限删除该 provider",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/tasks/ping": {
+      "post": {
+        "summary": "Submit Ping Task",
+        "deprecated": false,
+        "description": "",
+        "operationId": "submit_ping_task_api_tasks_ping_post",
+        "tags": [
+          "tasks"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Submit Ping Task Api Tasks Ping Post",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/tasks/{task_id}": {
+      "get": {
+        "summary": "Get Task Result",
+        "deprecated": false,
+        "description": "",
+        "operationId": "get_task_result_api_tasks__task_id__get",
+        "tags": [
+          "tasks"
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Task Result Api Tasks  Task Id  Get",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/import": {
+      "post": {
+        "summary": "导入论文到文库",
+        "deprecated": false,
+        "description": "将检索到的论文导入到用户文库，自动下载 PDF（如有）并触发异步解析任务。需要 JWT 鉴权。",
+        "operationId": "import_paper_api_discover_import_post",
+        "tags": [
+          "论文发现"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              },
+              "example": {
+                "title": "Attention Is All You Need",
+                "authors": "Ashish Vaswani, Noam Shazeer",
+                "abstract": "ipsum labore dolor anim dolore",
+                "doi": "10.48550/arXiv.1706.03762",
+                "year": 2017,
+                "venue": "NIPS",
+                "pdf_url": "http://arxiv.org/pdf/2103.14030"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "导入成功",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "paper_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    "status": "pending_parsing"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证（缺少或无效的 JWT Token）",
+            "headers": {}
+          },
+          "409": {
+            "description": "论文已存在于文库中（根据 DOI 判断）",
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/search": {
+      "get": {
+        "summary": "检索论文",
+        "deprecated": false,
+        "description": "调用 Semantic Scholar API 进行关键词检索，支持年份、来源类型筛选和多种排序方式",
+        "operationId": "search_papers_api_discover_search_get",
+        "tags": [
+          "论文发现"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "检索关键词",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "检索关键词",
+              "title": "Q",
+              "example": "transformer attention"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "分页偏移量",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "分页偏移量",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "每页数量，最大 50",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "每页数量，最大 50",
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "year_from",
+            "in": "query",
+            "description": "年份下限（含）",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份下限（含）",
+              "title": "Year From",
+              "example": 2017
+            }
+          },
+          {
+            "name": "year_to",
+            "in": "query",
+            "description": "年份上限（含）",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份上限（含）",
+              "title": "Year To",
+              "example": 2024
+            }
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "description": "来源类型筛选",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "来源类型筛选",
+              "enum": [
+                "conference",
+                "journal",
+                "arXiv"
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "排序方式",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "排序方式",
+              "enum": [
+                "relevance",
+                "citations",
+                "date"
+              ],
+              "default": "relevance",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "检索成功",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "total": 1523,
+                    "offset": 0,
+                    "limit": 10,
+                    "data": [
+                      {
+                        "semantic_id": "649def34f8be52c8b66281af98ae884c09aef38b",
+                        "title": "Attention Is All You Need",
+                        "authors": "Ashish Vaswani, Noam Shazeer",
+                        "year": 2017,
+                        "venue": "NIPS",
+                        "source_type": "conference",
+                        "citation_count": 85234,
+                        "pdf_url": "https://arxiv.org/pdf/1706.03762.pdf"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "502": {
+            "description": "Semantic Scholar API 调用失败",
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/import/bulk": {
+      "post": {
+        "summary": "Bulk Import Papers",
+        "deprecated": false,
+        "description": "批量导入，单次上限 20 篇。\n逐篇检查重复，跳过已存在的论文；其余逐篇创建记录并派发 Celery 任务。\n使用 flush() 在单个事务内获取 paper.id，最后统一 commit。",
+        "operationId": "bulk_import_papers_api_discover_import_bulk_post",
+        "tags": [
+          "discover"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/references/{semantic_id}": {
+      "get": {
+        "summary": "获取参考文献",
+        "deprecated": false,
+        "description": "获取指定论文的参考文献列表（该论文引用的文献，即上游），并标注哪些已在用户文库中。需要 JWT 鉴权。",
+        "operationId": "get_references_api_discover_references__semantic_id__get",
+        "tags": [
+          "论文发现"
+        ],
+        "parameters": [
+          {
+            "name": "semantic_id",
+            "in": "path",
+            "description": "Semantic Scholar 论文 ID",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "description": "Semantic Scholar 论文 ID",
+              "title": "Semantic Id",
+              "example": "649def34f8be52c8b66281af98ae884c09aef38b"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "获取成功",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "data": [
+                      {
+                        "semantic_id": "abc123",
+                        "title": "Neural Machine Translation",
+                        "authors": "Ilya Sutskever, Oriol Vinyals",
+                        "year": 2014,
+                        "venue": "NIPS",
+                        "citation_count": 12345,
+                        "in_library": true
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "502": {
+            "description": "Semantic Scholar API 调用失败",
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/discover/citations/{semantic_id}": {
+      "get": {
+        "summary": "获取引用文献",
+        "deprecated": false,
+        "description": "获取引用指定论文的文献列表（下游），并标注哪些已在用户文库中。需要 JWT 鉴权。",
+        "operationId": "get_citations_api_discover_citations__semantic_id__get",
+        "tags": [
+          "论文发现"
+        ],
+        "parameters": [
+          {
+            "name": "semantic_id",
+            "in": "path",
+            "description": "Semantic Scholar 论文 ID",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "description": "Semantic Scholar 论文 ID",
+              "title": "Semantic Id",
+              "example": "649def34f8be52c8b66281af98ae884c09aef38b"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "获取成功",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "data": [
+                      {
+                        "semantic_id": "xyz789",
+                        "title": "BERT: Pre-training of Deep Bidirectional Transformers",
+                        "authors": "Jacob Devlin, Ming-Wei Chang",
+                        "year": 2019,
+                        "venue": "NAACL",
+                        "citation_count": 67890,
+                        "in_library": false
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "502": {
+            "description": "Semantic Scholar API 调用失败",
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/folders/": {
+      "post": {
+        "summary": "创建文件夹",
+        "deprecated": false,
+        "description": "为当前用户创建一个新的论文分类文件夹。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "文件夹名称（不能为空）",
+                    "example": "我的论文"
+                  }
+                }
+              },
+              "example": {
+                "name": "我的论文"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FolderResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "文件夹名称为空",
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "获取文件夹列表",
+        "deprecated": false,
+        "description": "获取当前用户的所有文件夹，按创建时间倒序排列。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "description": "文件夹列表",
+                          "items": {
+                            "$ref": "#/components/schemas/FolderResponse"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/folders/{folder_id}": {
+      "get": {
+        "summary": "获取文件夹详情",
+        "deprecated": false,
+        "description": "根据 ID 获取单个文件夹的信息。只能访问自己创建的文件夹。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "文件夹 ID",
+            "required": true,
+            "example": "a1b2c3d4e5f6...",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FolderResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问",
+            "headers": {}
+          },
+          "404": {
+            "description": "文件夹不存在",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "重命名文件夹",
+        "deprecated": false,
+        "description": "修改文件夹的名称。只能修改自己创建的文件夹。",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "文件夹 ID",
+            "required": true,
+            "example": "a1b2c3d4e5f6...",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "新的文件夹名称",
+                    "example": "重命名后的文件夹"
+                  }
+                }
+              },
+              "example": {
+                "name": "重命名后的文件夹"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/FolderResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "文件夹名称为空",
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "403": {
+            "description": "无权修改",
+            "headers": {}
+          },
+          "404": {
+            "description": "文件夹不存在",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "删除文件夹",
+        "deprecated": false,
+        "description": "删除指定的文件夹。\n- 只能删除自己创建的文件夹\n- 删除后，文件夹中的论文会自动解绑（folder_id 置为 NULL），论文本身不会被删除\n",
+        "tags": [
+          "folders"
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "文件夹 ID",
+            "required": true,
+            "example": "a1b2c3d4e5f6...",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer <token>",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "null",
+                          "description": "删除成功后 data 为 null"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证",
+            "headers": {}
+          },
+          "403": {
+            "description": "无权删除",
+            "headers": {}
+          },
+          "404": {
+            "description": "文件夹不存在",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/graph/similarity": {
+      "get": {
+        "summary": "相似度图谱",
+        "deprecated": false,
+        "description": "相似度图谱（Query 见下）\nQuery 参数（均可选，除说明外有默认值）：\n\nfolder_id：只含该文件夹下论文\nmax_nodes：默认 200，范围 1–200\nmin_similarity：默认 0.55\ntop_k：默认 8",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/notes/uploads": {
+      "post": {
+        "summary": "笔记图片上传",
+        "deprecated": false,
+        "description": "上传图片，返回url给前端，前端将url插入到富文本中\n填写paperId和noteId，在数据库中备份图片的归属关系",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "paperId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "f1e2d3c4b5a697887766554433221100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "3c2a6c13c815421bb1a862891a59ed14",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjIzMzF9.nMSrtob8xyfBbYEEzErqVFe0Fn0WilENVXiof9WFC-8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "example": "cmMtdXBsb2FkLTE3Nzk4NjQwMTYzMjEtMTI=/屏幕截图 2026-05-10 163838.png",
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "noteId": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "size": {
+                          "type": "integer"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "noteId",
+                        "url",
+                        "filename",
+                        "mimeType",
+                        "size",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 0,
+                      "msg": "上传成功",
+                      "data": {
+                        "url": "/uploads/notes/tmp/3f5a9e...png",
+                        "filename": "photo.png",
+                        "mimeType": "image/png",
+                        "size": 12345
+                      }
+                    }
+                  },
+                  "2": {
+                    "summary": "示例 2",
+                    "value": {
+                      "code": 0,
+                      "msg": "上传成功",
+                      "data": {
+                        "id": "28780001276f4eb18fffe52c968e6d2c",
+                        "noteId": "3c2a6c13c815421bb1a862891a59ed14",
+                        "url": "/uploads/notes/3c2a6c13c815421bb1a862891a59ed14/82b3b28c3e064a6db14b0b61c6e41871.png",
+                        "filename": "屏幕截图 2026-05-14 015310.png",
+                        "mimeType": "image/png",
+                        "size": 36436,
+                        "createdAt": "2026-05-28T09:01:36"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/": {
+      "post": {
+        "summary": "创建笔记",
+        "deprecated": false,
+        "description": "创建笔记",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NTcyNzB9.ug7lduqlilv_i0RSyMZ9vSHpzij3kuKSKJXw_duzYd8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "paperId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "笔记标题"
+                  },
+                  "contentHtml": {
+                    "type": "string",
+                    "description": "笔记文本"
+                  },
+                  "contentFormat": {
+                    "type": "string",
+                    "description": "格式html或者markdown等等，前端可以自己确定类型"
+                  }
+                },
+                "required": [
+                  "paperId",
+                  "title",
+                  "contentHtml",
+                  "contentFormat"
+                ]
+              },
+              "example": {
+                "paperId": "f1e2d3c4b5a697887766554433221100",
+                "title": "笔记4",
+                "contentHtml": "机器学习",
+                "contentFormat": "html"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "paperId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "contentHtml": {
+                          "type": "string"
+                        },
+                        "contentFormat": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "paperId",
+                        "title",
+                        "contentHtml",
+                        "contentFormat",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "创建成功",
+                  "data": {
+                    "id": "note_hex_id",
+                    "paperId": "abc123",
+                    "title": "我的笔记标题",
+                    "contentHtml": "<p>看这里 <img src=\"/uploads/notes/note_hex_id/3f5a9e.png\"/></p>",
+                    "contentFormat": "html",
+                    "createdAt": "2026-05-28T08:00:00",
+                    "updatedAt": "2026-05-28T08:00:00"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "展示论文的笔记列表",
+        "deprecated": false,
+        "description": "展示当前论文下的所有笔记列表",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "paperId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "f1e2d3c4b5a697887766554433221100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码。默认1",
+            "required": false,
+            "example": 1,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页条数，默认20",
+            "required": false,
+            "example": 20,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjIzMzF9.nMSrtob8xyfBbYEEzErqVFe0Fn0WilENVXiof9WFC-8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "description": "笔记id"
+                              },
+                              "paperId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string",
+                                "description": "标题"
+                              },
+                              "excerpt": {
+                                "type": "string",
+                                "description": "内容"
+                              },
+                              "firstImageUrl": {
+                                "type": "string",
+                                "description": "方便扩展，暂时没用",
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "description": "更新时间"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "paperId",
+                              "title",
+                              "excerpt",
+                              "firstImageUrl",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "total": 2,
+                    "items": [
+                      {
+                        "id": "note1",
+                        "paperId": "abc123",
+                        "title": "笔记 A",
+                        "excerpt": "这是笔记的纯文本摘录...",
+                        "firstImageUrl": "/uploads/notes/note1/img1.png",
+                        "updatedAt": "2026-05-28T08:10:00"
+                      },
+                      {
+                        "id": "note2",
+                        "paperId": "abc123",
+                        "title": "笔记 B",
+                        "excerpt": "",
+                        "firstImageUrl": null,
+                        "updatedAt": "2026-05-27T12:00:00"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/{note_id}": {
+      "get": {
+        "summary": "获取单个笔记",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "paperId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "contentHtml": {
+                          "type": "string"
+                        },
+                        "contentFormat": {
+                          "type": "string"
+                        },
+                        "contentText": {
+                          "type": "string"
+                        },
+                        "images": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "orderIndex": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "paperId",
+                        "title",
+                        "contentHtml",
+                        "contentFormat",
+                        "contentText",
+                        "images",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "id": "note_hex_id",
+                    "paperId": "abc123",
+                    "title": "我的笔记标题",
+                    "contentHtml": "<p>内容带图片 <img src=\"/uploads/notes/note_hex_id/3f5a9e.png\"/></p>",
+                    "contentFormat": "html",
+                    "contentText": "内容带图片 ...",
+                    "images": [
+                      {
+                        "id": "imgid1",
+                        "url": "/uploads/notes/note_hex_id/3f5a9e.png",
+                        "orderIndex": 0
+                      }
+                    ],
+                    "createdAt": "2026-05-28T08:00:00",
+                    "updatedAt": "2026-05-28T08:00:00"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "修改笔记",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "contentHtml": {
+                    "type": "string"
+                  },
+                  "contentFormat": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "contentHtml",
+                  "contentFormat"
+                ]
+              },
+              "example": {
+                "title": "string",
+                "contentHtml": "string",
+                "contentFormat": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "更新成功",
+                  "data": {
+                    "id": "note_hex_id"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "删除笔记",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "删除成功",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/search": {
+      "get": {
+        "summary": "关键词搜索笔记",
+        "deprecated": false,
+        "description": "根据关键词搜索，支持在标题包含或者文本包含关键词",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "关键词",
+            "required": false,
+            "example": "笔记",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paperId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "f1e2d3c4b5a697887766554433221100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "1",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "20",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjEyOTl9.fC_sXYtaIxHYWlTptnHkCKuSMI-mddh8wuzamve3r74",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "note_id": {
+                                "type": "string"
+                              },
+                              "note_title": {
+                                "type": "string"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "content_text": {
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "note_id",
+                              "note_title",
+                              "content_text",
+                              "updated_at",
+                              "score"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "搜索完成",
+                  "data": {
+                    "total": 3,
+                    "items": [
+                      {
+                        "note_id": "125e64c45ec14c80bc9a884c4b7f021c",
+                        "note_title": "笔记4",
+                        "score": 0.3624762296676636,
+                        "content_text": "笔记",
+                        "updated_at": "2026-05-28T08:01:00"
+                      },
+                      {
+                        "note_id": "3c2a6c13c815421bb1a862891a59ed14",
+                        "note_title": "笔记4",
+                        "content_text": "机器学习",
+                        "updated_at": "2026-05-28T08:14:43",
+                        "score": 0
+                      },
+                      {
+                        "note_id": "d3f53e7749754dd998f689f8ee5d9f60",
+                        "note_title": "笔记3",
+                        "content_text": "string",
+                        "updated_at": "2026-05-28T07:42:55",
+                        "score": 0
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/api/notes/{note_id}/images": {
+      "get": {
+        "summary": "获取某个笔记下所有图片的url",
+        "deprecated": false,
+        "description": "获取某个笔记下所有图片的url",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "3c2a6c13c815421bb1a862891a59ed14",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGM1NDQ5YmQ3N2Q0MmFkYjAzYjNkMGJjMzAyY2JmMSIsImVtYWlsIjoiMTI4MjMxMjE3NEBxcS5jb20iLCJleHAiOjE3Nzk5NjIzMzF9.nMSrtob8xyfBbYEEzErqVFe0Fn0WilENVXiof9WFC-8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "orderIndex": {
+                                "type": "integer"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "filename",
+                              "orderIndex",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "查询成功",
+                  "data": {
+                    "total": 2,
+                    "items": [
+                      {
+                        "id": "28780001276f4eb18fffe52c968e6d2c",
+                        "url": "/uploads/notes/3c2a6c13c815421bb1a862891a59ed14/82b3b28c3e064a6db14b0b61c6e41871.png",
+                        "filename": "屏幕截图 2026-05-14 015310.png",
+                        "orderIndex": 0,
+                        "createdAt": "2026-05-28T09:01:36"
+                      },
+                      {
+                        "id": "dabb904e88954beaa355ac8173b63c02",
+                        "url": "/uploads/notes/3c2a6c13c815421bb1a862891a59ed14/06257c19e61e43d9aaf4623a9b885abb.png",
+                        "filename": "屏幕截图 2026-05-10 163838.png",
+                        "orderIndex": 0,
+                        "createdAt": "2026-05-28T09:10:53"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "jwt": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "deprecated": false,
+        "description": "",
+        "operationId": "health_check_health_get",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Check Health Get",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BulkImportRequest": {
+        "properties": {
+          "papers": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRequest"
+            },
+            "type": "array",
+            "title": "Papers"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "papers",
+          "user_id"
+        ],
+        "title": "BulkImportRequest"
+      },
+      "FolderResponse": {
+        "type": "object",
+        "description": "文件夹对象",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "文件夹 ID（UUID hex）",
+            "example": "a1b2c3d4e5f6..."
+          },
+          "name": {
+            "type": "string",
+            "description": "文件夹名称",
+            "example": "我的论文"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "创建时间",
+            "example": "2026-04-30T10:00:00"
+          }
+        }
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0 成功，非 0 失败",
+            "example": 0
+          },
+          "msg": {
+            "type": "string",
+            "description": "提示消息",
+            "example": "创建成功"
+          },
+          "data": {
+            "description": "响应数据（可能为 null）"
+          }
+        }
+      },
+      "ImportRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "论文标题",
+            "example": "Attention Is All You Need"
+          },
+          "authors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authors",
+            "description": "作者列表（逗号分隔）",
+            "example": "Ashish Vaswani, Noam Shazeer"
+          },
+          "abstract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstract",
+            "description": "摘要"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi",
+            "description": "DOI",
+            "example": "10.48550/arXiv.1706.03762"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "发表年份",
+            "example": 2017
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue",
+            "description": "发表会议/期刊",
+            "example": "NIPS"
+          },
+          "pdf_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Url",
+            "description": "开放获取 PDF 链接（Semantic Scholar openAccessPdf.url）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "ImportRequest",
+        "description": "导入论文请求体"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context",
+            "properties": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "responses": {},
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "jwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "servers": [],
+  "security": []
+}

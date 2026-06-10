@@ -1,1 +1,9 @@
 node_modules
+
+# Redis
+dump.rdb
+*.rdb
+
+.claude
+
+CLAUDE.md

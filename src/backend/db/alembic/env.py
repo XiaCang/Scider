@@ -1,5 +1,7 @@
 import os
 from logging.config import fileConfig
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -14,11 +16,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# ── Load .env from backend root ───────────────────────────────────
+from dotenv import load_dotenv
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+load_dotenv(dotenv_path)
+
 # add your model's MetaData object here
 import sys
-# Insert project/src so `backend` package can be imported (project_root/src should be on path)
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from backend.db.models import Base  # noqa
+# Insert project root (2 levels up from db/alembic/) so db.models can be imported
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from db.models import Base  # noqa
 
 target_metadata = Base.metadata
 

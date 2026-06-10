@@ -1,0 +1,26 @@
+fastapi>=0.110
+uvicorn[standard]>=0.30
+celery[redis]>=5.4
+redis>=5.0
+SQLAlchemy>=2.0
+alembic>=1.13
+asyncmy>=0.2.11
+python-dotenv>=1.0
+httpx>=0.27
+aiomysql>=0.2
+PyMySQL>=1.1.0 
+PyMuPDF>=1.24
+openai>=1.30
+aiofiles>=23.0
+python-multipart>=0.0.6
+PyJWT>=2.8
+passlib[bcrypt]>=1.7.4
+# passlib 1.7.4 与 bcrypt>=4.1 不兼容（移除了 __about__）；开发机 hash 命令与登录校验都依赖此组合
+bcrypt>=4.0.1,<4.1.0
+email-validator>=2.3
+
+# ── 测试依赖 ──
+pytest>=8.0
+pytest-asyncio>=0.24
+pytest-timeout>=2.3
+bleach>=5.0

@@ -1,0 +1,113 @@
+### 健康检查
+GET http://127.0.0.1:8000/health
+
+### 提交 ping 任务（公开接口，无需 token）
+POST http://127.0.0.1:8000/api/tasks/ping
+
+### 查询任务状态（替换为实际 task_id，公开接口）
+GET http://127.0.0.1:8000/api/tasks/<task-id>
+
+### ──── 用户接口 ────
+
+### 获取验证码（验证码会存储在 Redis 中，有效期 5 分钟）
+POST http://127.0.0.1:8000/api/user/send-code
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+
+### 用户注册（code 从 send-code 接口获取）
+POST http://127.0.0.1:8000/api/user/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "123456",
+  "name": "测试用户",
+  "code": "612359"
+}
+
+### 用户登录（获取 token）
+# 将响应中的 data.token 复制到下方请求的 Authorization 头中
+POST http://127.0.0.1:8000/api/user/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "123456"
+}
+
+### 查询当前用户信息（需替换 <token>）
+GET http://127.0.0.1:8000/api/user/me
+Authorization: Bearer <token>
+
+### 修改用户名（需替换 <token>）
+PATCH http://127.0.0.1:8000/api/user/me
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "新用户名"
+}
+
+### 修改密码（需先获取验证码）
+POST http://127.0.0.1:8000/api/user/change-password
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "code": "123456",
+  "new_password": "654321"
+}
+
+### ──── 论文上传接口（需先登录获取 token）────
+
+### 上传 PDF 论文（将 <token> 替换为实际 token，将路径替换为实际 PDF 文件路径）
+# 上传成功后会自动触发后台解析任务链（PDF 提取 → LLM 四要素提取）
+# 返回的 task_id 可用于查询解析进度
+POST http://127.0.0.1:8000/api/papers/upload
+Authorization: Bearer <token>
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="file"; filename="paper.pdf"
+Content-Type: application/pdf
+
+< ./1.pdf
+------boundary--
+
+### 查询任务状态（替换为实际 task_id，公开接口）
+GET http://127.0.0.1:8000/api/tasks/<task_id>
+
+### ──── 文件夹接口（需先登录获取 token）────
+
+### 创建文件夹
+POST http://127.0.0.1:8000/api/folders/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "我的论文"
+}
+
+### 获取文件夹列表
+GET http://127.0.0.1:8000/api/folders/
+Authorization: Bearer <token>
+
+### 获取单个文件夹详情（替换 <folder_id>）
+GET http://127.0.0.1:8000/api/folders/<folder_id>
+Authorization: Bearer <token>
+
+### 重命名文件夹（替换 <folder_id>）
+PATCH http://127.0.0.1:8000/api/folders/<folder_id>
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "重命名后的文件夹"
+}
+
+### 删除文件夹（替换 <folder_id>）
+DELETE http://127.0.0.1:8000/api/folders/<folder_id>
+Authorization: Bearer <token>

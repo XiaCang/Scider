@@ -1,148 +1,150 @@
 <script setup lang="ts">
-const nodes = [
-  { label: 'Vision Transformer', x: 18, y: 34, type: 'core' },
-  { label: 'Attention', x: 42, y: 18, type: 'keyword' },
-  { label: 'Image Retrieval', x: 66, y: 35, type: 'paper' },
-  { label: 'Multimodal Search', x: 31, y: 64, type: 'topic' },
-  { label: 'Prompted Reading', x: 60, y: 70, type: 'paper' },
-]
+import { ref, watch } from 'vue'
+import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
+import { useFolderStore } from '../../store/folder'
+import LibraryFolderTree from '../library/folder/LibraryFolderTree.vue'
+import GraphPanel from './GraphPanel.vue'
 
-const links = [
-  { x1: 18, y1: 34, x2: 42, y2: 18 },
-  { x1: 42, y1: 18, x2: 66, y2: 35 },
-  { x1: 18, y1: 34, x2: 31, y2: 64 },
-  { x1: 31, y1: 64, x2: 60, y2: 70 },
-  { x1: 42, y1: 18, x2: 60, y2: 70 },
-]
+const folderStore = useFolderStore()
+const expandedFolders = ref<Set<string>>(new Set())
+
+// 侧边栏折叠状态
+const isSidebarCollapsed = ref(false)
+
+// 切换折叠状态
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
+
+// 监听侧边栏折叠状态变化，触发图谱重绘
+watch(isSidebarCollapsed, () => {
+  // 等待 CSS 过渡动画完成后触发 resize
+  setTimeout(() => {
+    // 通过自定义事件通知 GraphPanel 重新调整大小
+    window.dispatchEvent(new CustomEvent('sidebar-toggle'))
+  }, 350) // 略大于 transition 时间（300ms）确保动画完成
+})
+
+// 切换文件夹时同步 store
+const handleSelectFolder = (id: string) => {
+  if (id === 'all') {
+    folderStore.setCurrentFolder(null)
+  } else {
+    folderStore.setCurrentFolder(id)
+  }
+}
+
+const handleUpdateExpanded = (value: Set<string>) => {
+  expandedFolders.value = value
+}
 </script>
 
 <template>
-  <section class="graph-page">
-    <header class="graph-header">
-      <div>
-        <h1 class="section-title">Knowledge Graph</h1>
-        <p class="section-description">
-          当前先搭建图谱画布框架，后续可以把真实关键词共现结果、拖拽交互和缩放能力接进来。
-        </p>
-      </div>
-      <div class="graph-tags">
-        <span class="status-pill is-brand">Keyword Co-occurrence</span>
-        <span class="status-pill">Canvas Ready</span>
-      </div>
-    </header>
+  <div class="graph-page-container">
+    <aside 
+      class="graph-sidebar" 
+      :class="{ collapsed: isSidebarCollapsed }"
+    >
+      <LibraryFolderTree
+        :active-folder-id="folderStore.currentFolderId || 'all'"
+        :expanded-folders="expandedFolders"
+        @select-folder="handleSelectFolder"
+        @update:expanded-folders="handleUpdateExpanded"
+      />
+    </aside>
 
-    <section class="graph-canvas">
-      <svg class="graph-canvas__lines" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <line
-          v-for="(link, index) in links"
-          :key="index"
-          :x1="link.x1"
-          :y1="link.y1"
-          :x2="link.x2"
-          :y2="link.y2"
-        />
-      </svg>
+    <!-- 折叠/展开按钮 -->
+    <button 
+      class="sidebar-toggle-btn"
+      :class="{ collapsed: isSidebarCollapsed }"
+      @click="toggleSidebar"
+      :title="isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+    >
+      <el-icon>
+        <DArrowRight v-if="isSidebarCollapsed" />
+        <DArrowLeft v-else />
+      </el-icon>
+    </button>
 
-      <button
-        v-for="node in nodes"
-        :key="node.label"
-        class="graph-node"
-        :class="`graph-node--${node.type}`"
-        :style="{ left: `${node.x}%`, top: `${node.y}%` }"
-        type="button"
-      >
-        {{ node.label }}
-      </button>
-    </section>
-  </section>
+    <main class="graph-main">
+      <GraphPanel />
+    </main>
+  </div>
 </template>
 
 <style scoped>
-.graph-page {
-  display: grid;
-  gap: 0.9rem;
+.graph-page-container {
+  display: flex;
+  height: 100vh;
+  background: var(--bg-page, #f5f7fa);
+  position: relative;
 }
 
-.graph-header {
+.graph-sidebar {
+  width: 280px;
+  min-width: 260px;
+  max-width: 280px;
+  height: 100%;
+  border-right: 1px solid var(--line-soft, #e4e7ed);
+  background: #fff;
+  overflow-y: auto;
+  padding: 10px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.graph-sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  padding: 0;
+  border-right: none;
+  overflow: hidden;
+}
+
+/* 折叠/展开按钮 */
+.sidebar-toggle-btn {
+  position: absolute;
+  left: 280px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  background: white;
+  border: 1px solid var(--line-soft, #e4e7ed);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--line-soft);
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.3s ease;
+  z-index: 10;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
 }
 
-.graph-tags {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.graph-canvas {
-  position: relative;
-  margin-top: 1rem;
-  min-height: 70vh;
-  overflow: hidden;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at top, rgba(237, 244, 255, 0.9), transparent 40%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(247, 250, 252, 0.96) 100%);
-}
-
-.graph-canvas::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-.graph-canvas__lines {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.graph-canvas__lines line {
-  stroke: rgba(22, 50, 95, 0.18);
-  stroke-width: 0.24;
-}
-
-.graph-node {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
-  border: 1px solid rgba(22, 50, 95, 0.1);
-  background: white;
-  padding: 0.62rem 0.8rem;
-  cursor: grab;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-  font-size: 0.82rem;
-}
-
-.graph-node--core {
-  background: #173668;
-  color: white;
-}
-
-.graph-node--keyword {
-  background: #eef4ff;
+.sidebar-toggle-btn:hover {
+  background: var(--brand-soft, rgba(74, 157, 154, 0.1));
   color: var(--brand);
+  box-shadow: 2px 0 12px rgba(74, 157, 154, 0.15);
 }
 
-.graph-node--topic {
-  background: #eef9f3;
-  color: var(--success);
+.sidebar-toggle-btn.collapsed {
+  left: 0;
 }
 
-@media (max-width: 820px) {
-  .graph-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.sidebar-toggle-btn .el-icon {
+  font-size: 16px;
+}
+
+.graph-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
 </style>

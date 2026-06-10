@@ -1,264 +1,511 @@
 <script setup lang="ts">
-import { ArrowDown, Search } from '@element-plus/icons-vue'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { Search } from '@element-plus/icons-vue'
+import { useSearch } from '../../discover/composables/useSearch'
+import PaperResultCard from '../../discover/components/PaperResultCard.vue'
+import PaperDetailSimple from '../library/paper/PaperDetailSimple.vue'
+import { yearOptions, venueOptions, sortOptions } from '../../discover/constants'
+import type { LibraryPaper } from '../../types/library'
+import { fetchPaperByIdApi } from '../../api/library'
+import { ElMessage } from 'element-plus'
 
-const quickSearch = ref('')
-const selectedYear = ref<string>('')
-const selectedVenue = ref<string>('')
-const sortBy = ref<string>('relevance')
+const {
+  keyword,
+  selectedYear,
+  selectedVenue,
+  sortBy,
+  loading,
+  error,
+  filteredResults,
+} = useSearch()
 
-const yearOptions = [
-  { label: '全部年份', value: '' },
-  { label: '2025', value: '2025' },
-  { label: '2024', value: '2024' },
-  { label: '2023', value: '2023' },
-  { label: '2022', value: '2022' },
-  { label: '2021及更早', value: '2021' },
-]
+/* ── 自定义下拉面板 ── */
+const yearOpen = ref(false)
+const venueOpen = ref(false)
+const sortOpen = ref(false)
 
-const venueOptions = [
-  { label: '全部类型', value: '' },
-  { label: 'arXiv', value: 'arXiv' },
-  { label: 'SIGIR', value: 'SIGIR' },
-  { label: 'CHI', value: 'CHI' },
-  { label: 'ACL', value: 'ACL' },
-  { label: 'NeurIPS', value: 'NeurIPS' },
-]
+function toggleYear() { yearOpen.value = !yearOpen.value; venueOpen.value = false; sortOpen.value = false }
+function toggleVenue() { venueOpen.value = !venueOpen.value; yearOpen.value = false; sortOpen.value = false }
+function toggleSort() { sortOpen.value = !sortOpen.value; yearOpen.value = false; venueOpen.value = false }
 
-const sortOptions = [
-  { label: '相关性', value: 'relevance' },
-  { label: '最新发表', value: 'year-desc' },
-  { label: '最早发表', value: 'year-asc' },
-  { label: '标题 A-Z', value: 'title-asc' },
-]
+function closeAll() { yearOpen.value = false; venueOpen.value = false; sortOpen.value = false }
 
-const recommendations = [
-  {
-    id: 'rec-1',
-    title: 'Scientific Document VLMs for Reading Assistance',
-    authors: 'Smith, J. et al.',
-    venue: 'arXiv',
-    year: 2025,
-    relation: 'Trending',
-    reason: '和你当前的"多模态论文理解"方向高度接近，可作为入门综述入口。',
-    description: '该研究探讨了视觉语言模型在科学文档阅读辅助中的应用，提供了系统性的分析和评估。',
-  },
-  {
-    id: 'rec-2',
-    title: 'Citation-aware Retrieval for Research Exploration',
-    authors: 'Johnson, M. et al.',
-    venue: 'SIGIR',
-    year: 2024,
-    relation: 'Upstream',
-    reason: '适合作为文献追踪与上下游检索能力的技术参考。',
-    description: '提出了一种基于引用感知的检索方法，能够有效追踪学术文献的上下游关系。',
-  },
-  {
-    id: 'rec-3',
-    title: 'Interactive Knowledge Graphs for Scholarly Search',
-    authors: 'Williams, K. et al.',
-    venue: 'CHI',
-    year: 2024,
-    relation: 'Downstream',
-    reason: '和知识图谱可视化及科研探索交互关系较强。',
-    description: '研究了交互式知识图谱在学术搜索中的应用，提升了用户探索和理解复杂研究领域的能力。',
-  },
-]
+function onYearPick(val: string) { selectedYear.value = val; yearOpen.value = false }
+function onVenuePick(val: string) { selectedVenue.value = val; venueOpen.value = false }
+function onSortPick(val: string) { sortBy.value = val; sortOpen.value = false }
+
+const currentYearLabel = computed(() =>
+  yearOptions.find(o => o.value === selectedYear.value)?.label ?? '全部年份'
+)
+const currentVenueLabel = computed(() =>
+  venueOptions.find(o => o.value === selectedVenue.value)?.label ?? '全部来源'
+)
+const currentSortLabel = computed(() =>
+  sortOptions.find(o => o.value === sortBy.value)?.label ?? '相关性'
+)
+
+/* ── 论文详情抽屉 ── */
+const detailVisible = ref(false)
+const selectedPaper = ref<LibraryPaper | null>(null)
+
+// 处理点击论文卡片
+const handlePaperClick = async (paper: any) => {
+  // 如果论文已在文库中，获取完整详情
+  if ((paper as any).in_library && paper.id) {
+    try {
+      const { data } = await fetchPaperByIdApi(paper.id)
+      selectedPaper.value = data
+    } catch (err) {
+      ElMessage.error('加载论文详情失败')
+      console.error(err)
+      return
+    }
+  } else {
+    // 对于未入库的论文，使用搜索结果的简化信息
+    const semanticId = paper.semantic_id || paper.id || ''
+    const doi = paper.doi || ''
+    
+    selectedPaper.value = {
+      id: semanticId,
+      title: paper.title || '',
+      authors: paper.authors || '',
+      year: paper.year || 0,
+      venue: paper.venue || '',
+      citation_count: paper.citation_count || 0,
+      abstract: paper.abstract || paper.description || '',
+      pdf_url: paper.pdf_url || '',
+      doi: doi,
+      arxiv_id: paper.arxiv_id || '',
+      url: semanticId ? `https://www.semanticscholar.org/paper/${semanticId}` : null,
+      doi_url: doi ? `https://doi.org/${doi}` : null,
+      status: 'PENDING',
+      source: paper.source_type || 'external',
+      keyPoints: null,
+      in_library: false,
+    } as any
+  }
+  
+  detailVisible.value = true
+}
+
+// 处理导入成功
+const onPaperImported = (paperId: string) => {
+  // 在结果列表中找到对应论文并标记为已入库
+  const item = filteredResults.value.find(p => p.id === paperId || p.semantic_id === paperId)
+  if (item) {
+    (item as any).in_library = true
+  }
+  // 更新当前选中论文
+  if (selectedPaper.value) {
+    selectedPaper.value.in_library = true
+  }
+}
+
+/* ── 推荐模型 ── */
 </script>
 
 <template>
-  <section class="discover-page">
-    <div class="discover-search-bar">
-      <label class="discover-search">
-        <el-icon><Search /></el-icon>
-        <input v-model="quickSearch" type="text" placeholder="Search papers, authors, topics..." />
-      </label>
-      
-      <div class="discover-filters">
-        <el-dropdown trigger="click">
-          <el-button plain>
-            {{ selectedYear ? yearOptions.find(opt => opt.value === selectedYear)?.label : '年份' }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="option in yearOptions"
-                :key="option.value"
-                @click="selectedYear = option.value"
-              >
-                {{ option.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+  <section class="discover-page" @click="closeAll">
 
-        <el-dropdown trigger="click">
-          <el-button plain>
-            {{ selectedVenue ? venueOptions.find(opt => opt.value === selectedVenue)?.label : '类型' }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="option in venueOptions"
-                :key="option.value"
-                @click="selectedVenue = option.value"
-              >
-                {{ option.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <el-dropdown trigger="click">
-          <el-button plain>
-            {{ sortOptions.find(opt => opt.value === sortBy)?.label || '排序' }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="option in sortOptions"
-                :key="option.value"
-                @click="sortBy = option.value"
-              >
-                {{ option.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+    <!-- 搜索区：紧凑一行 -->
+    <div class="hero-search">
+      <div class="search-bar">
+        <el-icon class="bar-icon"><Search /></el-icon>
+        <input
+          v-model="keyword"
+          type="text"
+          placeholder="搜索论文、作者、关键词..."
+          class="bar-input"
+        />
+        <div class="bar-divider" />
+        <div class="bar-filters">
+          <!-- 年份 -->
+          <div class="pill-wrap">
+            <button class="pill" :class="{ active: selectedYear }" @click.stop="toggleYear">
+              {{ currentYearLabel }}
+              <svg class="pill-cv" :class="{ up: yearOpen }" width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <Transition name="fade-drop">
+              <div v-if="yearOpen" class="pill-dropdown">
+                <button v-for="opt in yearOptions" :key="opt.value" class="pill-opt" :class="{ sel: selectedYear === opt.value }" @click="onYearPick(opt.value)">{{ opt.label }}</button>
+              </div>
+            </Transition>
+          </div>
+          <!-- 来源 -->
+          <div class="pill-wrap">
+            <button class="pill" :class="{ active: selectedVenue }" @click.stop="toggleVenue">
+              {{ currentVenueLabel }}
+              <svg class="pill-cv" :class="{ up: venueOpen }" width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <Transition name="fade-drop">
+              <div v-if="venueOpen" class="pill-dropdown">
+                <button v-for="opt in venueOptions" :key="opt.value" class="pill-opt" :class="{ sel: selectedVenue === opt.value }" @click="onVenuePick(opt.value)">{{ opt.label }}</button>
+              </div>
+            </Transition>
+          </div>
+          <!-- 排序 -->
+          <div class="pill-wrap">
+            <button class="pill" :class="{ active: sortBy !== 'relevance' }" @click.stop="toggleSort">
+              {{ currentSortLabel }}
+              <svg class="pill-cv" :class="{ up: sortOpen }" width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <Transition name="fade-drop">
+              <div v-if="sortOpen" class="pill-dropdown pill-dropdown--right">
+                <button v-for="opt in sortOptions" :key="opt.value" class="pill-opt" :class="{ sel: sortBy === opt.value }" @click="onSortPick(opt.value)">{{ opt.label }}</button>
+              </div>
+            </Transition>
+          </div>
+        </div>
       </div>
     </div>
 
-    <section class="discover-list">
-      <article v-for="item in recommendations" :key="item.id" class="discover-item">
-        <div class="discover-item__main">
-          <h2 class="item-title">{{ item.title }}</h2>
-          <div class="item-meta">
-            <span>{{ item.year }}</span>
-            <span class="meta-separator">·</span>
-            <span>{{ item.authors }}</span>
-            <span class="meta-separator">·</span>
-            <span>{{ item.venue }}</span>
-          </div>
-          <p class="item-description">{{ item.description }}</p>
+    <!-- 推荐提示 -->
+    <p v-if="!keyword && !loading && filteredResults.length > 0" class="discover-hint">
+      基于你的文库和阅读记录为你推荐以下论文
+    </p>
+
+    <!-- 加载态 -->
+    <div v-if="loading" class="state-message">
+      <div class="loading-dots"><span /><span /><span /></div>
+      <p>正在加载推荐...</p>
+    </div>
+
+    <!-- 错误态 -->
+    <div v-if="error" class="state-message state-error">
+      <p>{{ error }}</p>
+    </div>
+
+    <!-- 结果列表 -->
+    <div v-if="!loading" class="discover-list">
+      <div v-if="filteredResults.length === 0 && !error" class="empty-list">
+        <div class="empty-icon-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="10" y="6" width="28" height="36" rx="4" stroke="#cbd5e1" stroke-width="2" fill="none"/><path d="M18 18h12M18 25h12M18 32h8" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/></svg>
         </div>
-        <el-button plain>View Details</el-button>
-      </article>
-    </section>
+        <p>{{ keyword ? '未找到匹配的论文' : '暂无推荐内容' }}</p>
+      </div>
+
+      <TransitionGroup name="card-enter" tag="div" class="card-list">
+        <div
+          v-for="item in filteredResults"
+          :key="item.id"
+          @click="handlePaperClick(item)"
+          class="paper-card-wrapper"
+        >
+          <PaperResultCard
+            :paper="item"
+          />
+        </div>
+      </TransitionGroup>
+    </div>
+
+    <!-- 论文详情抽屉 -->
+    <PaperDetailSimple
+      v-model="detailVisible"
+      :paper="selectedPaper"
+      @imported="onPaperImported"
+    />
   </section>
 </template>
 
 <style scoped>
+/* ════════ 页面布局 ════════ */
 .discover-page {
-  display: grid;
-  gap: 0.9rem;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 2rem 3rem;
 }
 
-.discover-search-bar {
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--line-soft);
+/* ── 搜索区 ── */
+.hero-search {
+  margin-bottom: 1rem;
+}
+
+.search-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.8rem;
   align-items: center;
+  background-color: #faf8f5;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
-.discover-search {
-  display: inline-flex;
+.bar-icon {
+  margin-left: 1rem;
+  color: #94a3b8;
+}
+
+.bar-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background-color: transparent;
+  font-size: 1rem;
+  color: #1f2937;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.bar-divider {
+  width: 1px;
+  height: 2rem;
+  background-color: #e2e8f0;
+}
+
+.bar-filters {
+  display: flex;
   align-items: center;
-  gap: 0.6rem;
+  padding: 0 1rem;
+}
+
+/* ── 下拉面板 ── */
+.pill-wrap {
+  position: relative;
+  margin-left: 0.5rem;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: rgba(74, 157, 154, 0.08);
+    border-color: rgba(74, 157, 154, 0.2);
+    color: #4a9d9a;
+  }
+
+  &.active {
+    background-color: rgba(74, 157, 154, 0.12);
+    border-color: rgba(74, 157, 154, 0.3);
+    color: #4a9d9a;
+  }
+}
+
+.pill-cv {
+  width: 10px;
+  height: 10px;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.up {
+    transform: rotate(180deg);
+  }
+}
+
+.pill-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 140px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  z-index: 100;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background-color: #ffffff;
+    box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.02);
+  }
+
+  &--right {
+    left: auto;
+    right: 0;
+    transform: none;
+
+    &::before {
+      left: auto;
+      right: 20px;
+      transform: rotate(45deg);
+    }
+  }
+}
+
+.pill-opt {
+  display: block;
   width: 100%;
-  min-width: min(500px, 48vw);
-  padding: 0.56rem 0.8rem;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: white;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  padding: 0.625rem 1rem;
+  border: none;
+  background-color: transparent;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background-color: #faf8f5;
+    color: #4a9d9a;
+  }
+
+  &.sel {
+    background-color: rgba(74, 157, 154, 0.08);
+    color: #4a9d9a;
+    font-weight: 500;
+
+    &::after {
+      content: '✓';
+      float: right;
+      margin-left: 0.5rem;
+      color: #4a9d9a;
+      font-weight: 600;
+    }
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid #f1f5f9;
+  }
 }
 
-.discover-search input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  outline: none;
-  color: var(--text-primary);
+/* ── 推荐提示 ── */
+.discover-hint {
+  margin-bottom: 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
-.discover-filters {
+/* ── 加载态 ── */
+.state-message {
   display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
-.discover-list {
-  display: grid;
-  gap: 1rem;
-  padding-top: 1rem;
-}
-
-.discover-item {
+.loading-dots {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--line-soft);
-}
-
-.discover-item:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.item-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.item-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
   margin-bottom: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.88rem;
 }
 
-.meta-separator {
-  opacity: 0.6;
+.loading-dots span {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: 0 0.25rem;
+  background-color: #94a3b8;
+  border-radius: 50%;
+  animation: loading-bounce 0.6s infinite alternate;
+
+  &:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.4s;
+  }
 }
 
-.item-description {
-  color: var(--text-tertiary);
-  font-size: 0.88rem;
-  margin: 0;
-  line-height: 1.6;
+@keyframes loading-bounce {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(-0.5rem);
+  }
 }
 
-@media (max-width: 820px) {
-  .discover-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* ── 错误态 ── */
+.state-error {
+  color: #dc2626;
+}
 
-  .discover-search {
-    width: 100%;
-    min-width: 0;
-  }
+/* ── 结果列表 ── */
+.discover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 
-  .discover-filters {
-    width: 100%;
-  }
+.empty-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
 
-  .discover-filters :deep(.el-select) {
-    flex: 1;
-    min-width: 120px;
+.empty-icon-wrap {
+  margin-bottom: 0.5rem;
+}
+
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.paper-card-wrapper {
+  cursor: pointer;
+
+  &:hover {
+    background-color: #f9fafb;
   }
+}
+
+/* ── 过渡效果 ── */
+.fade-drop-enter-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-drop-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-drop-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.fade-drop-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.pill-dropdown--right.fade-drop-enter-from {
+  transform: translateY(-8px);
+}
+
+.pill-dropdown--right.fade-drop-leave-to {
+  transform: translateY(-4px);
+}
+
+.card-enter-enter-active,
+.card-enter-leave-active {
+  transition: opacity 0.2s ease-in-out;
+}
+
+.card-enter-enter-from,
+.card-enter-leave-to {
+  opacity: 0;
 }
 </style>
