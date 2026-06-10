@@ -1,4 +1,6 @@
-"""快速测试增删改查，在 src/backend 目录下运行：python test_db.py"""
+"""eeeeseeeee
+快速测试增删改查，在 src/backend 目录下运行：python test_db.py
+"""
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -43,4 +45,5 @@ async def main():
         print("删除用户成功")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

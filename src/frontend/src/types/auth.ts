@@ -1,77 +1,25 @@
-/** 通用 API 响应信封 */
-export interface ApiResponse<T = unknown> {
-  code: number
-  msg: string
-  data: T
-}
-
 export interface AuthUser {
-  userId: string
-  username: string
-  email?: string
+  id: string
+  name: string
+  email: string
+  institution?: string
 }
 
 export interface LoginPayload {
   email: string
   password: string
+  remember?: boolean
 }
 
 export interface RegisterPayload {
+  name: string
   email: string
   password: string
-  name: string
-  code: string
+  institution?: string
 }
 
-/** POST /api/user/login → data */
-export interface LoginResponseData {
-  token: string
-  userInfo: {
-    userId: string
-    username: string
-  }
-}
-
-/** POST /api/user/register → data */
-export interface RegisterResponseData {
-  userId: string
-  username: string
-  email: string
-}
-
-/** GET /api/user/me → data */
-export interface ProfileResponseData {
-  user: {
-    id: string
-    email: string
-    name: string
-  }
-}
-
-/** POST /api/user/send-code → data */
-export interface SendCodeResponseData {
-  email: string
-  sent: boolean
-}
-
-/** POST /api/user/change-password → data */
-export interface ChangePasswordResponseData {
-  userId: string
-  email: string
-}
-
-/** POST /api/user/change-password-by-old → payload */
-export interface ChangePasswordByOldPayload {
-  old_password: string
-  new_password: string
-}
-
-/** PATCH /api/user/me → payload (用户名修改) */
-export interface UpdateProfilePayload {
-  name: string
-}
-
-/** GET /api/user/avatar → data */
-export interface AvatarResponseData {
-  avatarUrl: string | null
+export interface AuthResponse {
+  accessToken: string
+  refreshToken?: string
+  user: AuthUser
 }

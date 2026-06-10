@@ -4,38 +4,26 @@ import MainLayout from '../layouts/MainLayout.vue'
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
 import AuthView from '../views/auth/AuthView.vue'
-import ForgotPasswordView from '../views/auth/ForgotPasswordView.vue'
+import DashboardView from '../views/dashboard/DashboardView.vue'
 import DiscoverView from '../views/discover/DiscoverView.vue'
 import DiscoverViewUpstream from '../views/discover/DiscoverViewUpstream.vue'
 import GraphView from '../views/graph/GraphView.vue'
 import LibraryView from '../views/library/LibraryView.vue'
-import PaperPDFView from '../views/library/paper/PaperPDFView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
-import PaperList from '../views/library/PaperList.vue'
-import SettingsView from '../views/settings/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/app/library',
+      redirect: '/app/dashboard',
     },
     {
       path: '/login',
       name: 'login',
       component: AuthView,
       meta: {
-        title: 'Scider | 登录',
-        guestOnly: true,
-      },
-    },
-    {
-      path: '/forgot-password',
-      name: 'forgot-password',
-      component: ForgotPasswordView,
-      meta: {
-        title: 'Scider | 忘记密码',
+        title: 'Scider | Login',
         guestOnly: true,
       },
     },
@@ -48,26 +36,22 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/app/library',
+          redirect: '/app/dashboard',
+        },
+        {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: DashboardView,
+          meta: {
+            title: 'Scider | Dashboard',
+          },
         },
         {
           path: 'library',
           name: 'library',
           component: LibraryView,
           meta: {
-            title: 'Scider | 文献库',
-          },  
-          children: [
-            { path: '', redirect: { name: 'library-folder', params: { folderId: 'all' } } },
-            { path: 'folder/:folderId', name: 'library-folder', component: PaperList },
-          ]
-        },
-        {
-          path: 'library/paper/:paperId/pdf',
-          name: 'paper-pdf',
-          component: PaperPDFView,
-          meta: {
-            title: 'Scider | PDF 预览',
+            title: 'Scider | Library',
           },
         },
         {
@@ -75,7 +59,7 @@ const router = createRouter({
           name: 'graph',
           component: GraphView,
           meta: {
-            title: 'Scider | 知识图谱',
+            title: 'Scider | Knowledge Graph',
           },
         },
         {
@@ -83,7 +67,7 @@ const router = createRouter({
           name: 'discover',
           component: DiscoverView,
           meta: {
-            title: 'Scider | 发现',
+            title: 'Scider | Discover',
           },
         },
         {
@@ -91,15 +75,7 @@ const router = createRouter({
           name: 'discover-upstream',
           component: DiscoverViewUpstream,
           meta: {
-            title: 'Scider | 上下游',
-          },
-        },
-        {
-          path: 'settings',
-          name: 'settings',
-          component: SettingsView,
-          meta: {
-            title: 'Scider | 设置',
+            title: 'Scider | Discover Upstream',
           },
         },
       ],
@@ -109,7 +85,7 @@ const router = createRouter({
       name: 'not-found',
       component: NotFoundView,
       meta: {
-        title: 'Scider | 页面未找到',
+        title: 'Scider | Not Found',
       },
     },
   ],
@@ -118,9 +94,9 @@ const router = createRouter({
   },
 })
 
-router.beforeEach(async (to) => {
+router.beforeEach((to) => {
   const authStore = useAuthStore(pinia)
-  await authStore.hydrate()
+  authStore.hydrate()
 
   if (typeof to.meta.title === 'string') {
     document.title = to.meta.title
@@ -136,7 +112,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guestOnly && authStore.isAuthenticated) {
-    return '/app/library'
+    return '/app/dashboard'
   }
 
   return true
