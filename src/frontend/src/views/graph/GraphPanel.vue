@@ -328,10 +328,10 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
   })
 
   const nodeCount = nodes.length
-  let forceConfig: any = { repulsion: 1000, gravity: 0.03, edgeLength: [180, 350], friction: 0.65, initIterations: 250, layoutAnimation: true }
-  if (nodeCount > 50) forceConfig = { repulsion: 1500, gravity: 0.02, edgeLength: [200, 400], friction: 0.7, initIterations: 300, layoutAnimation: true }
-  if (nodeCount < 20) forceConfig = { repulsion: 800, gravity: 0.05, edgeLength: [150, 250], friction: 0.6, initIterations: 200, layoutAnimation: true }
-  if (graphType.value === 'llm') forceConfig = { ...forceConfig, repulsion: 1200, gravity: 0.02, edgeLength: [180, 400] }
+  let forceConfig: any = { repulsion: 800, gravity: 0.08, edgeLength: [120, 280], friction: 0.6, initIterations: 300, layoutAnimation: true }
+  if (nodeCount > 50) forceConfig = { repulsion: 1200, gravity: 0.05, edgeLength: [150, 350], friction: 0.65, initIterations: 400, layoutAnimation: true }
+  if (nodeCount < 20) forceConfig = { repulsion: 600, gravity: 0.1, edgeLength: [100, 200], friction: 0.55, initIterations: 250, layoutAnimation: true }
+  if (graphType.value === 'llm') forceConfig = { ...forceConfig, repulsion: 1000, gravity: 0.04, edgeLength: [140, 320] }
 
   const option: echarts.EChartsOption = {
     tooltip: {
@@ -362,10 +362,12 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
     },
     legend: { data: currentCategories.map(c => c.name), orient: 'vertical', right: 15, top: 15, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 10, padding: [12,16] },
     series: [{
-      type: 'graph', layout: 'force', data: nodes.map(n => ({ ...n, symbol: getSymbolByType(n.type), symbolSize: (n.type === 'paper' ? 55 : 38) + Math.min(nodeConnCount[n.id] || 0, 12), itemStyle: { borderWidth: n.type === 'paper' ? 3 : 2, borderColor: '#fff', shadowBlur: n.type === 'paper' ? 15 : 8, shadowColor: 'rgba(0,0,0,0.12)' }, x: (n as any).x, y: (n as any).y })),
+      type: 'graph', layout: 'force', data: nodes.map(n => ({ ...n, symbol: getSymbolByType(n.type), symbolSize: (n.type === 'paper' ? 52 : 36) + Math.min(nodeConnCount[n.id] || 0, 12), itemStyle: { borderWidth: n.type === 'paper' ? 3 : 2, borderColor: '#fff', shadowBlur: n.type === 'paper' ? 14 : 8, shadowColor: 'rgba(0,0,0,0.1)', borderRadius: n.type === 'paper' ? 4 : 2 }, x: (n as any).x, y: (n as any).y })),
       links: links.map(l => {
         const style = relationStyleMap[l.relationType] || relationStyleMap.custom
         const edgeId = (l as any).id || `edge_${l.source}_${l.target}_${l.relationType}`
+        const isBidirectional = links.some(other => other.source === l.target && other.target === l.source)
+        const curveness = isBidirectional ? 0.12 : 0
         return { 
           id: edgeId,
           source: l.source, 
@@ -373,9 +375,10 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
           lineStyle: { 
             type: style.type, 
             color: style.color, 
-            curveness: l.relationType === 'ownership' ? 0.05 : 0.25, 
+            curveness, 
             width: l.relationType === 'ownership' ? 2.5 : 1.8, 
-            opacity: 0.8 
+            opacity: 0.8,
+            cap: 'round',
           }, 
           label: { show: false }, 
           relationType: l.relationType, 
@@ -383,9 +386,14 @@ const renderChart = (nodes: GraphNode[], links: GraphLink[]) => {
         }
       }),
       categories: currentCategories, roam: true, draggable: true, force: forceConfig,
-      emphasis: { focus: 'adjacency', itemStyle: { shadowBlur: 20, shadowColor: 'rgba(74,157,154,0.4)' }, label: { fontWeight: 700 } },
-      label: { show: true, position: 'right', fontSize: 11, fontWeight: 500, color: '#2c3e50', distance: 10, formatter: (params: any) => params.data.type === 'paper' ? params.name : (params.name.length > 10 ? params.name.substring(0,10)+'…' : params.name) },
-      blur: { itemStyle: { opacity: 0.15 }, lineStyle: { opacity: 0.05 }, label: { show: false } }
+      emphasis: {
+        focus: 'adjacency',
+        itemStyle: { shadowBlur: 24, shadowColor: 'rgba(74,157,154,0.5)', borderWidth: 3 },
+        label: { fontWeight: 700 },
+        lineStyle: { width: 3, opacity: 1 },
+      },
+      label: { show: true, position: 'right', fontSize: 12, fontWeight: 500, color: '#2c3e50', distance: 12, formatter: (params: any) => params.data.type === 'paper' ? params.name : (params.name.length > 10 ? params.name.substring(0,10)+'…' : params.name) },
+      blur: { itemStyle: { opacity: 0.12 }, lineStyle: { opacity: 0.04 }, label: { show: false } }
     }],
   }
   chartInstance.setOption(option, { notMerge: true })
@@ -852,7 +860,11 @@ onUnmounted(() => {
   inset: 0;
   border: 1px solid var(--line-soft);
   border-radius: 20px;
-  background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
+  background-size: 28px 28px, 28px 28px, 100% 100%;
   overflow: hidden;
 }
 
