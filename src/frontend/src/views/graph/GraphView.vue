@@ -4,35 +4,6 @@ import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../store/folder'
 import LibraryFolderTree from '../library/folder/LibraryFolderTree.vue'
 import GraphPanel from './GraphPanel.vue'
-import GuideTour from '../../components/GuideTour.vue'
-import { useGuide } from '../../hooks/useGuide'
-
-// ── 引导 tour ──
-const guide = useGuide({
-  pageKey: 'graph',
-  steps: [
-    {
-      selector: '.graph-sidebar',
-      title: '选择论文范围',
-      description: '通过左侧文件夹树选择你要分析的论文集合，图谱会基于所选文件夹中的论文生成可视化关系。',
-      placement: 'right',
-    },
-    {
-      selector: '.graph-type-switch',
-      title: '切换图谱模式',
-      description: '相似度图谱根据论文四要素计算关联度；LLM 模式利用 AI 自动挖掘论文间的关系。两者可随时切换。',
-      placement: 'bottom',
-    },
-    {
-      selector: '.graph-chart',
-      title: '图谱交互',
-      description: '在画布区域你可以拖拽节点、滚轮缩放。点击节点查看论文详情，拖动节点间可手动连线。',
-      placement: 'top',
-    },
-  ],
-})
-
-const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 const folderStore = useFolderStore()
 const expandedFolders = ref<Set<string>>(new Set())
@@ -98,18 +69,6 @@ const handleUpdateExpanded = (value: Set<string>) => {
     <main class="graph-main">
       <GraphPanel />
     </main>
-
-    <!-- 页面引导 tour -->
-    <GuideTour
-      :step="currentStepData"
-      :step-number="currentStep + 1"
-      :total-steps="totalSteps"
-      :is-first="isFirst"
-      :is-last="isLast"
-      @next="next"
-      @prev="prev"
-      @skip="skip"
-    />
   </div>
 </template>
 
