@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, nextTick, onBeforeUnmount, computed } from 'vue'
+import { computed } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import type { TourStep } from '../hooks/useGuide'
 
@@ -37,12 +37,15 @@ const anchor = computed(() => {
 
 const TOOLTIP_W = 320
 
+interface AnchorRect {
+  top: number
+  left: number
+  width: number
+  height: number
+}
+
 /** 根据锚点和 placement 计算原始 tooltip 坐标 */
-function calcRawPosition(
-  a: NonNullable<ReturnType<typeof anchor.value>>,
-  placement: string,
-  gap: number,
-) {
+function calcRawPosition(a: AnchorRect, placement: string, gap: number) {
   let top: number, left: number, transform: string
   switch (placement) {
     case 'top':

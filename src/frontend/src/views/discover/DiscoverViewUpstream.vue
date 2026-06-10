@@ -29,7 +29,7 @@ const guide = useGuide({
   ],
 })
 
-const { currentStep, isActive, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
+const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 /* ── 视图切换状态 ── */
 const activeView = ref<'upstream' | 'downstream'>('upstream')

@@ -11,7 +11,7 @@ import { ElMessage } from 'element-plus'
 import GuideTour from '../../components/GuideTour.vue'
 import { useGuide } from '../../hooks/useGuide'
 
-// ── 引导 tour ──
+// ── 引导 tour ─it
 const guide = useGuide({
   pageKey: 'discover',
   steps: [
@@ -36,7 +36,7 @@ const guide = useGuide({
   ],
 })
 
-const { currentStep, isActive, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
+const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 const {
   keyword,

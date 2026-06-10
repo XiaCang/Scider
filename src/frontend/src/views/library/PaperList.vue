@@ -160,7 +160,7 @@ const guide = useGuide({
   ],
 })
 
-const { currentStep, isActive, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
+const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 const searchQuery = ref('')
 const paperDetailVisible = ref(false)
