@@ -22,39 +22,10 @@ import {
 import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
 import AiChatPanel from '../../../components/AiChatPanel.vue'
 import PdfContextMenu from '../../../components/PdfContextMenu.vue'
-import GuideTour from '../../../components/GuideTour.vue'
-import { useGuide } from '../../../hooks/useGuide'
 
 const route = useRoute()
 const router = useRouter()
 const paperId = computed(() => route.params.paperId as string)
-
-// ── 引导 tour ──
-const guide = useGuide({
-  pageKey: 'pdf-viewer',
-  steps: [
-    {
-      selector: '.pdf-toolbar',
-      title: 'PDF 阅读工具栏',
-      description: '顶部工具栏提供翻页、页码跳转和缩放功能。你可以用鼠标滚轮缩放 PDF，或点击按钮精细调整显示比例。',
-      placement: 'bottom',
-    },
-    {
-      selector: '.toolbar-right',
-      title: 'AI 对话与笔记',
-      description: '右侧按钮可打开 AI 对话面板和笔记侧栏。选中 PDF 文字后右键，可直接发送到 AI 提问。笔记支持 Markdown 编辑并自动保存。',
-      placement: 'bottom',
-    },
-    {
-      selector: '.pdf-content',
-      title: 'PDF 阅读区',
-      description: '这里是论文正文阅读区域。支持连续滚动阅读，鼠标选中文字后可右键发送给 AI 助手进行深入解析。',
-      placement: 'top',
-    },
-  ],
-})
-
-const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 // PDF 信息
 const paperTitle = ref('')
@@ -976,18 +947,6 @@ onUnmounted(() => {
       :selected-text="contextMenu.text"
       @ask-ai="handleAskAiFromContext"
       @close="closeContextMenu"
-    />
-
-    <!-- 页面引导 tour -->
-    <GuideTour
-      :step="currentStepData"
-      :step-number="currentStep + 1"
-      :total-steps="totalSteps"
-      :is-first="isFirst"
-      :is-last="isLast"
-      @next="next"
-      @prev="prev"
-      @skip="skip"
     />
   </div>
 </template>

@@ -4,21 +4,6 @@ import { Promotion, Delete, ChatDotSquare, InfoFilled, ArrowDown, ArrowUp } from
 import { createChatConnection } from '../api/chat'
 import type { ChatMessage, PaperKeyPoints } from '../types/library'
 import { fetchPaperByIdApi } from '../api/library'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
-
-// 配置 marked
-marked.setOptions({
-  gfm: true,      // 启用 GitHub 风格 Markdown
-  breaks: true,   // 将换行符转为 <br>
-})
-
-// 渲染 Markdown 并净化 HTML
-const renderMarkdown = (content: string) => {
-  if (!content) return ''
-  const rawHtml = marked.parse(content, { async: false }) as string
-  return DOMPurify.sanitize(rawHtml)
-}
 
 const props = defineProps<{
   paperId: string
@@ -38,11 +23,14 @@ const keyPoints = ref<PaperKeyPoints>({
   conclusion: '',
 })
 const loadingKeyPoints = ref(false)
-let keyPointsLoaded = false
+let keyPointsLoaded = false  // 标记是否已加载过数据
 
+// 流式构建中的消息 ID
 let streamingMsgId = ''
+
 let chatConnection: ReturnType<typeof createChatConnection> | null = null
 
+// 静默预加载四要素（避免展开时请求导致高度突变）
 const preloadKeyPoints = async () => {
   if (keyPointsLoaded) return
   try {
@@ -61,6 +49,7 @@ const preloadKeyPoints = async () => {
   }
 }
 
+// 切换面板（不再在切换时请求数据，因为已预加载）
 const toggleKeyPointsPanel = () => {
   keyPointsPanelVisible.value = !keyPointsPanelVisible.value
 }
@@ -112,6 +101,7 @@ onMounted(() => {
     },
   })
 
+  // 预加载四要素数据
   preloadKeyPoints()
 })
 
@@ -210,7 +200,7 @@ defineExpose({ askWithContext })
       </div>
     </div>
 
-    <!-- 四要素面板 -->
+    <!-- 四要素面板（带简约过渡） -->
     <transition name="slide-fade">
       <div v-if="keyPointsPanelVisible" class="keypoints-panel">
         <div v-loading="loadingKeyPoints" class="keypoints-container">
@@ -249,14 +239,7 @@ defineExpose({ askWithContext })
         :class="msg.role"
       >
         <div class="ai-msg-label">{{ msg.role === 'user' ? '你' : 'AI' }}</div>
-        <!-- Assistant 使用 Markdown 渲染，User 保持纯文本 -->
-        <div v-if="msg.role === 'assistant'" 
-             class="ai-msg-content markdown-body" 
-             v-html="renderMarkdown(msg.content)">
-        </div>
-        <div v-else class="ai-msg-content">
-          {{ msg.content }}
-        </div>
+        <div class="ai-msg-content">{{ msg.content }}</div>
       </div>
       <div v-if="sending && !streamingMsgId" class="ai-msg assistant">
         <div class="ai-msg-label">AI</div>
@@ -291,8 +274,9 @@ defineExpose({ askWithContext })
   flex-direction: column;
   height: 100%;
   background: white;
+  /* 关键：强制滚动条占位，避免展开面板时滚动条出现/消失导致宽度抖动 */
   overflow-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable; /* 现代浏览器预留滚动条空间，更平滑 */
 }
 
 .ai-header {
@@ -448,69 +432,5 @@ defineExpose({ askWithContext })
 .slide-fade-leave-from {
   transform: translateY(0);
   opacity: 1;
-}
-
-/* Markdown 渲染样式 */
-.ai-msg-content.markdown-body {
-  background: #f5f7fa;
-  padding: 8px 10px;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-.ai-msg.user .ai-msg-content.markdown-body {
-  background: #ecf5ff;
-}
-
-.markdown-body p,
-.markdown-body pre,
-.markdown-body ul,
-.markdown-body ol,
-.markdown-body blockquote {
-  margin: 0 0 8px 0;
-}
-.markdown-body p:last-child,
-.markdown-body pre:last-child,
-.markdown-body ul:last-child,
-.markdown-body ol:last-child {
-  margin-bottom: 0;
-}
-.markdown-body pre {
-  background: #f0f0f0;
-  padding: 10px;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-.markdown-body code {
-  font-family: monospace;
-  font-size: 0.85em;
-  background: #e9ecef;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-.markdown-body pre code {
-  background: transparent;
-  padding: 0;
-}
-.markdown-body h1, .markdown-body h2, .markdown-body h3,
-.markdown-body h4, .markdown-body h5, .markdown-body h6 {
-  margin: 12px 0 8px;
-  font-weight: 600;
-}
-.markdown-body a {
-  color: var(--brand, #409eff);
-  text-decoration: none;
-}
-.markdown-body a:hover {
-  text-decoration: underline;
-}
-.markdown-body table {
-  border-collapse: collapse;
-  width: 100%;
-  margin-bottom: 8px;
-}
-.markdown-body th, .markdown-body td {
-  border: 1px solid #ddd;
-  padding: 6px;
 }
 </style>
