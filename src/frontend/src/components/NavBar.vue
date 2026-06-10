@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, SwitchButton, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, SwitchButton, Setting, Document } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from './AppLogo.vue'
@@ -43,6 +43,10 @@ const handleLogout = async () => {
 
 const handleSettings = async () => {
   await router.push('/app/settings')
+}
+
+const handleGuide = async () => {
+  await router.push('/app/guide')
 }
 </script>
 
@@ -90,6 +94,10 @@ const handleSettings = async () => {
             <el-dropdown-item @click="handleSettings">
               <el-icon><Setting /></el-icon>
               <span>设置</span>
+            </el-dropdown-item>
+            <el-dropdown-item @click="handleGuide">
+              <el-icon><Document /></el-icon>
+              <span>使用指南</span>
             </el-dropdown-item>
             <el-dropdown-item divided @click="handleLogout" class="logout-item">
               <el-icon><SwitchButton /></el-icon>

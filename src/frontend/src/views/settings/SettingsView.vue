@@ -4,6 +4,29 @@ import { Lock, User, Connection } from '@element-plus/icons-vue'
 import ResetPasswordSection from './sections/ResetPasswordSection.vue'
 import ProfileSection from './sections/ProfileSection.vue'
 import ModelProvidersSection from './sections/ModelProvidersSection.vue'
+import GuideTour from '../../components/GuideTour.vue'
+import { useGuide } from '../../hooks/useGuide'
+
+// ── 引导 tour ──
+const guide = useGuide({
+  pageKey: 'settings',
+  steps: [
+    {
+      selector: '.settings-nav-item:first-child',
+      title: '设置选项',
+      description: '左侧导航栏分为三个设置模块：修改密码、个人资料和模型提供商配置。点击任意模块即可切换。',
+      placement: 'right',
+    },
+    {
+      selector: '.settings-content',
+      title: '配置表单',
+      description: '右侧内容区显示当前选中模块的设置表单。以模型提供商配置为例，你可以添加和管理 AI 模型的 API 密钥与参数。',
+      placement: 'left',
+    },
+  ],
+})
+
+const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 type TabKey = 'password' | 'profile' | 'providers'
 
@@ -55,6 +78,18 @@ const activeTab = ref<TabKey>('password')
         </transition>
       </main>
     </div>
+
+    <!-- 页面引导 tour -->
+    <GuideTour
+      :step="currentStepData"
+      :step-number="currentStep + 1"
+      :total-steps="totalSteps"
+      :is-first="isFirst"
+      :is-last="isLast"
+      @next="next"
+      @prev="prev"
+      @skip="skip"
+    />
   </div>
 </template>
 
