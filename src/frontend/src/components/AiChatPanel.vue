@@ -32,11 +32,14 @@ const editInput = ref('')
 const editingId = ref<string | null>(null)
 
 let streamingMsgId = ''
+let doneReceived = false
 let chatConnection: ReturnType<typeof createChatConnection> | null = null
 
 onMounted(() => {
+  doneReceived = false
   chatConnection = createChatConnection(props.paperId, {
     onToken: (token) => {
+      if (doneReceived) return
       const last = messages.value[messages.value.length - 1]
       if (last && last.id === streamingMsgId) {
         last.content += token
@@ -51,6 +54,7 @@ onMounted(() => {
       scrollToBottom()
     },
     onDone: (fullContent, _sources) => {
+      doneReceived = true
       if (fullContent) {
         const last = messages.value[messages.value.length - 1]
         if (last && last.id === streamingMsgId) {
@@ -62,6 +66,7 @@ onMounted(() => {
       scrollToBottom()
     },
     onError: (error) => {
+      doneReceived = true
       if (streamingMsgId) {
         const last = messages.value[messages.value.length - 1]
         if (last && last.id === streamingMsgId) {
@@ -165,7 +170,7 @@ const copyMessage = (content: string) => {
 const retryMessage = (msg: ChatMessage) => {
   if (msg.role !== 'user') return
   const idx = messages.value.findIndex(m => m.id === msg.id)
-  if (idx !== -1) messages.value.splice(idx, 1)
+  if (idx !== -1) messages.value.splice(idx)
   sendMessage(msg.content)
 }
 
