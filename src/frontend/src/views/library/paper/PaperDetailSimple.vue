@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 
 import type { LibraryPaper } from '../../../types/library'
 import { downloadDiscoverPdfApi, importPaperApi } from '../../../api/discover'
-import { uploadPaperApi } from '../../../api/library'
 
 interface Props {
   modelValue: boolean
