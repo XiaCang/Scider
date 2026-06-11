@@ -359,14 +359,14 @@ const onSplitInput = (e: Event) => {
           :class="{ 'is-active': previewMode === 'live' }"
           @click="setMode('live')"
         >
-          所见即所得
+          即时预览
         </button>
         <button
           class="md-btn mode-btn"
           :class="{ 'is-active': previewMode === 'split' }"
           @click="setMode('split')"
         >
-          源码
+          传统
         </button>
       </div>
     </div>
@@ -483,8 +483,8 @@ const onSplitInput = (e: Event) => {
 }
 
 .md-btn.is-active {
-  background: #d4e6ff;
-  color: #1a73e8;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .md-btn--upload {

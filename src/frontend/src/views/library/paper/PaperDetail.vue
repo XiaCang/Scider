@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, Document } from '@element-plus/icons-vue'
+import { Check, Document, Edit as EditIcon } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 
@@ -26,6 +26,9 @@ const draftKeyPoints = ref<PaperKeyPoints>({
   innovation: '',
   conclusion: ''
 })
+
+// 当前正在编辑的字段名，null 表示不编辑
+const editingKey = ref<string | null>(null)
 
 // 计算属性：抽屉显示状态
 const drawerVisible = computed({
@@ -161,66 +164,118 @@ const statusClassMap: Record<string, string> = {
         </p>
 
         <div class="keypoints-list">
-          <!-- 研究背景 -->
-          <div class="keypoint-card">
-            <label class="keypoint-label">
-              研究背景
-            </label>
-            <p class="keypoint-hint">该研究试图解决什么问题？</p>
-            <el-input
-              v-model="draftKeyPoints.background"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 10 }"
-              placeholder="请输入研究背景..."
-              class="keypoint-textarea"
-            />
-          </div>
+            <!-- 研究背景 -->
+            <div class="keypoint-card" @dblclick="editingKey = 'background'">
+              <div class="keypoint-header">
+                <div>
+                  <label class="keypoint-label">研究背景</label>
+                  <p class="keypoint-hint">该研究试图解决什么问题？</p>
+                </div>
+                <el-button
+                  v-if="editingKey !== 'background'"
+                  size="small"
+                  text
+                  @click="editingKey = 'background'"
+                >
+                  <el-icon><EditIcon /></el-icon>
+                </el-button>
+              </div>
+              <el-input
+                v-if="editingKey === 'background'"
+                v-model="draftKeyPoints.background"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 10 }"
+                placeholder="请输入研究背景..."
+                class="keypoint-textarea"
+                @blur="editingKey = null"
+              />
+              <div v-else class="keypoint-display">{{ draftKeyPoints.background || '暂未提取' }}</div>
+            </div>
 
-          <!-- 研究方法 -->
-          <div class="keypoint-card">
-            <label class="keypoint-label">
-              研究方法
-            </label>
-            <p class="keypoint-hint">采用了何种技术路径或实验设计？</p>
-            <el-input
-              v-model="draftKeyPoints.method"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 10 }"
-              placeholder="请输入研究方法..."
-              class="keypoint-textarea"
-            />
-          </div>
+            <!-- 研究方法 -->
+            <div class="keypoint-card" @dblclick="editingKey = 'method'">
+              <div class="keypoint-header">
+                <div>
+                  <label class="keypoint-label">研究方法</label>
+                  <p class="keypoint-hint">采用了何种技术路径或实验设计？</p>
+                </div>
+                <el-button
+                  v-if="editingKey !== 'method'"
+                  size="small"
+                  text
+                  @click="editingKey = 'method'"
+                >
+                  <el-icon><EditIcon /></el-icon>
+                </el-button>
+              </div>
+              <el-input
+                v-if="editingKey === 'method'"
+                v-model="draftKeyPoints.method"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 10 }"
+                placeholder="请输入研究方法..."
+                class="keypoint-textarea"
+                @blur="editingKey = null"
+              />
+              <div v-else class="keypoint-display">{{ draftKeyPoints.method || '暂未提取' }}</div>
+            </div>
 
-          <!-- 创新点 -->
-          <div class="keypoint-card">
-            <label class="keypoint-label">
-              创新点
-            </label>
-            <p class="keypoint-hint">与现有工作相比，独特贡献是什么？</p>
-            <el-input
-              v-model="draftKeyPoints.innovation"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 10 }"
-              placeholder="请输入创新点..."
-              class="keypoint-textarea"
-            />
-          </div>
+            <!-- 创新点 -->
+            <div class="keypoint-card" @dblclick="editingKey = 'innovation'">
+              <div class="keypoint-header">
+                <div>
+                  <label class="keypoint-label">创新点</label>
+                  <p class="keypoint-hint">与现有工作相比，独特贡献是什么？</p>
+                </div>
+                <el-button
+                  v-if="editingKey !== 'innovation'"
+                  size="small"
+                  text
+                  @click="editingKey = 'innovation'"
+                >
+                  <el-icon><EditIcon /></el-icon>
+                </el-button>
+              </div>
+              <el-input
+                v-if="editingKey === 'innovation'"
+                v-model="draftKeyPoints.innovation"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 10 }"
+                placeholder="请输入创新点..."
+                class="keypoint-textarea"
+                @blur="editingKey = null"
+              />
+              <div v-else class="keypoint-display">{{ draftKeyPoints.innovation || '暂未提取' }}</div>
+            </div>
 
-          <!-- 结论 -->
-          <div class="keypoint-card">
-            <label class="keypoint-label">
-              结论
-            </label>
-            <p class="keypoint-hint">研究得出了何种关键发现？</p>
-            <el-input
-              v-model="draftKeyPoints.conclusion"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 10 }"
-              placeholder="请输入结论..."
-              class="keypoint-textarea"
-            />
+            <!-- 结论 -->
+            <div class="keypoint-card" @dblclick="editingKey = 'conclusion'">
+              <div class="keypoint-header">
+                <div>
+                  <label class="keypoint-label">结论</label>
+                  <p class="keypoint-hint">研究得出了何种关键发现？</p>
+                </div>
+                <el-button
+                  v-if="editingKey !== 'conclusion'"
+                  size="small"
+                  text
+                  @click="editingKey = 'conclusion'"
+                >
+                  <el-icon><EditIcon /></el-icon>
+                </el-button>
+              </div>
+              <el-input
+                v-if="editingKey === 'conclusion'"
+                v-model="draftKeyPoints.conclusion"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 10 }"
+                placeholder="请输入结论..."
+                class="keypoint-textarea"
+                @blur="editingKey = null"
+              />
+              <div v-else class="keypoint-display">{{ draftKeyPoints.conclusion || '暂未提取' }}</div>
+            </div>
           </div>
-        </div>
       </section>
 
       <!-- 操作按钮区 -->
@@ -365,6 +420,22 @@ const statusClassMap: Record<string, string> = {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.keypoint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.keypoint-display {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 2px 0;
 }
 
 .keypoint-hint {

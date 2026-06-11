@@ -8,40 +8,25 @@
     class="folder-settings-dialog"
   >
     <div class="settings-body">
-      <!-- 重命名卡片 -->
-      <div class="setting-card">
-        <div class="card-header">
-          <el-icon class="card-icon rename-icon"><EditPen /></el-icon>
-          <div class="card-title">
-            <span class="card-label">文件夹名称</span>
-            <span class="card-desc">修改后将立即生效</span>
-          </div>
-        </div>
+      <div class="form-group">
+        <label class="form-label">文件夹名称</label>
         <el-input
           v-model="name"
           placeholder="输入文件夹名称"
           size="large"
-          class="rename-input"
         />
       </div>
 
-      <!-- 危险操作区 -->
-      <div class="danger-zone">
-        <div class="danger-header">
-          <span class="danger-title">危险操作</span>
+      <div class="divider" />
+
+      <div class="delete-row">
+        <div class="delete-info">
+          <div class="delete-label">删除文件夹</div>
+          <div class="delete-desc">论文关联将被移除，论文本身不受影响</div>
         </div>
-        <div class="danger-card">
-          <div class="danger-card-left">
-            <el-icon class="danger-icon"><DeleteFilled /></el-icon>
-            <div>
-              <div class="danger-label">删除文件夹</div>
-              <div class="danger-desc">文件夹及其中的论文关联将被移除，论文本身不受影响</div>
-            </div>
-          </div>
-          <el-button type="danger" @click="handleDelete" plain size="small">
-            删除
-          </el-button>
-        </div>
+        <el-button type="danger" @click="handleDelete" plain>
+          删除
+        </el-button>
       </div>
     </div>
 
@@ -128,126 +113,52 @@ const confirm = async () => {
 .settings-body {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
-/* ── 设置卡片 ── */
-.setting-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: border-color 0.2s;
-}
-
-.setting-card:focus-within {
-  border-color: #4a9d9a;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.card-icon {
-  font-size: 1.25rem;
-  padding: 6px;
-  border-radius: 8px;
-}
-
-.rename-icon {
-  background: rgba(74, 157, 154, 0.1);
-  color: #4a9d9a;
-}
-
-.card-title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.card-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.card-desc {
-  font-size: 0.78rem;
-  color: #94a3b8;
-}
-
-.rename-input {
-  margin-left: 38px;
-  width: calc(100% - 38px);
-}
-
-/* ── 危险操作区 ── */
-.danger-zone {
+.form-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.danger-header {
-  padding: 0 2px;
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.danger-title {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+.divider {
+  height: 1px;
+  background: var(--line-soft);
 }
 
-.danger-card {
+.delete-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 12px;
-  padding: 14px 16px;
-  transition: border-color 0.2s;
 }
 
-.danger-card:hover {
-  border-color: #fca5a5;
-}
-
-.danger-card-left {
+.delete-info {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-.danger-icon {
-  font-size: 1.3rem;
-  color: #ef4444;
-  flex-shrink: 0;
-}
-
-.danger-label {
-  font-size: 0.88rem;
+.delete-label {
+  font-size: 0.85rem;
   font-weight: 600;
   color: #991b1b;
 }
 
-.danger-desc {
+.delete-desc {
   font-size: 0.75rem;
-  color: #b91c1c;
-  opacity: 0.8;
+  color: var(--text-tertiary);
   line-height: 1.3;
 }
 
-/* ── 底部按钮 ── */
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
@@ -257,16 +168,15 @@ const confirm = async () => {
 
 <style>
 .folder-settings-dialog .el-dialog__header {
-  padding: 20px 24px 0;
-  font-size: 16px;
+  padding: 18px 20px 0;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .folder-settings-dialog .el-dialog__body {
-  padding: 20px 24px;
+  padding: 16px 20px;
 }
 
-/* ── 新建/子文件夹弹窗（ElMessageBox）样式 ── */
 .dialog-content {
   padding: 4px 0;
 }
