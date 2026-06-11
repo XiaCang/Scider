@@ -42,7 +42,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, DeleteFilled } from '@element-plus/icons-vue'
 import { useFolderOperations } from '../../../hooks/useFolderOperations'
 import type { Folder as LibraryFolder } from '../../../types/folder'
 
