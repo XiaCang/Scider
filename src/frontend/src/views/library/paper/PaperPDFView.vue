@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, ChatDotSquare, Plus, Delete as DeleteIcon, ArrowLeftBold } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Document, ZoomIn, ZoomOut, FullScreen, Search, ChatDotSquare, Plus, Delete as DeleteIcon, ArrowLeftBold, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -9,7 +9,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
 
 import MarkdownEditor from '../../../components/MarkdownEditor.vue'
-import type { PaperNote, NoteListItem, PaperPdfInfo } from '../../../types/library'
+import type { PaperNote, NoteListItem, PaperPdfInfo, PaperKeyPoints } from '../../../types/library'
 import {
   fetchPaperPdfInfoApi,
   fetchPaperPdfFileApi,
@@ -18,6 +18,7 @@ import {
   updateNoteApi,
   deleteNoteApi,
   fetchNoteDetailApi,
+  fetchPaperByIdApi,
 } from '../../../api/library'
 import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
 import AiChatPanel from '../../../components/AiChatPanel.vue'
@@ -26,6 +27,33 @@ import PdfContextMenu from '../../../components/PdfContextMenu.vue'
 const route = useRoute()
 const router = useRouter()
 const paperId = computed(() => route.params.paperId as string)
+
+// ── 引导 tour ──
+const guide = useGuide({
+  pageKey: 'pdf-viewer',
+  steps: [
+    {
+      selector: '.pdf-toolbar',
+      title: 'PDF 阅读工具栏',
+      description: '顶部工具栏提供翻页、页码跳转和缩放功能。你可以用鼠标滚轮缩放 PDF，或点击按钮精细调整显示比例。',
+      placement: 'bottom',
+    },
+    {
+      selector: '.toolbar-right',
+      title: '侧栏面板',
+      description: '右侧按钮可打开侧栏，切换 AI 对话、笔记和论文信息三个面板。选中 PDF 文字后右键，可直接发送到 AI 提问。',
+      placement: 'bottom',
+    },
+    {
+      selector: '.pdf-content',
+      title: 'PDF 阅读区',
+      description: '这里是论文正文阅读区域。支持连续滚动阅读，鼠标选中文字后可右键发送给 AI 助手进行深入解析。',
+      placement: 'top',
+    },
+  ],
+})
+
+const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 // PDF 信息
 const paperTitle = ref('')
@@ -66,9 +94,9 @@ const showNoteList = () => {
   activeNote.value = null
 }
 
-// ============ 侧栏显隐 ============
-const showNoteSidebar = ref(true)
-const showAiSidebar = ref(false)
+// ============ 右侧栏 ============
+const showRightSidebar = ref(true)
+const rightSidebarTab = ref<'ai' | 'notes' | 'keypoints'>('notes')
 
 // UI 状态
 const isMobile = ref(window.innerWidth < 900)
@@ -77,58 +105,62 @@ const pdfError = ref('')
 const showSearchInline = ref(false)
 let pdfObjectUrl = ''
 
-// 笔记栏宽度调整
-const NOTE_SIDEBAR_MIN_WIDTH = 200
-const NOTE_SIDEBAR_MAX_WIDTH = 600
-const noteSidebarWidth = ref(270)
+// 右侧栏宽度调整
+const RIGHT_SIDEBAR_MIN_WIDTH = 240
+const RIGHT_SIDEBAR_MAX_WIDTH = 600
+const rightSidebarWidth = ref(320)
 const isResizing = ref(false)
 
-// AI 侧栏宽度调整
-const AI_SIDEBAR_MIN_WIDTH = 240
-const AI_SIDEBAR_MAX_WIDTH = 600
-const aiSidebarWidth = ref(320)
-const isAiResizing = ref(false)
-let aiResizeRaf: number | null = null
+// 论文信息相关
+const keyPoints = ref<PaperKeyPoints>({
+  background: '',
+  method: '',
+  innovation: '',
+  conclusion: '',
+})
+const keyPointsLoaded = ref(false)
+const paperInfo = ref<{
+  authors: string
+  year: number | string
+  abstract: string
+  doi: string
+  arxiv_id: string
+  source: string
+  url: string
+}>({ authors: '', year: '', abstract: '', doi: '', arxiv_id: '', source: '', url: '' })
 
-const startAiResize = (e: MouseEvent) => {
-  e.preventDefault()
-  isAiResizing.value = true
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-
-  const startX = e.clientX
-  const startWidth = aiSidebarWidth.value
-
-  const onMouseMove = (ev: MouseEvent) => {
-    if (aiResizeRaf !== null) cancelAnimationFrame(aiResizeRaf)
-    aiResizeRaf = requestAnimationFrame(() => {
-      const delta = ev.clientX - startX
-      aiSidebarWidth.value = Math.min(
-        AI_SIDEBAR_MAX_WIDTH,
-        Math.max(AI_SIDEBAR_MIN_WIDTH, startWidth + delta)
-      )
-      aiResizeRaf = null
-    })
+const loadKeyPoints = async () => {
+  if (keyPointsLoaded.value) return
+  try {
+    const res = await fetchPaperByIdApi(paperId.value)
+    const paperData = (res as any).data?.data || (res as any).data
+    const fetchedKeyPoints = paperData?.keyPoints || {}
+    keyPoints.value = {
+      background: fetchedKeyPoints.background || '',
+      method: fetchedKeyPoints.method || '',
+      innovation: fetchedKeyPoints.innovation || '',
+      conclusion: fetchedKeyPoints.conclusion || '',
+    }
+    paperInfo.value = {
+      authors: paperData?.authors || '',
+      year: paperData?.year || '',
+      abstract: paperData?.abstract || '',
+      doi: paperData?.doi || '',
+      arxiv_id: paperData?.arxiv_id || '',
+      source: paperData?.source || '',
+      url: paperData?.url || paperData?.doi_url || '',
+    }
+    keyPointsLoaded.value = true
+  } catch (error) {
+    console.error('加载论文信息失败:', error)
   }
-
-  const onMouseUp = () => {
-    isAiResizing.value = false
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    if (aiResizeRaf !== null) cancelAnimationFrame(aiResizeRaf)
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
 }
 
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, text: '' })
 const aiChatRef = ref<InstanceType<typeof AiChatPanel> | null>(null)
 
-// ============ 笔记栏拖拽调整宽度 ============
+// ============ 右侧栏拖拽调整宽度 ============
 const startResize = (e: MouseEvent) => {
   e.preventDefault()
   isResizing.value = true
@@ -136,12 +168,12 @@ const startResize = (e: MouseEvent) => {
   document.body.style.userSelect = 'none'
 
   const startX = e.clientX
-  const startWidth = noteSidebarWidth.value
+  const startWidth = rightSidebarWidth.value
 
   const onMouseMove = (ev: MouseEvent) => {
     const delta = startX - ev.clientX
-    const newWidth = Math.min(NOTE_SIDEBAR_MAX_WIDTH, Math.max(NOTE_SIDEBAR_MIN_WIDTH, startWidth + delta))
-    noteSidebarWidth.value = newWidth
+    const newWidth = Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, startWidth + delta))
+    rightSidebarWidth.value = newWidth
   }
 
   const onMouseUp = () => {
@@ -283,11 +315,12 @@ watch(noteContent, () => autoSaveNote())
 watch(noteTitle, () => autoSaveNote())
 
 // ============ 侧栏切换 ============
-const toggleNoteSidebar = () => {
-  showNoteSidebar.value = !showNoteSidebar.value
+const toggleRightSidebar = () => {
+  showRightSidebar.value = !showRightSidebar.value
 }
-const toggleAiSidebar = () => {
-  showAiSidebar.value = !showAiSidebar.value
+
+const clearAiChat = () => {
+  aiChatRef.value?.clearMessages()
 }
 
 // ============ 右键菜单 ============
@@ -307,8 +340,9 @@ const handlePdfContextMenu = (e: MouseEvent) => {
 }
 
 const handleAskAiFromContext = (text: string) => {
-  // 打开 AI 侧栏并发送文本
-  showAiSidebar.value = true
+  // 切换到 AI 对话并打开侧栏
+  rightSidebarTab.value = 'ai'
+  showRightSidebar.value = true
   nextTick(() => {
     aiChatRef.value?.askWithContext(text)
   })
@@ -318,7 +352,7 @@ const closeContextMenu = () => {
   contextMenu.value.visible = false
 }
 
-// ============ 原有功能（缩放、滚动、渲染等保持不变）============
+// ============ 缩放、滚动、渲染 ============
 const handleResize = () => {
   isMobile.value = window.innerWidth < 900
 }
@@ -591,13 +625,7 @@ const loadPdfDocument = async () => {
     totalPages.value = pdfDoc.value.numPages
     pageCount.value = totalPages.value
 
-    const firstPage = await doc.getPage(1)
-    const origWidth = firstPage.getViewport({ scale: 1 }).width
-    const containerWidth = (pagesContainer.value?.clientWidth ?? 800) - 40
-    let fitScale = containerWidth / origWidth
-    fitScale = Math.min(3, Math.max(0.25, fitScale))
-    zoomScale.value = fitScale
-    firstPage.cleanup()
+    zoomScale.value = 1.0
 
     // 渲染完成后才移除 loading 状态
     await renderAllPagesWithScale(zoomScale.value)
@@ -652,6 +680,7 @@ const loadPaperData = async () => {
     // 加载笔记列表（仅当 PDF 加载成功时）
     if (!pdfError.value) {
       await loadNotes()
+      loadKeyPoints()
     }
   } catch (error) {
     pdfError.value = error instanceof Error ? error.message : '加载失败'
@@ -696,27 +725,6 @@ onUnmounted(() => {
 
 <template>
   <div class="pdf-viewer-container">
-    <!-- 左侧 AI 对话栏 -->
-    <aside
-      v-if="showAiSidebar"
-      class="ai-sidebar"
-      :class="{ 'is-resizing': isAiResizing }"
-      :style="{ width: aiSidebarWidth + 'px' }"
-    >
-      <AiChatPanel
-        ref="aiChatRef"
-        :paper-id="paperId"
-      />
-    </aside>
-
-    <!-- AI 侧栏拖拽分隔条 -->
-    <div
-      v-if="showAiSidebar"
-      class="ai-resizer"
-      :class="{ 'is-active': isAiResizing }"
-      @mousedown="startAiResize"
-    />
-
     <!-- 中间 PDF 查看区 -->
     <main class="pdf-main">
       <!-- 工具栏 -->
@@ -793,20 +801,11 @@ onUnmounted(() => {
               <el-icon><Search /></el-icon>
             </el-button>
           </el-tooltip>
-          <el-tooltip content="AI 对话" placement="bottom">
+          <el-tooltip content="侧栏面板" placement="bottom">
             <el-button
               size="small"
-              :type="showAiSidebar ? 'primary' : ''"
-              @click="toggleAiSidebar"
-            >
-              <el-icon><ChatDotSquare /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="笔记" placement="bottom">
-            <el-button
-              size="small"
-              :type="showNoteSidebar ? 'primary' : ''"
-              @click="toggleNoteSidebar"
+              :type="showRightSidebar ? 'primary' : ''"
+              @click="toggleRightSidebar"
             >
               <el-icon><Edit /></el-icon>
             </el-button>
@@ -850,93 +849,201 @@ onUnmounted(() => {
       <div class="pdf-content" ref="pagesContainer" v-show="!pdfLoading && !pdfError && pdfUrl"></div>
     </main>
 
-    <!-- 笔记栏拖拽分隔条 -->
+    <!-- 右侧栏拖拽分隔条 -->
     <div
       class="resizer"
       :class="{ 'is-active': isResizing }"
       @mousedown="startResize"
     />
 
-    <!-- 右侧笔记栏 -->
+    <!-- 右侧统一侧栏 -->
     <aside
-      v-if="showNoteSidebar"
-      class="note-sidebar"
+      v-if="showRightSidebar"
+      class="right-sidebar"
       :class="{ 'is-resizing': isResizing }"
-      :style="{ width: noteSidebarWidth + 'px' }"
+      :style="{ width: rightSidebarWidth + 'px' }"
     >
-      <!-- ====== 笔记列表视图 ====== -->
-      <template v-if="noteView === 'list'">
-        <div class="note-header">
-          <h3 class="note-section-title">笔记</h3>
-          <div class="note-header-actions">
-            <el-button size="small" text @click="createNote">
-              <el-icon :size="14"><Plus /></el-icon>
-              新建
-            </el-button>
-          </div>
-        </div>
-
-        <!-- 笔记列表 -->
-        <div v-if="noteList.length > 0" class="note-list-view">
-          <div
-            v-for="item in noteList"
-            :key="item.id"
-            class="note-list-item"
-            @click="selectNote(item.id)"
+      <!-- 侧栏顶部 Tab 切换 -->
+      <div class="right-sidebar-header">
+        <div class="right-sidebar-tabs">
+          <button
+            class="sidebar-tab"
+            :class="{ active: rightSidebarTab === 'ai' }"
+            @click="rightSidebarTab = 'ai'"
           >
-            <div class="note-list-item-title">{{ item.title || '无标题' }}</div>
-            <div class="note-list-item-excerpt">{{ item.excerpt || '空笔记' }}</div>
-            <div class="note-list-item-meta">
-              <span>{{ formatTime(item.updatedAt) }}</span>
-              <el-button
-                size="small"
-                text
-                @click.stop="deleteNote(item.id)"
-              >
-                <el-icon :size="12"><DeleteIcon /></el-icon>
+            <el-icon :size="14"><ChatDotSquare /></el-icon>
+            <span>AI 对话</span>
+          </button>
+          <button
+            class="sidebar-tab"
+            :class="{ active: rightSidebarTab === 'notes' }"
+            @click="rightSidebarTab = 'notes'"
+          >
+            <el-icon :size="14"><Edit /></el-icon>
+            <span>笔记</span>
+          </button>
+          <button
+            class="sidebar-tab"
+            :class="{ active: rightSidebarTab === 'keypoints' }"
+            @click="rightSidebarTab = 'keypoints'; loadKeyPoints()"
+          >
+            <el-icon :size="14"><InfoFilled /></el-icon>
+            <span>信息</span>
+          </button>
+        </div>
+        <div class="right-sidebar-actions">
+          <el-button
+            v-if="rightSidebarTab === 'ai'"
+            size="small"
+            text
+            title="清空对话"
+            @click="clearAiChat"
+          >
+            <el-icon :size="14"><DeleteIcon /></el-icon>
+          </el-button>
+          <el-button
+            v-if="rightSidebarTab === 'notes' && noteView === 'list'"
+            size="small"
+            text
+            title="新建笔记"
+            @click="createNote"
+          >
+            <el-icon :size="14"><Plus /></el-icon>
+          </el-button>
+        </div>
+      </div>
+
+      <!-- ====== AI 对话面板 ====== -->
+      <div v-show="rightSidebarTab === 'ai'" class="right-sidebar-panel">
+        <AiChatPanel
+          ref="aiChatRef"
+          :paper-id="paperId"
+        />
+      </div>
+
+      <!-- ====== 笔记面板 ====== -->
+      <div v-show="rightSidebarTab === 'notes'" class="right-sidebar-panel">
+        <!-- 笔记列表视图 -->
+        <template v-if="noteView === 'list'">
+          <div v-if="noteList.length > 0" class="note-list-view">
+            <div
+              v-for="item in noteList"
+              :key="item.id"
+              class="note-list-item"
+              @click="selectNote(item.id)"
+            >
+              <div class="note-list-item-title">{{ item.title || '无标题' }}</div>
+              <div class="note-list-item-excerpt">{{ item.excerpt || '空笔记' }}</div>
+              <div class="note-list-item-meta">
+                <span>{{ formatTime(item.updatedAt) }}</span>
+                <el-button
+                  size="small"
+                  text
+                  @click.stop="deleteNote(item.id)"
+                >
+                  <el-icon :size="12"><DeleteIcon /></el-icon>
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="note-empty-view">
+            <p>暂无笔记，点击上方"+"创建</p>
+          </div>
+        </template>
+
+        <!-- 笔记编辑视图 -->
+        <template v-if="noteView === 'edit' && activeNoteId">
+          <div class="note-header">
+            <el-button text size="small" @click="showNoteList">
+              <el-icon><ArrowLeftBold /></el-icon>
+            </el-button>
+            <h3 class="note-section-title note-section-title--flex">编辑笔记</h3>
+            <div class="note-header-actions">
+              <span v-if="noteSaving" class="save-status">保存中...</span>
+              <span v-else class="save-status">已保存</span>
+              <el-button size="small" text @click.stop="deleteNote(activeNoteId!)">
+                <el-icon :size="14"><DeleteIcon /></el-icon>
               </el-button>
             </div>
           </div>
-        </div>
-        <div v-else class="note-empty-view">
-          <p>暂无笔记，点击"新建"创建</p>
-        </div>
-      </template>
 
-      <!-- ====== 笔记编辑视图 ====== -->
-      <template v-if="noteView === 'edit' && activeNoteId">
-        <div class="note-header">
-          <el-button text size="small" @click="showNoteList">
-            <el-icon><ArrowLeftBold /></el-icon>
-          </el-button>
-          <h3 class="note-section-title note-section-title--flex">编辑笔记</h3>
-          <div class="note-header-actions">
-            <span v-if="noteSaving" class="save-status">保存中...</span>
-            <span v-else class="save-status">已保存</span>
-            <el-button size="small" text @click.stop="deleteNote(activeNoteId!)">
-              <el-icon :size="14"><DeleteIcon /></el-icon>
-            </el-button>
-          </div>
-        </div>
-
-        <div class="note-edit-area">
-          <el-input
-            v-model="noteTitle"
-            size="small"
-            placeholder="笔记标题"
-            class="note-title-input"
-          />
-
-          <div class="note-editor-wrapper">
-            <MarkdownEditor
-              v-model="noteContent"
-              :paper-id="paperId"
-              :note-id="activeNoteId"
-              placeholder="记录你对这篇论文的想法...（支持 Markdown，内容会自动保存）"
+          <div class="note-edit-area">
+            <el-input
+              v-model="noteTitle"
+              size="small"
+              placeholder="笔记标题"
+              class="note-title-input"
             />
+
+            <div class="note-editor-wrapper">
+              <MarkdownEditor
+                v-model="noteContent"
+                :paper-id="paperId"
+                :note-id="activeNoteId"
+                placeholder="记录你对这篇论文的想法..."
+              />
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- ====== 论文信息面板 ====== -->
+      <div v-show="rightSidebarTab === 'keypoints'" class="right-sidebar-panel">
+        <div class="keypoints-container">
+          <div v-if="!keyPointsLoaded" class="keypoints-loading">
+            <el-icon class="is-loading" :size="20"><Document /></el-icon>
+            <span>加载中...</span>
+          </div>
+          <div v-else class="keypoints-list">
+            <!-- 论文基本信息 -->
+            <div class="paper-info-section">
+              <div class="paper-info-title">{{ paperTitle }}</div>
+              <div v-if="paperInfo.authors" class="paper-info-row">
+                <span class="paper-info-label">作者</span>
+                <span class="paper-info-value">{{ paperInfo.authors }}</span>
+              </div>
+              <div v-if="paperInfo.year" class="paper-info-row">
+                <span class="paper-info-label">年份</span>
+                <span class="paper-info-value">{{ paperInfo.year }}</span>
+              </div>
+              <div v-if="paperInfo.source" class="paper-info-row">
+                <span class="paper-info-label">来源</span>
+                <span class="paper-info-value">{{ paperInfo.source }}</span>
+              </div>
+              <div v-if="paperInfo.doi" class="paper-info-row">
+                <span class="paper-info-label">DOI</span>
+                <a v-if="paperInfo.doi" class="paper-info-link" :href="paperInfo.url || ('https://doi.org/' + paperInfo.doi)" target="_blank">{{ paperInfo.doi }}</a>
+              </div>
+              <div v-if="paperInfo.arxiv_id" class="paper-info-row">
+                <span class="paper-info-label">arXiv</span>
+                <a class="paper-info-link" :href="'https://arxiv.org/abs/' + paperInfo.arxiv_id" target="_blank">{{ paperInfo.arxiv_id }}</a>
+              </div>
+              <div v-if="paperInfo.abstract" class="paper-info-row paper-info-abstract">
+                <span class="paper-info-label">摘要</span>
+                <span class="paper-info-value">{{ paperInfo.abstract }}</span>
+              </div>
+            </div>
+            <div class="keypoint-divider"></div>
+            <!-- 四要素 -->
+            <div class="keypoint-card">
+              <div class="keypoint-label">研究背景</div>
+              <div class="keypoint-content">{{ keyPoints.background || '暂无内容' }}</div>
+            </div>
+            <div class="keypoint-card">
+              <div class="keypoint-label">研究方法</div>
+              <div class="keypoint-content">{{ keyPoints.method || '暂无内容' }}</div>
+            </div>
+            <div class="keypoint-card">
+              <div class="keypoint-label">创新点</div>
+              <div class="keypoint-content">{{ keyPoints.innovation || '暂无内容' }}</div>
+            </div>
+            <div class="keypoint-card">
+              <div class="keypoint-label">结论</div>
+              <div class="keypoint-content">{{ keyPoints.conclusion || '暂无内容' }}</div>
+            </div>
           </div>
         </div>
-      </template>
+      </div>
     </aside>
 
     <!-- 右键上下文菜单 -->
@@ -1126,33 +1233,78 @@ onUnmounted(() => {
   background: var(--brand);
 }
 
-/* ── AI 侧栏拖拽分隔条 ── */
-.ai-resizer {
-  width: 5px;
-  cursor: col-resize;
-  background: transparent;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-  transition: background 0.15s ease;
-}
-
-.ai-resizer:hover,
-.ai-resizer.is-active {
-  background: var(--brand);
-}
-
-.ai-sidebar.is-resizing {
-  transition: none;
-}
-
-/* ── AI 侧栏 ── */
-.ai-sidebar {
-  background: white;
-  border-right: 1px solid var(--line-soft);
+/* ── 右侧统一侧栏 ── */
+.right-sidebar {
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.right-sidebar.is-resizing {
+  transition: none;
+}
+
+.right-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--line-soft);
+  background-color: white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.right-sidebar-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sidebar-tab:hover {
+  color: #4a9d9a;
+  background-color: rgba(74, 157, 154, 0.08);
+}
+
+.sidebar-tab.active {
+  color: #4a9d9a;
+  background-color: rgba(74, 157, 154, 0.1);
+  font-weight: 600;
+}
+
+.right-sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.right-sidebar-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1227,17 +1379,6 @@ onUnmounted(() => {
   font-size: 0.82rem;
 }
 
-.note-sidebar {
-  background-color: var(--bg-secondary);
-  border-left: 1px solid var(--line-soft);
-  display: flex;
-  flex-direction: column;
-}
-
-.note-sidebar.is-resizing {
-  transition: none;
-}
-
 .note-header {
   padding: 0.55rem 0.8rem;
   border-bottom: 1px solid var(--line-soft);
@@ -1305,7 +1446,7 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-/* 分栏/预览模式 - 适配新布局 */
+/* 分栏/预览模式  */
 .note-editor-wrapper :deep(.mode-split .md-preview-section),
 .note-editor-wrapper :deep(.mode-live .md-live) {
   flex: 1;
@@ -1316,6 +1457,111 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* ── 信息面板 ── */
+.keypoints-container {
+  padding: 12px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.keypoints-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  padding: 40px 0;
+}
+
+.keypoints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.paper-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.paper-info-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.paper-info-row {
+  display: flex;
+  gap: 8px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.paper-info-label {
+  flex-shrink: 0;
+  color: #888;
+  font-weight: 600;
+  min-width: 36px;
+}
+
+.paper-info-value {
+  color: #3a3a3a;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.paper-info-link {
+  color: #409eff;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.paper-info-link:hover {
+  text-decoration: underline;
+}
+
+.paper-info-abstract {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.keypoint-divider {
+  height: 1px;
+  background: #eee;
+  margin: 4px 0;
+}
+
+.keypoint-card {
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.keypoint-card:not(:last-child) {
+  border-bottom: 1px solid #eee;
+}
+
+.keypoint-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+
+.keypoint-content {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #3a3a3a;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* 浮动搜索浮层 */
@@ -1337,8 +1583,8 @@ onUnmounted(() => {
   }
 }
 @media (max-width: 1200px) {
-  .note-sidebar {
-    width: 240px;
+  .right-sidebar {
+    width: 240px !important;
   }
 }
 </style>
@@ -1382,7 +1628,7 @@ onUnmounted(() => {
   background-color: rgba(0, 0, 255, 0.2);
 }
 
-/* ── 工具栏按钮 hover 颜色改为品牌色（替代 Element Plus 默认蓝色）── */
+/* 工具栏按钮 */
 .pdf-toolbar .el-button:not(.el-button--primary):not(:disabled):hover {
   color: #4a9d9a !important;
   background-color: rgba(74, 157, 154, 0.08) !important;
