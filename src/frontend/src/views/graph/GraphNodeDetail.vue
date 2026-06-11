@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Back, Edit, Delete } from '@element-plus/icons-vue'
+import { Back, Edit, Delete } from '@element-plus/icons-vue'
 import type { LibraryPaper } from '../../types/library'
 import type { GraphNodeData, NodeType } from '../../types/graph'
 import { updateGraphNode, deleteGraphNode } from '../../api/graph'
