@@ -171,11 +171,28 @@ img {
 
 /* ── Element Plus overrides (warm palette) ── */
 
+/* 全局主色变量 — 覆盖 El 默认 #409eff，统一为品牌色 #4a9d9a */
+:root {
+  --el-color-primary: #4a9d9a;
+  --el-color-primary-light-3: #6db0ae;
+  --el-color-primary-light-5: #93c4c2;
+  --el-color-primary-light-7: #b9d7d6;
+  --el-color-primary-light-8: #cce3e2;
+  --el-color-primary-light-9: #e0efee;
+  --el-color-primary-dark-2: #3d8b88;
+}
+
 .el-button {
   border-radius: 10px;
   font-weight: 600;
   min-height: 32px;
   padding: 7px 14px;
+}
+
+/* 修复默认按钮 hover 使用蓝色的问题 */
+.el-button:hover {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
 }
 
 .el-button--primary {
@@ -196,6 +213,17 @@ img {
 .el-button--primary.is-plain:hover {
   --el-button-bg-color: #4a9d9a;
   --el-button-text-color: #fff;
+}
+
+/* ── ElRadioButton 品牌色覆盖 ── */
+.el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  box-shadow: -1px 0 0 0 var(--el-color-primary);
+}
+
+.el-radio-button__inner:hover {
+  color: var(--el-color-primary);
 }
 
 .el-input__wrapper,
