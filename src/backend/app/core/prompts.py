@@ -105,56 +105,6 @@ def build_qa_user_prompt(
     )
 
 
-GRAPH_QA_SYSTEM_PROMPT = """\
-你是一位学术研究助手，基于用户提供的知识图谱中的论文集合回答问题。
-
-回答规则：
-1. 仅基于所提供的论文信息作答，不引用外部知识。
-2. 回答中引用论文时，使用「《论文标题》」格式。
-3. 若提供的内容不足以回答，明确告知并说明原因。
-4. 使用与用户问题相同的语言作答。
-5. 回答简洁精准，重点突出跨论文的关联与规律。\
-"""
-
-_GRAPH_QA_USER_TEMPLATE = """\
-【知识图谱包含的论文集合】
-{papers_summary}
-
-用户问题：{question}\
-"""
-
-
-def build_graph_qa_user_prompt(
-    papers: list[dict],
-    question: str,
-    max_chars_per_paper: int = 300,
-    max_total_chars: int = 8000,
-) -> str:
-    lines = []
-    total = 0
-    for i, p in enumerate(papers, 1):
-        kp = p.get("key_points") or {}
-        parts = [f"{i}. 《{p.get('title', '未知标题')}》"]
-        if p.get("authors"):
-            parts.append(f"   作者：{p['authors']}")
-        if p.get("year"):
-            parts.append(f"   年份：{p['year']}")
-        for label, key in [("背景", "background"), ("方法", "methodology"), ("创新", "innovation"), ("结论", "conclusion")]:
-            val = kp.get(key) or ""
-            if val:
-                parts.append(f"   {label}：{val[:max_chars_per_paper]}")
-        block = "\n".join(parts)
-        if total + len(block) > max_total_chars:
-            lines.append(f"[已截断，共 {len(papers)} 篇论文，仅展示前 {i-1} 篇]")
-            break
-        lines.append(block)
-        total += len(block)
-    return _GRAPH_QA_USER_TEMPLATE.format(
-        papers_summary="\n\n".join(lines),
-        question=question,
-    )
-
-
 def build_user_prompt(paper_text: str, max_chars: int = 8000) -> str:
     """
     构造 User Prompt，对超长文本进行截断以避免超出模型 Context 限制。

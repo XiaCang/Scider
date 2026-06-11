@@ -1,6 +1,5 @@
 """知识图谱：基于论文向量相似度的节点与边（ECharts graph 友好结构）。"""
 
-import asyncio
 import hashlib
 from typing import Any, Optional
 
@@ -12,8 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.graph_similarity import build_similarity_edges
 from app.core.graph_llm_clustering import generate_llm_graph_structure
-from app.core.llm_client import chat_completion
-from app.core.prompts import GRAPH_QA_SYSTEM_PROMPT, build_graph_qa_user_prompt
 from db.crud_graph import list_papers_with_embeddings, list_papers_without_embeddings
 from db.models import KeyPoints, Paper, PaperStatus, GraphNode, GraphEdge, GraphLLMCache
 from db.session import get_db
@@ -537,54 +534,3 @@ async def llm_graph_structure(
     }
 
     return success(data=payload, msg="ok", code=0)
-
-
-class GraphAskRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=500)
-    paper_ids: list[str] = Field(..., min_length=1, description="图谱当前可见的论文ID列表")
-
-
-@router.post("/ask", response_model=None)
-async def ask_graph(
-    body: GraphAskRequest,
-    request: Request,
-    session: AsyncSession = Depends(get_db),
-):
-    user = getattr(request.state, "user", None)
-    if not user:
-        return error(msg="未认证", code=401, data=None, status_code=401)
-
-    q = (
-        select(Paper, KeyPoints)
-        .join(KeyPoints, KeyPoints.paper_id == Paper.id, isouter=True)
-        .where(Paper.user_id == user["id"])
-        .where(Paper.id.in_(body.paper_ids))
-    )
-    rows = (await session.execute(q)).all()
-
-    if not rows:
-        return error(msg="未找到指定论文", code=404, data=None, status_code=404)
-
-    papers_for_llm = []
-    for paper, kp in rows:
-        papers_for_llm.append({
-            "title": paper.title or "",
-            "authors": paper.authors or "",
-            "year": paper.year,
-            "key_points": {
-                "background": kp.background if kp else "",
-                "methodology": kp.methodology if kp else "",
-                "innovation": kp.innovation if kp else "",
-                "conclusion": kp.conclusion if kp else "",
-            },
-        })
-
-    user_prompt = build_graph_qa_user_prompt(papers_for_llm, body.question)
-    try:
-        answer = await asyncio.get_event_loop().run_in_executor(
-            None, chat_completion, GRAPH_QA_SYSTEM_PROMPT, user_prompt
-        )
-    except Exception as e:
-        return error(msg=f"LLM 调用失败: {str(e)}", code=500, data=None, status_code=500)
-
-    return success(data={"answer": answer, "paper_count": len(rows)}, msg="ok", code=0)

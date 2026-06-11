@@ -23,6 +23,8 @@ import {
 import PdfSearchPanel from '../../../components/PdfSearchPanel.vue'
 import AiChatPanel from '../../../components/AiChatPanel.vue'
 import PdfContextMenu from '../../../components/PdfContextMenu.vue'
+import GuideTour from '../../../components/GuideTour.vue'
+import { useGuide } from '../../../hooks/useGuide'
 
 const route = useRoute()
 const router = useRouter()
@@ -1054,6 +1056,18 @@ onUnmounted(() => {
       :selected-text="contextMenu.text"
       @ask-ai="handleAskAiFromContext"
       @close="closeContextMenu"
+    />
+
+    <!-- 页面引导 tour -->
+    <GuideTour
+      :step="currentStepData"
+      :step-number="currentStep + 1"
+      :total-steps="totalSteps"
+      :is-first="isFirst"
+      :is-last="isLast"
+      @next="next"
+      @prev="prev"
+      @skip="skip"
     />
   </div>
 </template>
