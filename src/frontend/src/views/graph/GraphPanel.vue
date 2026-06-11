@@ -677,6 +677,10 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(74, 157, 154, 0.25);
 }
 
+/* 修复 radio button hover 蓝色问题 */
+.graph-type-switch :deep(.el-radio-button__inner:hover) {
+  color: #4a9d9a;
+}
 .graph-filters {
   display: flex;
   gap: 0.8rem;
