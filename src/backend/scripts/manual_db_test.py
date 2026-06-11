@@ -1,0 +1,3 @@
+# This is a manual database test script
+
+# Include your database test logic here...
