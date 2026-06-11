@@ -627,13 +627,7 @@ const loadPdfDocument = async () => {
     totalPages.value = pdfDoc.value.numPages
     pageCount.value = totalPages.value
 
-    const firstPage = await doc.getPage(1)
-    const origWidth = firstPage.getViewport({ scale: 1 }).width
-    const containerWidth = (pagesContainer.value?.clientWidth ?? 800) - 40
-    let fitScale = containerWidth / origWidth
-    fitScale = Math.min(3, Math.max(0.25, fitScale))
-    zoomScale.value = fitScale
-    firstPage.cleanup()
+    zoomScale.value = 1.0
 
     // 渲染完成后才移除 loading 状态
     await renderAllPagesWithScale(zoomScale.value)
@@ -988,7 +982,7 @@ onUnmounted(() => {
                 v-model="noteContent"
                 :paper-id="paperId"
                 :note-id="activeNoteId"
-                placeholder="记录你对这篇论文的想法...（支持 Markdown，内容会自动保存）"
+                placeholder="记录你对这篇论文的想法..."
               />
             </div>
           </div>

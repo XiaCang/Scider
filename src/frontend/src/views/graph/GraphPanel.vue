@@ -419,13 +419,21 @@ const handleChartClick = (params: any) => {
     }
   } else if (params.dataType === 'edge') {
     const edge = params.data
+    // 从 currentLinks 查找真实数据（params.data.label 被 ECharts 的 label: { show: false } 覆盖了）
+    const realEdge = currentLinks.find(l => {
+      const lid = (l as any).id
+      // 先按 ID 匹配，再按 source+target+relationType 匹配
+      if (lid && lid === edge.id) return true
+      return l.source === edge.source && l.target === edge.target && l.relationType === edge.relationType
+    })
     selectedEdge.value = {
-      id: edge.id,
+      id: realEdge ? (realEdge as any).id : edge.id,
       source: edge.source,
       target: edge.target,
       relationType: edge.relationType,
-      label: edge.label,
-      reason: edge.reason,
+      label: realEdge ? (realEdge as any).label : undefined,
+      reason: realEdge ? (realEdge as any).reason : undefined,
+      properties: realEdge ? (realEdge as any).properties : undefined,
     }
     edgeDetailVisible.value = true
   }
@@ -655,10 +663,10 @@ onUnmounted(() => {
     </el-dialog>
 
     <!-- 选择关系类型弹窗 -->
-    <el-dialog v-model="relationDialogVisible" title="创建关联边" width="450px">
+    <el-dialog v-model="relationDialogVisible" title="创建关联边" width="450px" class="graph-edge-dialog">
       <el-form label-width="100px">
         <el-form-item label="关系类型">
-          <el-select v-model="edgeRelationType">
+          <el-select v-model="edgeRelationType" popper-class="graph-select-popper">
             <el-option label="扩展关系 (extends)" value="extends" />
             <el-option label="应用关系 (applies)" value="applies" />
             <el-option label="对比关系 (compares)" value="compares" />
@@ -911,5 +919,89 @@ onUnmounted(() => {
     width: 30px;
     height: 30px;
   }
+}
+</style>
+
+<style>
+.graph-edge-dialog .el-select {
+  width: 100%;
+}
+
+.graph-edge-dialog .el-select .el-select__wrapper {
+  min-height: 34px;
+  border-radius: 10px;
+  background: var(--bg-muted, #f5f0ea) !important;
+  box-shadow: 0 0 0 1px var(--line-strong, rgba(0, 0, 0, 0.1)) inset !important;
+}
+
+.graph-edge-dialog .el-select .el-select__wrapper.is-focused,
+.graph-edge-dialog .el-select .el-select__wrapper.is-focus {
+  box-shadow:
+    0 0 0 1px var(--brand, #4a9d9a) inset,
+    0 0 0 4px var(--brand-soft, rgba(74, 157, 154, 0.1)) !important;
+}
+
+.graph-edge-dialog .el-select .el-select__selected-item,
+.graph-edge-dialog .el-select .el-select__placeholder,
+.graph-edge-dialog .el-select .el-select__caret {
+  color: var(--text-primary, #1f2937) !important;
+}
+
+.graph-select-popper {
+  --el-color-primary: var(--brand, #4a9d9a);
+  --el-bg-color-overlay: var(--bg-solid, #ffffff);
+  --el-fill-color-blank: var(--bg-solid, #ffffff);
+  --el-fill-color-light: var(--brand-soft, rgba(74, 157, 154, 0.1));
+  --el-text-color-primary: var(--text-primary, #1f2937);
+  --el-text-color-regular: var(--text-secondary, #6b7280);
+  background: var(--bg-solid, #ffffff) !important;
+  backdrop-filter: blur(12px);
+  border-radius: 12px !important;
+  border: 1px solid var(--line-soft, rgba(0, 0, 0, 0.06)) !important;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+.graph-select-popper.el-popper {
+  background: var(--bg-solid, #ffffff) !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--line-soft, rgba(0, 0, 0, 0.06)) !important;
+}
+
+.graph-select-popper .el-select-dropdown {
+  background: var(--bg-solid, #ffffff) !important;
+}
+
+.graph-select-popper .el-select-dropdown__wrap {
+  background: var(--bg-solid, #ffffff) !important;
+}
+
+.graph-select-popper .el-select-dropdown__list {
+  background: var(--bg-solid, #ffffff) !important;
+}
+
+.graph-select-popper .el-popper__arrow::before {
+  background: var(--bg-solid, #ffffff) !important;
+  border-color: var(--line-soft, rgba(0, 0, 0, 0.06)) !important;
+}
+
+.graph-select-popper .el-select-dropdown__item {
+  color: var(--text-secondary, #6b7280) !important;
+  font-size: 14px;
+  border-radius: 8px;
+  margin: 2px 6px;
+}
+
+.graph-select-popper .el-select-dropdown__item.hover,
+.graph-select-popper .el-select-dropdown__item:hover {
+  background: var(--brand-soft, rgba(74, 157, 154, 0.1)) !important;
+  color: var(--brand, #4a9d9a) !important;
+}
+
+.graph-select-popper .el-select-dropdown__item.selected {
+  background: var(--brand-soft, rgba(74, 157, 154, 0.1)) !important;
+  color: var(--brand, #4a9d9a) !important;
+  font-weight: 600;
 }
 </style>

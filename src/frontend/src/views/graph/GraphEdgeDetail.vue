@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit, Delete } from '@element-plus/icons-vue'
 import { updateGraphEdge, deleteGraphEdge } from '../../api/graph'
@@ -32,38 +32,81 @@ const drawerVisible = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-const isEditing = ref(false)
-const editForm = ref({
-  relation_type: '',
-  label: '',
-})
+// 本地响应式副本，保存成功后立即更新，无需等 prop 刷新
+const localData = ref<EdgeData | null>(null)
+watch(() => props.edgeData, (val) => {
+  localData.value = val ? { ...val, properties: val.properties ? { ...val.properties } : undefined } : null
+}, { immediate: true })
 
-const startEdit = () => {
+const displayData = computed(() => localData.value || props.edgeData)
+
+// 行内编辑状态
+const editingField = ref<string | null>(null)
+const editValue = ref('')
+
+const relationTypeOptions = [
+  { value: 'extends', label: '扩展关系' },
+  { value: 'applies', label: '应用关系' },
+  { value: 'compares', label: '对比关系' },
+  { value: 'related', label: '相关关系' },
+  { value: 'semantic', label: '语义关联' },
+  { value: 'ownership', label: '归属关系' },
+  { value: 'custom', label: '自定义' },
+]
+
+const relationTypeMap: Record<string, string> = Object.fromEntries(
+  relationTypeOptions.map(o => [o.value, o.label])
+)
+
+const edgeLabel = computed(() =>
+  displayData.value?.label || displayData.value?.reason || displayData.value?.properties?.reason || ''
+)
+
+const startEdit = (field: string) => {
   if (!props.edgeData) return
-  editForm.value = {
-    relation_type: props.edgeData.relationType,
-    label: props.edgeData.label || '',
+  if (field === 'relation_type') {
+    editValue.value = props.edgeData.relationType
+  } else if (field === 'label') {
+    editValue.value = edgeLabel.value
   }
-  isEditing.value = true
+  editingField.value = field
 }
 
 const cancelEdit = () => {
-  isEditing.value = false
+  editingField.value = null
+  editValue.value = ''
 }
 
-const submitEdit = async () => {
-  if (!props.edgeData) return
+const saving = ref(false)
+
+const saveEdit = async () => {
+  if (!props.edgeData || !editingField.value || saving.value) return
+  saving.value = true
   try {
-    await updateGraphEdge(props.edgeData.id, {
-      relation_type: editForm.value.relation_type,
-      label: editForm.value.label,
-    })
-    ElMessage.success('边更新成功')
-    isEditing.value = false
+    const payload: any = {}
+    if (editingField.value === 'relation_type') {
+      payload.relation_type = editValue.value
+    } else if (editingField.value === 'label') {
+      payload.label = editValue.value
+    }
+    await updateGraphEdge(props.edgeData.id, payload)
+    // 立即更新本地数据，无需等 graph 刷新
+    if (localData.value) {
+      if (editingField.value === 'relation_type') {
+        localData.value.relationType = editValue.value
+      } else if (editingField.value === 'label') {
+        localData.value.label = editValue.value
+      }
+    }
+    ElMessage.success('更新成功')
+    editingField.value = null
+    editValue.value = ''
     emit('refresh')
-    drawerVisible.value = false
-  } catch (error) {
-    ElMessage.error('更新失败')
+  } catch (e: any) {
+    const msg = e?.response?.data?.msg || e?.message || '更新失败'
+    ElMessage.error(msg)
+  } finally {
+    saving.value = false
   }
 }
 
@@ -85,18 +128,8 @@ const handleDeleteEdge = async () => {
 }
 
 const handleClose = () => {
-  isEditing.value = false
+  editingField.value = null
   drawerVisible.value = false
-}
-
-const relationTypeMap: Record<string, string> = {
-  extends: '扩展关系',
-  applies: '应用关系',
-  compares: '对比关系',
-  related: '相关关系',
-  semantic: '语义关联',
-  ownership: '归属关系',
-  custom: '自定义',
 }
 </script>
 
@@ -108,49 +141,49 @@ const relationTypeMap: Record<string, string> = {
     size="450px"
     @close="handleClose"
   >
-    <div v-if="edgeData" class="edge-detail">
-      <div class="edge-info">
-        <div class="info-item">
-          <label>源节点 ID</label>
-          <span>{{ edgeData.source }}</span>
+    <div v-if="displayData" class="edge-detail">
+      <div class="edge-summary">
+        <span class="edge-badge">{{ relationTypeMap[displayData.relationType] || displayData.relationType }}</span>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-key">源节点</span>
+          <span class="info-val mono">{{ displayData.source }}</span>
         </div>
-        <div class="info-item">
-          <label>目标节点 ID</label>
-          <span>{{ edgeData.target }}</span>
+        <div class="info-row">
+          <span class="info-key">目标节点</span>
+          <span class="info-val mono">{{ displayData.target }}</span>
         </div>
-        <div class="info-item">
-          <label>关系类型</label>
-          <span>{{ relationTypeMap[edgeData.relationType] || edgeData.relationType }}</span>
+
+        <!-- 关系类型（只读） -->
+        <div class="info-row">
+          <span class="info-key">关系类型</span>
+          <span class="info-val">{{ relationTypeMap[displayData.relationType] || displayData.relationType }}</span>
         </div>
-        <div v-if="edgeData.label" class="info-item">
-          <label>标签</label>
-          <span>{{ edgeData.label }}</span>
-        </div>
-        <div v-if="edgeData.reason" class="info-item">
-          <label>关联理由</label>
-          <span>{{ edgeData.reason }}</span>
+
+        <!-- 关联理由 -->
+        <div class="info-row info-row--col">
+          <span class="info-key">关联理由</span>
+          <template v-if="editingField === 'label'">
+            <div class="inline-edit-wrap">
+              <el-input v-model="editValue" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="描述这条边的含义" />
+              <div class="inline-edit-actions">
+                <el-button size="small" type="primary" @click="saveEdit">保存</el-button>
+                <el-button size="small" @click="cancelEdit">取消</el-button>
+              </div>
+            </div>
+          </template>
+          <template v-else>
+            <p class="info-text">{{ edgeLabel || '暂无描述' }}</p>
+            <button class="inline-btn" title="修改" @click="startEdit('label')">
+              <el-icon :size="12"><Edit /></el-icon>
+            </button>
+          </template>
         </div>
       </div>
 
-      <div v-if="isEditing" class="edit-form">
-        <el-form label-width="80px">
-          <el-form-item label="关系类型">
-            <el-input v-model="editForm.relation_type" placeholder="extends/applies/compares/related/custom" />
-          </el-form-item>
-          <el-form-item label="标签">
-            <el-input v-model="editForm.label" placeholder="可选" />
-          </el-form-item>
-          <el-form-item>
-            <el-button @click="cancelEdit">取消</el-button>
-            <el-button type="primary" @click="submitEdit">保存</el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div v-if="!isEditing" class="action-buttons">
-        <el-button type="warning" plain @click="startEdit">
-          <el-icon><Edit /></el-icon> 编辑
-        </el-button>
+      <div class="actions">
         <el-button type="danger" plain @click="handleDeleteEdge">
           <el-icon><Delete /></el-icon> 删除
         </el-button>
@@ -163,12 +196,132 @@ const relationTypeMap: Record<string, string> = {
 </template>
 
 <style scoped>
-.edge-detail { display: flex; flex-direction: column; gap: 1.5rem; padding: 0 0.5rem; }
-.edge-info { background: var(--bg-secondary); border-radius: 12px; padding: 1rem; }
-.info-item { display: flex; margin-bottom: 0.8rem; }
-.info-item label { width: 100px; font-weight: 500; color: var(--text-secondary); }
-.info-item span { flex: 1; color: var(--text-primary); word-break: break-all; }
-.edit-form { background: var(--bg-secondary); padding: 1rem; border-radius: 12px; }
-.action-buttons { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem; }
-.empty-state { display: flex; align-items: center; justify-content: center; min-height: 200px; }
+.edge-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.edge-summary {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.edge-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(74, 157, 154, 0.12);
+  color: #4a9d9a;
+}
+
+/* ── 信息行 ── */
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.info-row {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  align-items: flex-start;
+}
+
+.info-row--col {
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.info-key {
+  flex-shrink: 0;
+  min-width: 5em;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.info-val {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.info-val.mono {
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 0.8rem;
+}
+
+.info-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+/* ── 行内编辑按钮 ── */
+.inline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.inline-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+/* ── 行内编辑控件 ── */
+.inline-edit-select {
+  width: 160px;
+}
+
+.inline-edit-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.inline-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── 操作 ── */
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.actions :deep(.el-button--danger.is-plain:hover) {
+  color: #c17767 !important;
+  background: rgba(193, 119, 103, 0.08) !important;
+  border-color: rgba(193, 119, 103, 0.3) !important;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+@media (max-width: 768px) {
+  .actions { flex-direction: column; }
+}
 </style>
