@@ -7,29 +7,6 @@ import PaperDetailSimple from '../library/paper/PaperDetailSimple.vue'
 import type { LibraryPaper } from '../../types/library'
 import { fetchPaperByIdApi } from '../../api/library'
 import { ElMessage } from 'element-plus'
-import GuideTour from '../../components/GuideTour.vue'
-import { useGuide } from '../../hooks/useGuide'
-
-// ── 引导 tour ──
-const guide = useGuide({
-  pageKey: 'discover-upstream',
-  steps: [
-    {
-      selector: '.selector-trigger',
-      title: '选择论文',
-      description: '从你的文库中选择一篇论文作为分析起点，系统会以它为中心探索引用关系。',
-      placement: 'bottom',
-    },
-    {
-      selector: '.view-toggle',
-      title: '切换视图',
-      description: '在上游（该论文引用的文献）和下游（引用该论文的文献）之间切换，追踪研究脉络的来龙去脉。',
-      placement: 'bottom',
-    },
-  ],
-})
-
-const { currentStep, isFirst, isLast, currentStepData, totalSteps, next, prev, skip } = guide
 
 /* ── 视图切换状态 ── */
 const activeView = ref<'upstream' | 'downstream'>('upstream')
@@ -322,18 +299,6 @@ const onPaperImported = (paperId: string) => {
       v-model="detailVisible"
       :paper="detailPaper"
       @imported="onPaperImported"
-    />
-
-    <!-- 页面引导 tour -->
-    <GuideTour
-      :step="currentStepData"
-      :step-number="currentStep + 1"
-      :total-steps="totalSteps"
-      :is-first="isFirst"
-      :is-last="isLast"
-      @next="next"
-      @prev="prev"
-      @skip="skip"
     />
 
   </section>

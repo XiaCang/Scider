@@ -12,7 +12,6 @@ import LibraryView from '../views/library/LibraryView.vue'
 import PaperPDFView from '../views/library/paper/PaperPDFView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import PaperList from '../views/library/PaperList.vue'
-import GuideView from '../views/GuideView.vue'
 import SettingsView from '../views/settings/SettingsView.vue'
 
 const router = createRouter({
@@ -93,14 +92,6 @@ const router = createRouter({
           component: DiscoverViewUpstream,
           meta: {
             title: 'Scider | 上下游',
-          },
-        },
-        {
-          path: 'guide',
-          name: 'guide',
-          component: GuideView,
-          meta: {
-            title: 'Scider | 使用指南',
           },
         },
         {

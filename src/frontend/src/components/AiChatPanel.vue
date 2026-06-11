@@ -31,7 +31,9 @@ const messagesContainer = ref<HTMLElement | null>(null)
 const editInput = ref('')
 const editingId = ref<string | null>(null)
 
+// 流式构建中的消息 ID
 let streamingMsgId = ''
+
 let chatConnection: ReturnType<typeof createChatConnection> | null = null
 
 onMounted(() => {
@@ -282,8 +284,9 @@ defineExpose({ askWithContext, clearMessages })
   flex-direction: column;
   height: 100%;
   background: white;
+  /* 关键：强制滚动条占位，避免展开面板时滚动条出现/消失导致宽度抖动 */
   overflow-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable; /* 现代浏览器预留滚动条空间，更平滑 */
 }
 
 .ai-messages {
