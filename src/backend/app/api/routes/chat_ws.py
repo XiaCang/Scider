@@ -117,8 +117,8 @@ async def _verify_ws_token(websocket: WebSocket) -> Optional[dict]:
 
 async def _stream_llm_answer(system_prompt: str, user_prompt: str):
     """
-    模拟流式 LLM 输出。
-    生产环境可替换为真实的 streaming API 调用。
+    流式 LLM 输出。
+    每次 yield 一个 token 片段。
     """
     from app.core.llm_client import _build_client, _active_model
 
@@ -137,14 +137,10 @@ async def _stream_llm_answer(system_prompt: str, user_prompt: str):
             stream=True,
         )
 
-        full_content = ""
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                 delta = chunk.choices[0].delta.content
-                full_content += delta
                 yield delta
-
-        yield full_content  # 最后返回完整内容用于保存上下文
     except Exception as e:
         logger.error("Streaming LLM error: %s", e)
         raise
@@ -261,9 +257,7 @@ async def websocket_chat(websocket: WebSocket):
                     async for chunk in _stream_llm_answer_stream(
                         QA_SYSTEM_PROMPT, user_prompt
                     ):
-                        if index == 0:
-                            # 第一个 yield 是实际的 content
-                            pass
+                        full_answer += chunk
                         await manager.send_json(user["id"], paper_id, {
                             "type": "token",
                             "content": chunk,
@@ -327,9 +321,8 @@ async def websocket_chat(websocket: WebSocket):
 async def _stream_llm_answer_stream(system_prompt: str, user_prompt: str):
     """
     流式 LLM 输出生成器。
-    使用真正的 streaming API。
+    每次 yield 一个 token 片段，最后不额外 yield 完整内容以免前端重复。
     """
-    from openai import OpenAI
     from app.core.llm_client import _build_client, _active_model
 
     client = _build_client()
@@ -346,12 +339,7 @@ async def _stream_llm_answer_stream(system_prompt: str, user_prompt: str):
         stream=True,
     )
 
-    full_content = ""
     for chunk in response:
         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
             delta = chunk.choices[0].delta.content
-            full_content += delta
             yield delta
-
-    # 用完整内容作为最后一个输出
-    yield full_content

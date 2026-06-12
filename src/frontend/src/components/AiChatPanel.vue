@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Promotion, CopyDocument, Refresh, Edit, Check, Close } from '@element-plus/icons-vue'
 import { createChatConnection } from '../api/chat'
+import { askGraphApi } from '../api/graph'
 import type { ChatMessage } from '../types/library'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -22,7 +23,12 @@ const renderMarkdown = (content: string) => {
 
 const props = defineProps<{
   paperId: string
+  emptyPrompt?: string
+  mode?: 'ws' | 'http'
+  paperIds?: string[]
 }>()
+
+const chatMode = computed(() => props.mode || 'ws')
 
 const messages = ref<ChatMessage[]>([])
 const inputText = ref('')
@@ -36,65 +42,69 @@ let doneReceived = false
 let chatConnection: ReturnType<typeof createChatConnection> | null = null
 
 onMounted(() => {
-  doneReceived = false
-  chatConnection = createChatConnection(props.paperId, {
-    onToken: (token) => {
-      if (doneReceived) return
-      const last = messages.value[messages.value.length - 1]
-      if (last && last.id === streamingMsgId) {
-        last.content += token
-      } else {
-        messages.value.push({
-          id: streamingMsgId,
-          role: 'assistant',
-          content: token,
-          createdAt: new Date().toISOString(),
-        })
-      }
-      scrollToBottom()
-    },
-    onDone: (fullContent, _sources) => {
-      doneReceived = true
-      if (fullContent) {
+  if (chatMode.value === 'ws') {
+    doneReceived = false
+    chatConnection = createChatConnection(props.paperId, {
+      onToken: (token) => {
+        if (doneReceived) return
         const last = messages.value[messages.value.length - 1]
         if (last && last.id === streamingMsgId) {
-          last.content = fullContent
+          last.content += token
+        } else {
+          messages.value.push({
+            id: streamingMsgId,
+            role: 'assistant',
+            content: token,
+            createdAt: new Date().toISOString(),
+          })
         }
-      }
-      sending.value = false
-      streamingMsgId = ''
-      scrollToBottom()
-    },
-    onError: (error) => {
-      doneReceived = true
-      if (streamingMsgId) {
-        const last = messages.value[messages.value.length - 1]
-        if (last && last.id === streamingMsgId) {
-          last.content += `\n\n**${error}**`
+        scrollToBottom()
+      },
+      onDone: (fullContent, _sources) => {
+        doneReceived = true
+        if (fullContent) {
+          const last = messages.value[messages.value.length - 1]
+          if (last && last.id === streamingMsgId) {
+            last.content = fullContent
+          }
         }
+        sending.value = false
         streamingMsgId = ''
-      } else {
-        messages.value.push({
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `⚠️ ${error}`,
-          createdAt: new Date().toISOString(),
-        })
-      }
-      sending.value = false
-      scrollToBottom()
-    },
-  })
+        scrollToBottom()
+      },
+      onError: (error) => {
+        doneReceived = true
+        if (streamingMsgId) {
+          const last = messages.value[messages.value.length - 1]
+          if (last && last.id === streamingMsgId) {
+            last.content += `\n\n**${error}**`
+          }
+          streamingMsgId = ''
+        } else {
+          messages.value.push({
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `⚠️ ${error}`,
+            createdAt: new Date().toISOString(),
+          })
+        }
+        sending.value = false
+        scrollToBottom()
+      },
+    })
+  }
 })
 
 onUnmounted(() => {
-  chatConnection?.close()
-  chatConnection = null
+  if (chatMode.value === 'ws') {
+    chatConnection?.close()
+    chatConnection = null
+  }
 })
 
 const sendMessage = async (text?: string) => {
   const content = text ?? inputText.value.trim()
-  if (!content || sending.value || !chatConnection) return
+  if (!content || sending.value) return
 
   messages.value.push({
     id: Date.now().toString(),
@@ -104,14 +114,57 @@ const sendMessage = async (text?: string) => {
   })
   if (!text) inputText.value = ''
   sending.value = true
-  streamingMsgId = (Date.now() + 1).toString()
 
+  // HTTP 模式（知识图谱）：调用 /graph/ask
+  if (chatMode.value === 'http') {
+    const paperIds = props.paperIds || []
+    if (paperIds.length === 0) {
+      messages.value.push({
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: '⚠️ 图谱中没有论文节点，请先加载图谱数据',
+        createdAt: new Date().toISOString(),
+      })
+      sending.value = false
+      await nextTick()
+      scrollToBottom()
+      return
+    }
+    try {
+      const res = await askGraphApi({ question: content, paper_ids: paperIds })
+      const answer = res?.data?.answer || '未获取到回答'
+      messages.value.push({
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: answer,
+        createdAt: new Date().toISOString(),
+      })
+    } catch (e: any) {
+      const errMsg = e?.response?.data?.message || e?.message || '请求失败'
+      messages.value.push({
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `⚠️ ${errMsg}`,
+        createdAt: new Date().toISOString(),
+      })
+    } finally {
+      sending.value = false
+    }
+    await nextTick()
+    scrollToBottom()
+    return
+  }
+
+  // WS 模式（论文聊天）
+  if (!chatConnection) return
+  streamingMsgId = (Date.now() + 1).toString()
   chatConnection.send(content)
   await nextTick()
   scrollToBottom()
 }
 
 const askWithContext = async (selectedText: string) => {
+  if (chatMode.value === 'http') return // HTTP 模式不支持此功能
   if (!chatConnection) return
   const question = `关于这段文字：「${selectedText.slice(0, 200)}」，请解释一下。`
   messages.value.push({
@@ -130,7 +183,9 @@ const askWithContext = async (selectedText: string) => {
 
 const clearMessages = () => {
   messages.value = []
-  chatConnection?.clear()
+  if (chatMode.value === 'ws') {
+    chatConnection?.clear()
+  }
 }
 
 const scrollToBottom = () => {
@@ -206,9 +261,9 @@ defineExpose({ askWithContext, clearMessages })
   <div class="ai-chat-panel">
     <div class="ai-messages" ref="messagesContainer">
       <div v-if="messages.length === 0" class="ai-empty">
-        <p>对论文内容有疑问？</p>
-        <p>选中 PDF 文字后右键→"向 AI 提问"</p>
-        <p>或在下方输入问题</p>
+        <p>{{ props.emptyPrompt || '对论文内容有疑问？' }}</p>
+        <p v-if="chatMode === 'ws'">选中 PDF 文字后右键→"向 AI 提问"</p>
+        <p>在下方输入问题</p>
       </div>
 
       <!-- 消息列表 -->

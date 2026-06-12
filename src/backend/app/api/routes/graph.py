@@ -539,9 +539,15 @@ async def llm_graph_structure(
     return success(data=payload, msg="ok", code=0)
 
 
+class HistoryMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., min_length=1)
+
+
 class GraphAskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=500)
     paper_ids: list[str] = Field(..., min_length=1, description="图谱当前可见的论文ID列表")
+    history: list[HistoryMessage] = Field(default=[], description="多轮对话历史")
 
 
 @router.post("/ask", response_model=None)
@@ -579,7 +585,7 @@ async def ask_graph(
             },
         })
 
-    user_prompt = build_graph_qa_user_prompt(papers_for_llm, body.question)
+    user_prompt = build_graph_qa_user_prompt(papers_for_llm, body.question, body.history)
     try:
         answer = await asyncio.get_event_loop().run_in_executor(
             None, chat_completion, GRAPH_QA_SYSTEM_PROMPT, user_prompt
