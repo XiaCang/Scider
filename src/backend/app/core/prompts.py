@@ -120,6 +120,8 @@ _GRAPH_QA_USER_TEMPLATE = """\
 【知识图谱包含的论文集合】
 {papers_summary}
 
+{history}
+
 用户问题：{question}\
 """
 
@@ -127,6 +129,7 @@ _GRAPH_QA_USER_TEMPLATE = """\
 def build_graph_qa_user_prompt(
     papers: list[dict],
     question: str,
+    history: list | None = None,
     max_chars_per_paper: int = 300,
     max_total_chars: int = 8000,
 ) -> str:
@@ -149,8 +152,22 @@ def build_graph_qa_user_prompt(
             break
         lines.append(block)
         total += len(block)
+
+    # 构建对话历史
+    history_str = ""
+    if history:
+        h_lines = []
+        for h in history[-10:]:  # 最多保留最近 10 轮
+            role_label = "用户" if h.role == "user" else "AI"
+            # 截断过长的内容
+            content = h.content[:300] + ("…" if len(h.content) > 300 else "")
+            h_lines.append(f"{role_label}：{content}")
+        if h_lines:
+            history_str = "【对话历史】\n" + "\n".join(h_lines)
+
     return _GRAPH_QA_USER_TEMPLATE.format(
         papers_summary="\n\n".join(lines),
+        history=history_str,
         question=question,
     )
 
