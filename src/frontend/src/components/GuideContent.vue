@@ -41,9 +41,8 @@ const guideItems: GuideItem[] = [
     title: 'AI 问答助手',
     desc: '基于论文内容与知识图谱的智能分析助手',
     tips: [
-      'PDF 场景：基于当前论文内容 + 用户笔记回答',
-      '图谱场景：基于当前知识图谱内容回答',
-      '支持流式/非流式展示，维护多轮对话上下文',
+      'PDF 场景：基于当前论文内容 + 用户笔记流式回答',
+      '图谱场景：基于图谱论文节点流式回答',
       '采用 RAG 技术确保回答准确、贴合论文原文',
     ],
   },
@@ -99,7 +98,6 @@ const guideItems: GuideItem[] = [
       '修改昵称与上传头像，支持 JPG/PNG 格式',
       '密码修改需验证原密码，密码重置全流程支持',
       '账户注销需二次密码验证，数据 7 天内可恢复',
-      '深色模式切换，全局 UI 配色即时响应',
     ],
   },
   {
@@ -110,7 +108,6 @@ const guideItems: GuideItem[] = [
       '多模型提供商列表，支持增删改查 API 密钥',
       'API 密钥加密存储，前端仅显示脱敏标识',
       '设置默认模型，自由切换 AI 服务商',
-      '首篇论文引导浮层，功能导览自动展示',
     ],
   },
 ]
@@ -147,7 +144,7 @@ const resourceLinks: ResourceLink[] = [
     icon: Link,
     label: '宣传页面',
     desc: 'Scider 产品介绍与快速入口',
-    url: 'http://scider.xyz',
+    url: 'https://qingxin14.github.io/scider/',
   },
 ]
 </script>

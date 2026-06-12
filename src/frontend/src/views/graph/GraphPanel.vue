@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, watch, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
-import { Plus, Connection, PictureFilled, DataLine } from '@element-plus/icons-vue'
+import { Plus, Connection, PictureFilled, DataLine, ChatDotSquare, Close } from '@element-plus/icons-vue'
 import { useFolderStore } from '../../store/folder'
 import { usePaperStore } from '../../store/paper'
 import type { PaperKeyPoints } from '../../types/library'
 import type { GraphLink, GraphNode, NodeType, GraphNodeData } from '../../types/graph'
 import GraphNodeDetail from './GraphNodeDetail.vue'
 import GraphEdgeDetail from './GraphEdgeDetail.vue'
+import AiChatPanel from '../../components/AiChatPanel.vue'
 import {
   fetchSimilarityGraphApi,
   fetchLLMGraphApi,
@@ -85,6 +86,42 @@ const newNodeForm = ref({
   category: 0,
 })
 
+// AI Chat 侧边栏
+const aiChatSidebarVisible = ref(false)
+const sidebarWidth = ref(420)
+const isResizing = ref(false)
+
+const toggleAiChat = () => {
+  aiChatSidebarVisible.value = !aiChatSidebarVisible.value
+}
+
+const startResize = (e: MouseEvent) => {
+  isResizing.value = true
+  e.preventDefault()
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+const onResize = (e: MouseEvent) => {
+  if (!isResizing.value) return
+  const wrapper = chartRef.value?.parentElement?.parentElement
+  if (!wrapper) return
+  const rect = wrapper.getBoundingClientRect()
+  const newWidth = rect.right - e.clientX
+  sidebarWidth.value = Math.max(300, Math.min(700, newWidth))
+}
+
+const stopResize = () => {
+  isResizing.value = false
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  nextTick(() => chartInstance?.resize())
+}
+
 // 选择关系类型弹窗
 const relationDialogVisible = ref(false)
 const pendingEdge = ref<{ source: GraphNode; target: GraphNode } | null>(null)
@@ -93,6 +130,11 @@ const edgeLabel = ref('')
 
 // 计算当前是否为 LLM 模式
 const isLLMMode = computed(() => graphType.value === 'llm')
+
+// 知识图谱中当前可见的论文 ID 列表（用于 AI Chat HTTP 模式）
+const graphPaperIds = computed(() =>
+  currentNodes.filter(n => n.type === 'paper').map(n => n.id)
+)
 
 const getCacheKey = () => `${folderStore.currentFolderId || 'all'}_${paperStore.papers.length}`
 
@@ -562,6 +604,11 @@ watch(() => paperStore.papers.length, () => {
   llmCache.key = ''
 })
 
+// 侧边栏开关时重绘图表
+watch(aiChatSidebarVisible, () => {
+  nextTick(() => chartInstance?.resize())
+})
+
 onMounted(async () => {
   if (paperStore.papers.length === 0) await paperStore.loadPapers()
   await loadSimilarityGraph()
@@ -603,6 +650,11 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="header-right">
+          <el-tooltip :content="aiChatSidebarVisible ? '关闭 AI 对话' : 'AI 对话'" placement="top" :show-after="500">
+            <el-button size="small" class="toolbar-btn" :class="{ 'toolbar-btn-active': aiChatSidebarVisible }" @click="toggleAiChat">
+              <el-icon><ChatDotSquare /></el-icon>
+            </el-button>
+          </el-tooltip>
           <el-tooltip content="添加自定义节点" placement="top" :show-after="500">
             <el-button size="small" class="toolbar-btn" @click="openAddNodeDialog" :disabled="!isLLMMode">
               <el-icon><Plus /></el-icon>
@@ -643,9 +695,19 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <div class="graph-canvas-wrapper">
+    <div class="graph-canvas-wrapper" :class="{ 'has-sidebar': aiChatSidebarVisible }">
       <div class="graph-canvas">
         <div v-loading="isLoading" ref="chartRef" class="graph-chart" />
+      </div>
+      <div v-if="aiChatSidebarVisible" class="ai-sidebar-resize-handle" @mousedown="startResize">
+        <div class="resize-grip" />
+      </div>
+      <div v-if="aiChatSidebarVisible" class="ai-sidebar" :style="{ width: sidebarWidth + 'px' }">
+        <div class="ai-sidebar-header">
+          <span class="ai-sidebar-title">AI 知识问答</span>
+          <el-button :icon="Close" text size="small" @click="aiChatSidebarVisible = false" />
+        </div>
+        <AiChatPanel paper-id="knowledge_graph" mode="http" :paper-ids="graphPaperIds" empty-prompt="对图谱内容有疑问？基于当前图谱中的论文提问。" />
       </div>
     </div>
 
@@ -845,6 +907,12 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.toolbar-btn.toolbar-btn-active {
+  background: rgba(74, 157, 154, 0.12);
+  border-color: rgba(74, 157, 154, 0.4);
+  color: #4a9d9a;
+}
+
 .toolbar-btn.linking-active {
   background: rgba(193, 119, 103, 0.1);
   border-color: rgba(193, 119, 103, 0.5);
@@ -863,13 +931,18 @@ onUnmounted(() => {
 
 .graph-canvas-wrapper {
   flex: 1;
-  position: relative;
+  display: flex;
+  gap: 12px;
   min-height: 0;
 }
 
+.graph-canvas-wrapper.has-sidebar .graph-canvas {
+  flex: 1;
+}
+
 .graph-canvas {
-  position: absolute;
-  inset: 0;
+  flex: 1;
+  position: relative;
   border: 1px solid var(--line-soft);
   border-radius: 20px;
   background:
@@ -878,6 +951,64 @@ onUnmounted(() => {
     linear-gradient(135deg, #f8fafc 0%, #eef2f7 50%, #f1f5f9 100%);
   background-size: 28px 28px, 28px 28px, 100% 100%;
   overflow: hidden;
+}
+
+.ai-sidebar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-soft);
+  border-radius: 20px;
+  background: white;
+  overflow: hidden;
+}
+
+.ai-sidebar-resize-handle {
+  flex-shrink: 0;
+  width: 6px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  border-radius: 3px;
+  margin: 0 -2px;
+}
+
+.ai-sidebar-resize-handle:hover {
+  background: rgba(74, 157, 154, 0.15);
+}
+
+.resize-grip {
+  width: 3px;
+  height: 36px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background 0.15s;
+}
+
+.ai-sidebar-resize-handle:hover .resize-grip {
+  background: rgba(74, 157, 154, 0.5);
+}
+
+.ai-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+
+.ai-sidebar-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary, #333);
+}
+
+.ai-sidebar :deep(.ai-chat-panel) {
+  flex: 1;
+  min-height: 0;
 }
 
 .graph-chart {
