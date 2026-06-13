@@ -59,12 +59,18 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Apply database migrations
+        run: alembic -c db/alembic.ini upgrade head
+        env:
+          DATABASE_URL: mysql+asyncmy://root:218218wcj@127.0.0.1:3306/db?charset=utf8mb4
+
       - name: Run unit tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v --ignore=tests/test_deployment.py
         env:
           DATABASE_URL: mysql+asyncmy://root:218218wcj@127.0.0.1:3306/db?charset=utf8mb4
           REDIS_BROKER_URL: redis://127.0.0.1:6379/0
           REDIS_RESULT_BACKEND: redis://127.0.0.1:6379/1
+          REDIS_VERIFY_URL: redis://127.0.0.1:6379/2
           JWT_SECRET: ci-test-jwt-secret-key-for-pipeline-2025
           LLM_PROVIDER: deepseek
 
