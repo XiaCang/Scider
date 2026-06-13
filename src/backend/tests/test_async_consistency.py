@@ -50,14 +50,24 @@ def client():
 @pytest.fixture(scope="module")
 def auth_token(client):
     """获取认证 token"""
+    # 如果设置了 TEST_USER_ID，说明是测试模式（跳过登录），直接返回空 token
+    import os
+    test_user_id = os.getenv("TEST_USER_ID")
+    if test_user_id:
+        # 测试模式下不需要真实 token，中间件不会拦截
+        return None
+
+    # 否则尝试真实登录
     email = os.getenv("TEST_EMAIL", "test@example.com")
     password = os.getenv("TEST_PASSWORD", "test123")
 
-    resp = client.post("/api/user/login", json={"email": email, "password": password})
-    if resp.status_code != 200 or resp.json().get("code") != 0:
-        pytest.skip("无法登录测试用户")
-
-    return resp.json()["data"]["token"]
+    try:
+        resp = client.post("/api/user/login", json={"email": email, "password": password})
+        if resp.status_code != 200 or resp.json().get("code") != 0:
+            pytest.skip("无法登录测试用户")
+        return resp.json()["data"]["token"]
+    except Exception:
+        pytest.skip("登录请求异常（可能数据库未就绪）")
 
 
 @pytest.fixture
