@@ -116,7 +116,8 @@ def get_db_migration_version() -> str:
         迁移版本号
     """
     try:
-        result = run_command(["alembic", "current"], check=False)
+        # alembic.ini 位于 db/alembic.ini，需显式指定路径
+        result = run_command(["alembic", "-c", "db/alembic.ini", "current"], check=False)
         output = result.stdout.strip()
         # 从输出中提取版本号（格式：<revision> (head)）
         if output:
@@ -195,8 +196,8 @@ def test_database_migration():
     version_before = get_db_migration_version()
     print(f"  当前版本: {version_before}")
 
-    # 执行迁移（模拟：alembic upgrade head）
-    result = run_command(["alembic", "upgrade", "head"], timeout=60, check=False)
+    # 执行迁移（模拟：alembic upgrade head；alembic.ini 位于 db/ 下）
+    result = run_command(["alembic", "-c", "db/alembic.ini", "upgrade", "head"], timeout=60, check=False)
 
     if result.returncode != 0:
         pytest.fail(f"数据库迁移失败: {result.stderr}")
