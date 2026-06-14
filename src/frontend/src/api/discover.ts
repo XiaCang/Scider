@@ -63,9 +63,9 @@ export const bulkImportPapersApi = (data: BulkImportRequest) =>
   request.post<ApiResponse<unknown>>('/discover/import/bulk', data)
 
 /** GET /api/discover/pdf-proxy — 代理下载外部 PDF */
-export const downloadDiscoverPdfApi = (pdfUrl: string) =>
+export const downloadDiscoverPdfApi = (pdfUrl: string, arxivId?: string) =>
   request.get('/discover/pdf-proxy', {
-    params: { pdf_url: pdfUrl },
+    params: { pdf_url: pdfUrl, arxiv_id: arxivId || undefined },
     responseType: 'blob',
     timeout: 120000,
   })

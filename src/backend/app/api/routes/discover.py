@@ -300,40 +300,52 @@ async def import_paper(body: ImportRequest, request: Request):
 @router.get(
     "/pdf-proxy",
     summary="代理下载外部 PDF",
-    description="通过后端代理下载外部 PDF（避免前端跨域限制），要求用户已认证",
+    description="通过后端代理下载外部 PDF（避免前端跨域限制），要求用户已认证。优先使用 arXiv 下载（更稳定），失败后自动降级到 publisher URL。",
 )
 async def proxy_pdf(
     request: Request,
     pdf_url: str = Query(..., description="需要下载的 PDF 链接"),
+    arxiv_id: Optional[str] = Query(None, description="arXiv ID，有则优先尝试 arXiv 下载"),
 ):
-    """代理下载外部 PDF 文件，避免前端直接请求外部资源时的跨域问题。"""
+    """代理下载外部 PDF 文件，优先尝试 arXiv（免费且无反爬），失败后降级到 publisher URL。"""
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse(status_code=401, content=err(401, "未认证"))
 
-    logger.info("discover.pdf_proxy user_id=%s pdf_url=%s", str(user["id"]), pdf_url[:120])
+    logger.info("discover.pdf_proxy user_id=%s arxiv_id=%s pdf_url=%s", str(user["id"]), arxiv_id, pdf_url[:120])
 
-    try:
-        content = await _download_pdf(pdf_url)
+    # 尝试的 URL 列表：arXiv 优先，publisher URL 兜底
+    urls_to_try: list[str] = []
+    if arxiv_id:
+        urls_to_try.append(f"https://arxiv.org/pdf/{arxiv_id}.pdf")
+    urls_to_try.append(pdf_url)
 
-        # 从 URL 中提取文件名
-        filename = os.path.basename(pdf_url.split("?")[0])
-        if not filename.endswith(".pdf"):
-            filename = "paper.pdf"
+    last_error = None
+    for url in urls_to_try:
+        try:
+            content = await _download_pdf(url)
+            # 从 URL 中提取文件名
+            filename = os.path.basename(url.split("?")[0])
+            if not filename.endswith(".pdf"):
+                filename = "paper.pdf"
 
-        from fastapi.responses import Response
-        return Response(
-            content=content,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Content-Length": str(len(content)),
-            },
-        )
-    except Exception as e:
-        logger.error("discover.pdf_proxy failed url=%s error=%s", pdf_url[:120], e)
-        status = 504 if "timeout" in str(e).lower() or "timed out" in str(e).lower() else 502
-        return JSONResponse(status_code=status, content=err(status, f"下载 PDF 失败: {str(e)}"))
+            from fastapi.responses import Response
+            return Response(
+                content=content,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Length": str(len(content)),
+                },
+            )
+        except Exception as e:
+            last_error = e
+            logger.warning("discover.pdf_proxy fallback url=%s error=%s", url[:120], e)
+            continue
+
+    logger.error("discover.pdf_proxy all urls failed pdf_url=%s", pdf_url[:120])
+    status = 504 if "timeout" in str(last_error).lower() or "timed out" in str(last_error).lower() else 502
+    return JSONResponse(status_code=status, content=err(status, f"下载 PDF 失败: {str(last_error)}"))
 
 
 # ---------------------------------------------------------------------------
