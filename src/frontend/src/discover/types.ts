@@ -88,6 +88,10 @@ export interface ImportRequest {
   arxiv_id?: string | null
   year?: number | null
   venue?: string | null
-  /** @deprecated 不再由前端发送；PDF 通过 multipart file 字段上传 */
   pdf_url?: string | null
+}
+
+/** 批量导入请求体（对齐 /api/discover/import/bulk） */
+export interface BulkImportRequest {
+  papers: ImportRequest[]
 }
