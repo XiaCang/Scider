@@ -4,7 +4,8 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import type { LibraryPaper } from '../../../types/library'
-import { downloadDiscoverPdfApi, importPaperApi } from '../../../api/discover'
+import { downloadDiscoverPdfApi } from '../../../api/discover'
+import { batchUploadPapersApi } from '../../../api/library'
 
 interface Props {
   modelValue: boolean
@@ -85,33 +86,47 @@ const handleOpenArxiv = () => {
   }
 }
 
-// ── 导入论文 ──
+// ── 导入论文（客户端下载 PDF → 上传到文库）──
 const importing = ref(false)
 
 const handleImport = async () => {
   if (!props.paper || importing.value) return
 
+  const pdfUrl = effectivePdfUrl.value
+  if (!pdfUrl) {
+    ElMessage.warning('该论文暂无可用 PDF 链接')
+    return
+  }
+
   importing.value = true
   try {
-    const resp = await importPaperApi({
-      title: props.paper.title,
-      authors: props.paper.authors || null,
-      abstract: props.paper.abstract || null,
-      doi: props.paper.doi || null,
-      arxiv_id: props.paper.arxiv_id || null,
-      year: props.paper.year || null,
-      venue: props.paper.source || null,
-      pdf_url: effectivePdfUrl.value || null,
-    })
-    const data: any = 'data' in resp ? (resp as any).data : resp
-    const result = data.data || data
-    ElMessage.success('论文已成功导入文库')
-    emit('imported', result.paper_id)
+    // Step 1：客户端下载 PDF（浏览器处理 Cloudflare 等反爬）
+    const pdfBlob = await downloadDiscoverPdfApi(pdfUrl, arxivId.value || undefined)
+
+    // Step 2：下载到用户本地
+    const downloadUrl = window.URL.createObjectURL(pdfBlob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    const safeName = (props.paper.title || 'paper').replace(/[/\\?%*:|"<>]/g, '_')
+    link.download = `${safeName}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
+
+    // Step 3：调用已有上传接口将 PDF 存入服务器（自动创建 Paper 并触发解析）
+    const file = new File([pdfBlob], `${safeName}.pdf`, { type: 'application/pdf' })
+    const uploadResp = await batchUploadPapersApi([file])
+    const uploadData: any = uploadResp.data || uploadResp
+    const result = uploadData.data?.results?.[0] || {}
+    const paperId = result.paper_id
+
+    ElMessage.success('PDF 已下载并导入文库')
+    emit('imported', paperId || '')
   } catch (err: any) {
     const msg = err?.response?.data?.msg || err?.message || '导入失败'
-    if (msg.includes('已在文库中')) {
+    if (msg.includes('该论文已存在') || msg.includes('请勿重复上传')) {
       ElMessage.info('该论文已在文库中')
-      emit('imported', props.paper?.id || '')
     } else {
       ElMessage.error(msg)
     }
