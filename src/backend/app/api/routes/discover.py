@@ -10,12 +10,12 @@ discover.py — 论文发现模块路由
 """
 
 import asyncio
+import cloudscraper
 import hashlib
 import logging
 import os
 from typing import Optional, List
 
-import httpx
 from fastapi import APIRouter, Query, Request, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -64,6 +64,41 @@ class ImportResponse(BaseModel):
     paper_id: str = Field(..., description="论文 ID")
     task_id: str = Field(..., description="异步解析任务 ID")
     status: str = Field(..., description="论文状态")
+
+
+# ---------------------------------------------------------------------------
+# PDF 下载辅助函数
+# ---------------------------------------------------------------------------
+
+async def _download_pdf(url: str, timeout: int = 60) -> bytes:
+    """使用 cloudscraper 下载 PDF（绕过 Cloudflare JS 挑战），在后台线程执行。"""
+    scraper = cloudscraper.create_scraper()
+    resp = await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: scraper.get(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/125.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/pdf,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+                "Referer": url.rsplit("/", 1)[0] + "/",
+            },
+            timeout=timeout,
+            allow_redirects=True,
+        ),
+    )
+    resp.raise_for_status()
+
+    content_type = resp.headers.get("Content-Type", "")
+    if "text/html" in content_type:
+        logger.warning("_download_pdf got HTML instead of PDF url=%s", url[:120])
+        raise ValueError(f"目标网站返回了 HTML 页面（可能被反爬拦截），无法下载 PDF")
+
+    return resp.content
 
 
 # ---------------------------------------------------------------------------
@@ -223,10 +258,7 @@ async def import_paper(body: ImportRequest, request: Request):
 
         for url in pdf_urls_to_try:
             try:
-                async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                    resp = await client.get(url)
-                    resp.raise_for_status()
-                content = resp.content
+                content = await _download_pdf(url, timeout=30)
                 md5_hash = hashlib.md5(content).hexdigest()
                 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
                 pdf_path = os.path.join(settings.UPLOAD_DIR, f"{md5_hash}.pdf")
@@ -281,23 +313,8 @@ async def proxy_pdf(
 
     logger.info("discover.pdf_proxy user_id=%s pdf_url=%s", str(user["id"]), pdf_url[:120])
 
-    # 模拟常见浏览器请求头，避免被目标网站（如 AIP、IEEE 等）拒绝
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/pdf,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
-        "Referer": pdf_url.rsplit("/", 1)[0] + "/",
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-            resp = await client.get(pdf_url, headers=headers)
-            resp.raise_for_status()
-        content = resp.content
+        content = await _download_pdf(pdf_url)
 
         # 从 URL 中提取文件名
         filename = os.path.basename(pdf_url.split("?")[0])
@@ -313,12 +330,10 @@ async def proxy_pdf(
                 "Content-Length": str(len(content)),
             },
         )
-    except httpx.TimeoutException:
-        logger.error("discover.pdf_proxy timeout url=%s", pdf_url[:120])
-        return JSONResponse(status_code=504, content=err(504, "下载 PDF 超时"))
     except Exception as e:
         logger.error("discover.pdf_proxy failed url=%s error=%s", pdf_url[:120], e)
-        return JSONResponse(status_code=502, content=err(502, f"下载 PDF 失败: {str(e)}"))
+        status = 504 if "timeout" in str(e).lower() or "timed out" in str(e).lower() else 502
+        return JSONResponse(status_code=status, content=err(status, f"下载 PDF 失败: {str(e)}"))
 
 
 # ---------------------------------------------------------------------------
