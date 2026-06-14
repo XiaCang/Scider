@@ -11,12 +11,11 @@ discover.py — 论文发现模块路由
 
 import asyncio
 import cloudscraper
-import hashlib
 import logging
 import os
 from typing import Optional, List
 
-from fastapi import APIRouter, Query, Request, Path
+from fastapi import APIRouter, Path, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -210,7 +209,7 @@ async def get_recommendations(
 # ---------------------------------------------------------------------------
 
 class ImportRequest(BaseModel):
-    """导入论文请求体"""
+    """导入论文请求体（JSON，不含 PDF 文件；PDF 由前端通过上传接口处理）"""
     title: str = Field(..., description="论文标题")
     authors: Optional[str] = Field(None, description="作者列表（逗号分隔）")
     abstract: Optional[str] = Field(None, description="摘要")
@@ -218,13 +217,12 @@ class ImportRequest(BaseModel):
     arxiv_id: Optional[str] = Field(None, description="arXiv ID")
     year: Optional[int] = Field(None, description="发表年份")
     venue: Optional[str] = Field(None, description="发表会议/期刊")
-    pdf_url: Optional[str] = Field(None, description="PDF 下载链接")
 
 
 @router.post(
     "/import",
     summary="导入论文到文库",
-    description="将检索到的论文导入到用户文库，自动下载 PDF（如有）并触发异步解析任务",
+    description="导入论文元数据（不含 PDF）。PDF 由前端通过 pdf-proxy 下载后经 /papers/upload 接口上传。",
     response_model=None,
     responses={
         200: {"description": "导入成功"},
@@ -233,7 +231,7 @@ class ImportRequest(BaseModel):
     }
 )
 async def import_paper(body: ImportRequest, request: Request):
-    """单篇导入：从 JWT 获取 user_id，尝试下载 PDF，创建 Paper 记录并触发异步解析。"""
+    """单篇导入：仅导入元数据，创建 Paper 记录（pdf_path=null）。PDF 不走此接口。"""
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse(status_code=401, content=err(401, "未认证"))
@@ -248,33 +246,10 @@ async def import_paper(body: ImportRequest, request: Request):
                 logger.warning("discover.import duplicate doi=%s user_id=%s", body.doi, user_id)
                 return JSONResponse(status_code=409, content=err(409, "论文已在文库中"))
 
-        pdf_path, md5_hash, file_size = None, None, 0
-        # 收集所有可用的 PDF 下载链接：arXiv PDF 优先，其次 OA PDF
-        pdf_urls_to_try: list[str] = []
-        if body.arxiv_id:
-            pdf_urls_to_try.append(f"https://arxiv.org/pdf/{body.arxiv_id}.pdf")
-        if body.pdf_url:
-            pdf_urls_to_try.append(body.pdf_url)
-
-        for url in pdf_urls_to_try:
-            try:
-                content = await _download_pdf(url, timeout=30)
-                md5_hash = hashlib.md5(content).hexdigest()
-                os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-                pdf_path = os.path.join(settings.UPLOAD_DIR, f"{md5_hash}.pdf")
-                if not os.path.exists(pdf_path):
-                    with open(pdf_path, "wb") as f:
-                        f.write(content)
-                file_size = len(content)
-                logger.info("discover.import pdf downloaded url=%s md5=%s size=%d", url, md5_hash, file_size)
-                break  # 下载成功就退出循环
-            except Exception as e:
-                logger.warning("discover.import pdf download failed url=%s error=%s", url, e)
-
         paper = Paper(
             title=body.title, authors=body.authors, abstract=body.abstract,
             doi=body.doi, year=body.year, user_id=user_id,
-            pdf_path=pdf_path, md5_hash=md5_hash, file_size=file_size,
+            pdf_path=None, md5_hash=None, file_size=0,
             status=PaperStatus.PENDING_PARSING,
         )
         session.add(paper)
@@ -282,15 +257,7 @@ async def import_paper(body: ImportRequest, request: Request):
         await session.refresh(paper)
         logger.info("discover.import paper created paper_id=%s user_id=%s", paper.id, user_id)
 
-    # 有 PDF 才派发解析任务；仅导入元数据的论文等待后续 PDF 上传
-    if pdf_path:
-        from app.tasks.parse_task import parse_pdf_task
-        task = parse_pdf_task.delay(paper.id, pdf_path)
-        logger.info("discover.import task dispatched task_id=%s paper_id=%s", task.id, paper.id)
-        return ok(data={"paper_id": paper.id, "task_id": task.id, "status": paper.status.value})
-    else:
-        logger.info("discover.import no pdf_url, paper created without parse task paper_id=%s", paper.id)
-        return ok(data={"paper_id": paper.id, "task_id": None, "status": paper.status.value})
+    return ok(data={"paper_id": paper.id, "task_id": None, "status": paper.status.value})
 
 
 # ---------------------------------------------------------------------------

@@ -54,7 +54,7 @@ export interface ImportPaperResult {
   status: string
 }
 
-/** POST /api/discover/import — 单篇导入 */
+/** POST /api/discover/import — 单篇导入（仅元数据，不含 PDF） */
 export const importPaperApi = (data: ImportRequest) =>
   request.post<ApiResponse<ImportPaperResult>>('/discover/import', data)
 
