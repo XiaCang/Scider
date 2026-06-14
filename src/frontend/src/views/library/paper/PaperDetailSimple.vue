@@ -129,7 +129,7 @@ const handleDownloadPdf = async () => {
 
   downloading.value = true
   try {
-    const blob = await downloadDiscoverPdfApi(url)
+    const blob = await downloadDiscoverPdfApi(url, arxivId.value || undefined)
     const downloadUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = downloadUrl
