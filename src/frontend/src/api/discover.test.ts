@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import type { Mocked } from 'vitest'
 
 vi.mock('../network/request', () => {
   const mockAxios = {
@@ -27,16 +26,18 @@ describe('discover API', () => {
     it('应发送 GET /discover/search 包含查询参数', async () => {
       const { searchPapersApi } = await import('./discover')
       const params = { q: 'deep learning', offset: 0, limit: 10 }
-      request.get.mockResolvedValue({ data: { code: 0, data: { data: [], total: 0 } } })
+      const resp = { code: 0, msg: 'ok', data: { data: [], total: 0, offset: 0, limit: 10 } }
+      request.get.mockResolvedValue(resp)
       const result = await searchPapersApi(params)
       expect(request.get).toHaveBeenCalledWith('/discover/search', { params })
-      expect(result.data.code).toBe(0)
+      expect(result.code).toBe(0)
     })
 
     it('应支持可选筛选参数', async () => {
       const { searchPapersApi } = await import('./discover')
       const params = { q: 'transformer', year_from: 2020, year_to: 2024, source_type: 'conference', sort: 'citation_count' }
-      request.get.mockResolvedValue({ data: { code: 0, data: { data: [], total: 0 } } })
+      const resp = { code: 0, msg: 'ok', data: { data: [], total: 0, offset: 0, limit: 10 } }
+      request.get.mockResolvedValue(resp)
       await searchPapersApi(params)
       expect(request.get).toHaveBeenCalledWith('/discover/search', { params })
     })
@@ -46,7 +47,7 @@ describe('discover API', () => {
     it('应发送 GET /discover/recommendations', async () => {
       const { fetchRecommendationsApi } = await import('./discover')
       request.get.mockResolvedValue({ data: [] })
-      const result = await fetchRecommendationsApi()
+      await fetchRecommendationsApi()
       expect(request.get).toHaveBeenCalledWith('/discover/recommendations', { params: { direction: undefined } })
     })
 
@@ -61,7 +62,7 @@ describe('discover API', () => {
   describe('fetchUpstreamPapersApi', () => {
     it('应发送 GET /discover/references/{semantic_id}', async () => {
       const { fetchUpstreamPapersApi } = await import('./discover')
-      request.get.mockResolvedValue({ data: { code: 0, data: { papers: [] } } })
+      request.get.mockResolvedValue({ code: 0, msg: 'ok', data: { data: [] as any[] } })
       await fetchUpstreamPapersApi('sem-1')
       expect(request.get).toHaveBeenCalledWith('/discover/references/sem-1')
     })
@@ -70,7 +71,7 @@ describe('discover API', () => {
   describe('fetchDownstreamPapersApi', () => {
     it('应发送 GET /discover/citations/{semantic_id}', async () => {
       const { fetchDownstreamPapersApi } = await import('./discover')
-      request.get.mockResolvedValue({ data: { code: 0, data: { papers: [] } } })
+      request.get.mockResolvedValue({ code: 0, msg: 'ok', data: { data: [] as any[] } })
       await fetchDownstreamPapersApi('sem-1')
       expect(request.get).toHaveBeenCalledWith('/discover/citations/sem-1')
     })
@@ -79,7 +80,7 @@ describe('discover API', () => {
   describe('fetchUpstreamByPaperApi', () => {
     it('应发送 GET /discover/references/by-paper/{paper_id} 含超时', async () => {
       const { fetchUpstreamByPaperApi } = await import('./discover')
-      request.get.mockResolvedValue({ data: { code: 0, data: { papers: [] } } })
+      request.get.mockResolvedValue({ code: 0, msg: 'ok', data: { data: [] as any[] } })
       await fetchUpstreamByPaperApi('p-1')
       expect(request.get).toHaveBeenCalledWith('/discover/references/by-paper/p-1', { timeout: 120000 })
     })
@@ -88,7 +89,7 @@ describe('discover API', () => {
   describe('fetchDownstreamByPaperApi', () => {
     it('应发送 GET /discover/citations/by-paper/{paper_id} 含超时', async () => {
       const { fetchDownstreamByPaperApi } = await import('./discover')
-      request.get.mockResolvedValue({ data: { code: 0, data: { papers: [] } } })
+      request.get.mockResolvedValue({ code: 0, msg: 'ok', data: { data: [] as any[] } })
       await fetchDownstreamByPaperApi('p-1')
       expect(request.get).toHaveBeenCalledWith('/discover/citations/by-paper/p-1', { timeout: 120000 })
     })
@@ -97,7 +98,7 @@ describe('discover API', () => {
   describe('fetchCitationGraphApi', () => {
     it('应发送 GET /discover/citations 含 paper_id 参数', async () => {
       const { fetchCitationGraphApi } = await import('./discover')
-      request.get.mockResolvedValue({ data: { nodes: [], links: [] } })
+      request.get.mockResolvedValue({ nodes: [], links: [] })
       await fetchCitationGraphApi('p-1')
       expect(request.get).toHaveBeenCalledWith('/discover/citations', { params: { paper_id: 'p-1' } })
     })
@@ -106,19 +107,20 @@ describe('discover API', () => {
   describe('importPaperApi', () => {
     it('应发送 POST /discover/import', async () => {
       const { importPaperApi } = await import('./discover')
-      const data = { semantic_id: 'sem-1', title: 'Paper', authors: ['Author'], year: 2024, abstract: 'abstract', venue: 'NeurIPS', source_type: 'conference', citation_count: 10, reference_count: 5, url: 'http://example.com', pdf_url: 'http://example.com/pdf' }
-      request.post.mockResolvedValue({ data: { code: 0, data: { paper_id: 'p-1', task_id: 't-1', status: 'imported' } } })
+      const data = { semantic_id: 'sem-1', title: 'Paper', authors: 'Author', year: 2024, abstract: 'abstract', venue: 'NeurIPS', source_type: 'conference', citation_count: 10, reference_count: 5, url: 'http://example.com', pdf_url: 'http://example.com/pdf' }
+      const resp = { code: 0, msg: 'ok', data: { paper_id: 'p-1', task_id: 't-1', status: 'imported' } }
+      request.post.mockResolvedValue(resp)
       const result = await importPaperApi(data)
       expect(request.post).toHaveBeenCalledWith('/discover/import', data)
-      expect(result.data.data.paper_id).toBe('p-1')
+      expect(result.data.paper_id).toBe('p-1')
     })
   })
 
   describe('bulkImportPapersApi', () => {
     it('应发送 POST /discover/import/bulk', async () => {
       const { bulkImportPapersApi } = await import('./discover')
-      const data = { papers: [{ semantic_id: 'sem-1', title: 'Paper', authors: ['Author'], year: 2024, abstract: '', venue: '', source_type: 'conference', citation_count: 0, reference_count: 0, url: '', pdf_url: '' }] }
-      request.post.mockResolvedValue({ data: { code: 0, data: null } })
+      const data = { papers: [{ semantic_id: 'sem-1', title: 'Paper', authors: 'Author', year: 2024, abstract: '', venue: '', source_type: 'conference', citation_count: 0, reference_count: 0, url: '', pdf_url: '' }] }
+      request.post.mockResolvedValue({ code: 0, msg: 'ok', data: null })
       await bulkImportPapersApi(data)
       expect(request.post).toHaveBeenCalledWith('/discover/import/bulk', data)
     })
@@ -127,7 +129,8 @@ describe('discover API', () => {
   describe('downloadDiscoverPdfApi', () => {
     it('应发送 GET /discover/pdf-proxy 含 blob responseType', async () => {
       const { downloadDiscoverPdfApi } = await import('./discover')
-      request.get.mockResolvedValue(new Blob(['pdf content']))
+      const blob = new Blob(['pdf content'])
+      request.get.mockResolvedValue(blob)
       const result = await downloadDiscoverPdfApi('http://example.com/paper.pdf')
       expect(request.get).toHaveBeenCalledWith('/discover/pdf-proxy', {
         params: { pdf_url: 'http://example.com/paper.pdf', arxiv_id: undefined },

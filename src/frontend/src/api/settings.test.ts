@@ -26,30 +26,32 @@ describe('settings API', () => {
     it('应发送 GET /user/llm-providers', async () => {
       const { getProvidersApi } = await import('./settings')
       const mockProviders = [
-        { id: '1', name: 'DeepSeek', base_url: 'https://api.deepseek.com', api_key: 'sk-xxx', model: 'deepseek-chat', enabled: true },
+        { id: '1', name: 'DeepSeek', provider: 'deepseek', base_url: 'https://api.deepseek.com', api_key_masked: 'sk-xxx', default_model: 'deepseek-chat', enabled: true, user_id: null },
       ]
-      request.get.mockResolvedValue({ data: { code: 0, data: mockProviders } })
+      const resp = { code: 0, msg: 'ok', data: mockProviders }
+      request.get.mockResolvedValue(resp)
       const result = await getProvidersApi()
       expect(request.get).toHaveBeenCalledWith('/user/llm-providers')
-      expect(result.data.data[0].name).toBe('DeepSeek')
+      expect(result.data[0].name).toBe('DeepSeek')
     })
   })
 
   describe('createProviderApi', () => {
     it('应发送 POST /user/llm-providers', async () => {
       const { createProviderApi } = await import('./settings')
-      const payload = { name: 'Qwen', base_url: 'https://dashscope.aliyuncs.com', api_key: 'sk-yyy', model: 'qwen-plus', enabled: true }
-      request.post.mockResolvedValue({ data: { code: 0, data: { id: '2', ...payload } } })
+      const payload = { name: 'Qwen', provider: 'qwen', base_url: 'https://dashscope.aliyuncs.com', api_key: 'sk-yyy', default_model: 'qwen-plus', enabled: true }
+      const resp = { code: 0, msg: 'ok', data: { id: '2', name: 'Qwen', provider: 'qwen', base_url: 'https://dashscope.aliyuncs.com', api_key_masked: 'sk-yyy', default_model: 'qwen-plus', enabled: true, user_id: null as string | null } }
+      request.post.mockResolvedValue(resp)
       const result = await createProviderApi(payload)
       expect(request.post).toHaveBeenCalledWith('/user/llm-providers', payload)
-      expect(result.data.data.name).toBe('Qwen')
+      expect(result.data.name).toBe('Qwen')
     })
   })
 
   describe('updateProviderApi', () => {
     it('应发送 PATCH /user/llm-providers/{id}', async () => {
       const { updateProviderApi } = await import('./settings')
-      request.patch.mockResolvedValue({ data: { code: 0, data: { id: '1' } } })
+      request.patch.mockResolvedValue({ code: 0, msg: 'ok', data: { id: '1' } })
       await updateProviderApi('1', { enabled: false })
       expect(request.patch).toHaveBeenCalledWith('/user/llm-providers/1', { enabled: false })
     })
@@ -58,7 +60,7 @@ describe('settings API', () => {
   describe('deleteProviderApi', () => {
     it('应发送 DELETE /user/llm-providers/{id}', async () => {
       const { deleteProviderApi } = await import('./settings')
-      request.delete.mockResolvedValue({ data: { code: 0, data: null } })
+      request.delete.mockResolvedValue({ code: 0, msg: 'ok', data: null })
       await deleteProviderApi('1')
       expect(request.delete).toHaveBeenCalledWith('/user/llm-providers/1')
     })
