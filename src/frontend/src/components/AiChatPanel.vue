@@ -131,7 +131,10 @@ const sendMessage = async (text?: string) => {
       return
     }
     try {
-      const res = await askGraphApi({ question: content, paper_ids: paperIds })
+      // 取最近 10 条消息作为对话历史（排除当前刚加入的用户消息）
+      const historyMessages = messages.value.slice(0, -1).slice(-10)
+      const history = historyMessages.map(m => ({ role: m.role, content: m.content }))
+      const res = await askGraphApi({ question: content, paper_ids: paperIds, history })
       const answer = res?.data?.answer || '未获取到回答'
       messages.value.push({
         id: Date.now().toString(),
@@ -157,6 +160,7 @@ const sendMessage = async (text?: string) => {
 
   // WS 模式（论文聊天）
   if (!chatConnection) return
+  doneReceived = false
   streamingMsgId = (Date.now() + 1).toString()
   chatConnection.send(content)
   await nextTick()
@@ -174,6 +178,7 @@ const askWithContext = async (selectedText: string) => {
     createdAt: new Date().toISOString(),
   })
   sending.value = true
+  doneReceived = false
   streamingMsgId = (Date.now() + 1).toString()
 
   chatConnection.send(question)

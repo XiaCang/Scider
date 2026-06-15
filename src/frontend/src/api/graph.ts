@@ -147,5 +147,5 @@ export const getCustomGraph = () =>
   request.get<ApiResponse<CustomGraphPayload>>('/graph/edit/graph')
 
 // 知识图谱 AI 问答
-export const askGraphApi = (data: { question: string; paper_ids: string[] }) =>
+export const askGraphApi = (data: { question: string; paper_ids: string[]; history?: { role: string; content: string }[] }) =>
   request.post<ApiResponse<{ answer: string; paper_count: number }>>('/graph/ask', data)
