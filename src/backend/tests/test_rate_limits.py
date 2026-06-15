@@ -1,6 +1,6 @@
 import os
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 
@@ -67,7 +67,8 @@ async def test_send_code_rate_limit(monkeypatch):
         pass
     monkeypatch.setattr(rc, "get_redis", lambda: fake)
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         for _ in range(2):
             resp = await ac.post("/api/user/send-code", json={"email": "a@example.com"})
             assert resp.status_code == 200
@@ -102,7 +103,8 @@ async def test_login_rate_limit(monkeypatch):
 
     monkeypatch.setattr(auth_router, "authenticate_user", fake_auth_fail)
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # first two attempts should return credential error (code 401)
         for _ in range(2):
             resp = await ac.post("/api/user/login", json={"email": "b@example.com", "password": "pwd"})
