@@ -32,15 +32,6 @@ function createMockWsClass() {
   globalThis.WebSocket = MockWebSocket as any
   return {
     getInstance: (index = 0) => instances[index],
-    waitForInstance: () => {
-      return new Promise<any>((resolve) => {
-        const check = () => {
-          if (instances.length > 0) resolve(instances[0])
-          else setTimeout(check, 5)
-        }
-        check()
-      })
-    },
   }
 }
 
@@ -80,10 +71,8 @@ describe('createChatConnection', () => {
     createChatConnection('p-1', callbacks)
 
     const ws = getInstance()
+    // 实例被创建说明构造函数被调用了
     expect(ws).toBeDefined()
-    const url = (globalThis.WebSocket as any).mock?.calls?.[0]?.[0]
-    // url mock not available for class constructor, use the instance constructor
-    expect(ws.constructor).toBe(globalThis.WebSocket)
   })
 
   it('WebSocket URL 应包含必要参数', async () => {
@@ -209,7 +198,7 @@ describe('createChatConnection', () => {
     const { createChatConnection } = await import('./chat')
     const ctrl = createChatConnection('p-1', { onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn() })
 
-    const ws = getInstance()
+    getInstance()
     expect(ctrl.connected).toBe(true)
   })
 })

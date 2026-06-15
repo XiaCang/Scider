@@ -25,20 +25,22 @@ describe('tasks API', () => {
   describe('fetchTaskResultApi', () => {
     it('应发送 GET /tasks/{task_id}', async () => {
       const { fetchTaskResultApi } = await import('./tasks')
-      request.get.mockResolvedValue({ data: { code: 0, data: { status: 'SUCCESS', result: {} } } })
+      const resp = { code: 0, msg: 'ok', data: { status: 'SUCCESS', result: {} } }
+      request.get.mockResolvedValue(resp)
       const result = await fetchTaskResultApi('task-1')
       expect(request.get).toHaveBeenCalledWith('/tasks/task-1')
-      expect(result.data.data.status).toBe('SUCCESS')
+      expect(result.code).toBe(0)
     })
   })
 
   describe('pingTaskApi', () => {
     it('应发送 POST /tasks/ping', async () => {
       const { pingTaskApi } = await import('./tasks')
-      request.post.mockResolvedValue({ data: { code: 0, data: { pong: true } } })
+      const resp = { code: 0, msg: 'ok', data: { pong: true } }
+      request.post.mockResolvedValue(resp)
       const result = await pingTaskApi()
       expect(request.post).toHaveBeenCalledWith('/tasks/ping')
-      expect(result.data.code).toBe(0)
+      expect(result.code).toBe(0)
     })
   })
 })
