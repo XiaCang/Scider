@@ -80,13 +80,13 @@ describe('request 拦截器逻辑（直接测试拦截器函数）', () => {
 
   describe('响应拦截器 - 成功', () => {
     it('正常响应应直接返回 response.data', () => {
-      const response = { data: { code: 0, msg: 'ok', data: 'some-data' } }
+      const response = { data: { code: 0, msg: 'ok', data: 'some-data' }, config: { responseType: 'json' } }
       const result = responseFulfilled(response)
       expect(result).toEqual({ code: 0, msg: 'ok', data: 'some-data' })
     })
 
     it('后端返回业务错误码应拒绝', async () => {
-      const response = { data: { code: 40001, msg: '参数错误' } }
+      const response = { data: { code: 40001, msg: '参数错误' }, config: { responseType: 'json' } }
       await expect(responseFulfilled(response)).rejects.toThrow('参数错误')
     })
   })
