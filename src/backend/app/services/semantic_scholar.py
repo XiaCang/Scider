@@ -11,9 +11,13 @@ semantic_scholar.py — Semantic Scholar Graph API 客户端
 
 import logging
 import time
+import urllib3
 from typing import Optional
 
 import httpx
+
+# 临时禁用 SSL 警告：SS 证书于 2026-06-15 过期，已设置 verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from app.core.config import settings
 
@@ -59,10 +63,12 @@ def _request(method: str, url: str, **kwargs) -> dict:
     - HTTP 4xx/5xx（非 429）直接抛出 RuntimeError
     """
     last_exc: Exception | None = None
+    # FIXME: verify=False 是临时方案，因为 2026-06-15 SS 证书过期后仍未更新。
+    # 等 SS 更新证书后应移除 verify=False，恢复 SSL 验证。
     for attempt in range(_MAX_RETRIES):
         time.sleep(_MIN_INTERVAL)  # 主动限速，防止匿名 429
         try:
-            with httpx.Client(timeout=30000, headers=_headers()) as client:
+            with httpx.Client(timeout=30000, headers=_headers(), verify=False) as client:
                 r = getattr(client, method)(url, **kwargs)
 
                 if r.status_code == 429:
